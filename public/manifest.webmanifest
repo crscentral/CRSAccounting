@@ -1,0 +1,16 @@
+{
+  "name": "CRS Accounting",
+  "short_name": "CRS Accounting",
+  "description": "Finance and revenue management software for CRS Central, a unit of CRS Chauhan Private Limited.",
+  "start_url": "/CRSAccounting/",
+  "scope": "/CRSAccounting/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F8F6F1",
+  "theme_color": "#1B3A6B",
+  "icons": [
+    { "src": "/CRSAccounting/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/CRSAccounting/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/CRSAccounting/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
