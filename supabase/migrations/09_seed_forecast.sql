@@ -1,0 +1,4 @@
+insert into public.forecast_entries (company_id, forecast_year, forecast_month, revenue_usd, expenses_usd) values
+('11111111-1111-1111-1111-111111111111', 2027, 1, 836000, 414000),
+('11111111-1111-1111-1111-111111111111', 2027, 2, 7000, 2000),
+('11111111-1111-1111-1111-111111111111', 2027, 3, 5000, 1000);
