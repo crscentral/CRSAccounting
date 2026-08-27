@@ -459,10 +459,83 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
 }
 
 /**
+ * Renders a simple grouped bar chart to a PNG data URL using the Canvas API directly --
+ * no charting library needed, so this works the same in the PDF/Word exports as it does
+ * on screen. `series`: [{ name, color, values }], values aligned to `categories`.
+ */
+function renderGroupedBarChartDataUrl({ categories, series, width = 800, height = 400, valueFormatter }) {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, width, height)
+
+  const marginLeft = 64, marginRight = 20, marginTop = 20, marginBottom = 66
+  const chartW = width - marginLeft - marginRight
+  const chartH = height - marginTop - marginBottom
+
+  const allValues = series.flatMap(s => s.values)
+  const maxVal = Math.max(1, ...allValues, 0)
+  const minVal = Math.min(0, ...allValues)
+  const range = maxVal - minVal || 1
+  const zeroY = marginTop + chartH * (maxVal / range)
+
+  ctx.strokeStyle = '#e2e8f0'
+  ctx.fillStyle = '#94a3b8'
+  ctx.font = '10px sans-serif'
+  ctx.textAlign = 'right'
+  const ticks = 5
+  for (let t = 0; t <= ticks; t++) {
+    const val = minVal + (range * t) / ticks
+    const y = marginTop + chartH - ((val - minVal) / range) * chartH
+    ctx.beginPath(); ctx.moveTo(marginLeft, y); ctx.lineTo(marginLeft + chartW, y); ctx.stroke()
+    ctx.fillText(valueFormatter ? valueFormatter(val) : Math.round(val).toLocaleString(), marginLeft - 6, y + 3)
+  }
+
+  const groupWidth = chartW / Math.max(categories.length, 1)
+  const barPadding = groupWidth * 0.15
+  const barWidth = (groupWidth - barPadding * 2) / Math.max(series.length, 1)
+
+  categories.forEach((cat, ci) => {
+    series.forEach((s, si) => {
+      const val = s.values[ci] || 0
+      const barH = (Math.abs(val) / range) * chartH
+      const x = marginLeft + ci * groupWidth + barPadding + si * barWidth
+      const y = val >= 0 ? zeroY - barH : zeroY
+      ctx.fillStyle = s.color
+      ctx.fillRect(x, y, Math.max(barWidth - 2, 1), barH)
+    })
+    ctx.fillStyle = '#475569'
+    ctx.textAlign = 'center'
+    ctx.font = '10px sans-serif'
+    ctx.fillText(cat, marginLeft + ci * groupWidth + groupWidth / 2, marginTop + chartH + 16)
+  })
+
+  ctx.strokeStyle = '#94a3b8'
+  ctx.beginPath(); ctx.moveTo(marginLeft, zeroY); ctx.lineTo(marginLeft + chartW, zeroY); ctx.stroke()
+
+  let legendX = marginLeft
+  const legendY = height - 20
+  ctx.textAlign = 'left'
+  ctx.font = '11px sans-serif'
+  series.forEach(s => {
+    ctx.fillStyle = s.color
+    ctx.fillRect(legendX, legendY - 9, 10, 10)
+    ctx.fillStyle = '#334155'
+    ctx.fillText(s.name, legendX + 14, legendY)
+    legendX += ctx.measureText(s.name).width + 40
+  })
+
+  return canvas.toDataURL('image/png')
+}
+
+/**
  * Multi-section report export -- used by the "choose what to include" Download Report
  * flow on every page (Dashboard, Chart of Accounts, Analytics, etc). Each section is
- * either a data table ({ heading, columns, rows }) or a set of summary key/value pairs
- * ({ heading, keyValuePairs: [[label, value], ...] }).
+ * a data table ({ heading, columns, rows }), summary key/value pairs
+ * ({ heading, keyValuePairs: [[label, value], ...] }), or a chart
+ * ({ heading, chart: { categories, series } }).
  */
 export function exportMultiSectionPDF({ title, subtitle, sections, filename }) {
   const doc = new jsPDF()
@@ -512,6 +585,13 @@ export function exportMultiSectionPDF({ title, subtitle, sections, filename }) {
         margin: { left: 14, right: 14 },
       })
       y = doc.lastAutoTable.finalY + 10
+    } else if (section.chart) {
+      const imgW = pageWidth - 28
+      const imgH = imgW * (400 / 800)
+      if (y + imgH > pageHeight - 15) { doc.addPage(); y = 20 }
+      const dataUrl = renderGroupedBarChartDataUrl({ ...section.chart, valueFormatter: section.chart.valueFormatter })
+      doc.addImage(dataUrl, 'PNG', 14, y + 3, imgW, imgH)
+      y += imgH + 12
     }
   })
 
@@ -528,6 +608,10 @@ export function exportMultiSectionExcel({ title, sections, filename }) {
     } else if (section.columns && section.rows) {
       rows.push(section.columns)
       section.rows.forEach(r => rows.push(r))
+    } else if (section.chart) {
+      rows.push(['(Chart shown as data -- Excel export cannot embed a native chart image)'])
+      rows.push(['Category', ...section.chart.series.map(s => s.name)])
+      section.chart.categories.forEach((cat, i) => rows.push([cat, ...section.chart.series.map(s => s.values[i])]))
     }
     rows.push([])
   })
@@ -552,6 +636,9 @@ export function exportMultiSectionWord({ title, subtitle, sections, filename }) 
         `<tr>${r.map(cell => `<td style="padding:5px 8px;border:1px solid #ddd;">${esc(cell)}</td>`).join('')}</tr>`
       ).join('')
       inner = `<table style="border-collapse:collapse;width:100%;margin-bottom:12px;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
+    } else if (section.chart) {
+      const dataUrl = renderGroupedBarChartDataUrl(section.chart)
+      inner = `<img src="${dataUrl}" style="max-width:100%;margin-bottom:12px;" />`
     }
     return `<h3 style="color:#1B3A6B;margin-top:20px;">${esc(section.heading)}</h3>${inner}`
   }).join('')
