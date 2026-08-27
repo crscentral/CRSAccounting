@@ -70,13 +70,43 @@ export default function Dashboard() {
     const sSel = s || [], pSel = p || [], rSel = r || []
     const sections = []
 
-    if (selections.sections.includes('Revenue vs Expenses vs Collections')) {
+    if (selections.sections.includes('Revenue, Expenses & Profit/Loss (Chart)')) {
       const monthlyMap = {}
-      sSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, col: 0 }; monthlyMap[k].rev += Number(i.amount_usd) })
-      pSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, col: 0 }; monthlyMap[k].exp += Number(i.amount_usd) })
-      rSel.forEach(i => { const k = i.receipt_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, col: 0 }; monthlyMap[k].col += Number(i.amount_usd) })
+      sSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0 }; monthlyMap[k].rev += Number(i.amount_usd) })
+      pSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0 }; monthlyMap[k].exp += Number(i.amount_usd) })
       const monthly = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
-      sections.push({ heading: 'Revenue vs Expenses vs Collections', columns: ['Month', 'Revenue', 'Expenses', 'Collected'], rows: monthly.map(m => [m.month, fmt(m.rev), fmt(m.exp), fmt(m.col)]) })
+      sections.push({
+        heading: 'Revenue, Expenses & Profit/Loss',
+        chart: {
+          categories: monthly.map(m => m.month),
+          valueFormatter: v => formatMoney(v, selections.currency),
+          series: [
+            { name: 'Revenue', color: '#10b981', values: monthly.map(m => conv(m.rev)) },
+            { name: 'Expenses', color: '#f97316', values: monthly.map(m => conv(m.exp)) },
+            { name: 'Profit/Loss', color: '#3b82f6', values: monthly.map(m => conv(m.rev - m.exp)) },
+          ],
+        },
+      })
+    }
+
+    if (selections.sections.includes('Billing & Outstanding Overview (Chart)')) {
+      const monthlyMap = {}
+      sSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, out: 0 }; monthlyMap[k].rev += Number(i.amount_usd); monthlyMap[k].out += Number(i.balance_due) })
+      pSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, out: 0 }; monthlyMap[k].exp += Number(i.amount_usd) })
+      const monthly = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
+      sections.push({
+        heading: 'Billing & Outstanding Overview',
+        chart: {
+          categories: monthly.map(m => m.month),
+          valueFormatter: v => formatMoney(v, selections.currency),
+          series: [
+            { name: 'Revenue Billed', color: '#10b981', values: monthly.map(m => conv(m.rev)) },
+            { name: 'Outstanding Payment', color: '#f59e0b', values: monthly.map(m => conv(m.out)) },
+            { name: 'Expenses Billed', color: '#f97316', values: monthly.map(m => conv(m.exp)) },
+            { name: 'Profit Expected', color: '#3b82f6', values: monthly.map(m => conv(m.rev - m.exp)) },
+          ],
+        },
+      })
     }
 
     if (selections.sections.includes('Company Overview - YTD')) {
@@ -145,20 +175,30 @@ export default function Dashboard() {
   const monthlyMap = {}
   sales.forEach(i => {
     const key = i.invoice_date.slice(0, 7)
-    monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0 }
+    monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
     monthlyMap[key].Revenue += Number(i.amount_usd)
+    monthlyMap[key].Outstanding += Number(i.balance_due)
   })
   purchases.forEach(i => {
     const key = i.invoice_date.slice(0, 7)
-    monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0 }
+    monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
     monthlyMap[key].Expenses += Number(i.amount_usd)
   })
   receipts.forEach(r => {
     const key = r.receipt_date.slice(0, 7)
-    monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0 }
+    monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
     monthlyMap[key].Collected += Number(r.amount_usd)
   })
   const chartData = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
+    .map(m => ({ ...m, Profit: m.Revenue - m.Expenses }))
+
+  const billingChartData = chartData.map(m => ({
+    month: m.month,
+    'Revenue Billed': m.Revenue,
+    'Outstanding Payment': m.Outstanding,
+    'Expenses Billed': m.Expenses,
+    'Profit Expected': m.Revenue - m.Expenses,
+  }))
 
   const reportColumns = [
     { label: 'Invoice #', key: 'invoice_number' }, { label: 'Customer', key: 'customerName' },
@@ -190,7 +230,7 @@ export default function Dashboard() {
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mb-6">
         <h2 className="font-semibold text-slate-700 mb-4 flex items-center gap-2">
-          <TrendingUp size={18} /> Revenue vs Expenses vs Collections
+          <TrendingUp size={18} /> Revenue, Expenses &amp; Profit/Loss
         </h2>
         <div className="h-72 sm:h-96 -ml-2">
           <ResponsiveContainer width="100%" height="100%">
@@ -202,7 +242,28 @@ export default function Dashboard() {
               <Legend />
               <Bar dataKey="Revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
               <Bar dataKey="Expenses" fill="#f97316" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Collected" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Profit" name="Profit/Loss" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mb-6">
+        <h2 className="font-semibold text-slate-700 mb-4 flex items-center gap-2">
+          <Receipt size={18} /> Billing &amp; Outstanding Overview
+        </h2>
+        <div className="h-72 sm:h-96 -ml-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={billingChartData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(v) => cp.fmt(v)} />
+              <Legend />
+              <Bar dataKey="Revenue Billed" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Outstanding Payment" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Expenses Billed" fill="#f97316" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Profit Expected" fill="#3b82f6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -271,7 +332,7 @@ export default function Dashboard() {
           fields={[
             { type: 'currency', key: 'currency', default: cp.displayCurrency },
             { type: 'period', key: 'period', default: 'MTD' },
-            { type: 'checkboxGroup', key: 'sections', label: 'Include Sections', options: ['Revenue vs Expenses vs Collections', 'Company Overview - YTD', 'Company Overview - All Time', 'Recent Transactions', 'Outstanding Invoices'], default: ['Revenue vs Expenses vs Collections', 'Company Overview - YTD', 'Company Overview - All Time', 'Recent Transactions', 'Outstanding Invoices'] },
+            { type: 'checkboxGroup', key: 'sections', label: 'Include Sections', options: ['Revenue, Expenses & Profit/Loss (Chart)', 'Billing & Outstanding Overview (Chart)', 'Company Overview - YTD', 'Company Overview - All Time', 'Recent Transactions', 'Outstanding Invoices'], default: ['Revenue, Expenses & Profit/Loss (Chart)', 'Billing & Outstanding Overview (Chart)', 'Company Overview - YTD', 'Company Overview - All Time', 'Recent Transactions', 'Outstanding Invoices'] },
           ]}
           onGenerate={generateDashboardReport}
           onClose={() => setReportModalOpen(false)}
