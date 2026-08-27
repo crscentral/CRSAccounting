@@ -34,6 +34,13 @@ export default function CreateFirstCompanyScreen() {
         p_fiscal_year_start_month: form.fiscal_year_start_month,
       })
       if (rpcError) throw rpcError
+
+      // Notify the platform admins that a new company is waiting for approval.
+      // Best-effort only -- never blocks the signup if the email fails to send.
+      supabase.functions.invoke('notify-pending-company', {
+        body: { companyName: form.name.trim(), signupEmail: user?.email },
+      }).catch(() => {})
+
       await refreshCompanies()
       switchCompany(newCompanyId)
     } catch (err) {
