@@ -1,4 +1,5 @@
-import { Clock, XCircle, LogOut } from 'lucide-react'
+import { useState } from 'react'
+import { Clock, XCircle, LogOut, RefreshCw } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import logo from '../assets/crs-logo.png'
 
@@ -8,8 +9,18 @@ import logo from '../assets/crs-logo.png'
  * (crscentral.rm@gmail.com) approves it via Settings -> Platform Admin.
  */
 export default function PendingApprovalScreen() {
-  const { user, activeCompany, signOut } = useAuth()
+  const { user, activeCompany, signOut, refreshCompanies } = useAuth()
+  const [checking, setChecking] = useState(false)
   const rejected = activeCompany?.approval_status === 'rejected'
+
+  async function handleCheckStatus() {
+    setChecking(true)
+    try {
+      await refreshCompanies()
+    } finally {
+      setTimeout(() => setChecking(false), 500)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -39,6 +50,18 @@ export default function PendingApprovalScreen() {
               </p>
             </>
           )}
+
+          {!rejected && (
+            <button
+              onClick={handleCheckStatus}
+              disabled={checking}
+              className="mt-5 w-full flex items-center justify-center gap-2 bg-navy-50 hover:bg-navy-100 text-navy-700 font-medium rounded-lg py-2 text-sm border border-navy-200 transition-colors"
+            >
+              <RefreshCw size={14} className={checking ? 'animate-spin' : ''} />
+              {checking ? 'Checking Status…' : 'Check Approval Status'}
+            </button>
+          )}
+
           <p className="text-xs text-slate-400 mt-4">Signed in as {user?.email}</p>
         </div>
 

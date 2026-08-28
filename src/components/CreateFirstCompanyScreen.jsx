@@ -38,8 +38,13 @@ export default function CreateFirstCompanyScreen() {
       // Notify the platform admins that a new company is waiting for approval.
       // Best-effort only -- never blocks the signup if the email fails to send.
       supabase.functions.invoke('notify-pending-company', {
-  body: { companyId: newCompanyId, companyName: form.name.trim(), signupEmail: user?.email },
-}).catch(() => {})
+        body: {
+          companyId: newCompanyId,
+          companyName: form.name.trim(),
+          signupEmail: user?.email,
+          ownerFullName: user?.user_metadata?.full_name || user?.email,
+        },
+      }).catch((e) => console.error('Failed to notify platform admin:', e))
 
       await refreshCompanies()
       switchCompany(newCompanyId)

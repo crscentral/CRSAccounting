@@ -19,13 +19,17 @@ export default function Login() {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email, password,
           options: { data: { full_name: fullName } },
         })
         if (error) throw error
-        setMessage('Account created. If email confirmation is enabled, check your inbox, then sign in.')
-        setMode('signin')
+        if (signUpData?.session) {
+          setMessage('Account created successfully!')
+        } else {
+          setMessage('Account created! Please sign in with your email and password to set up your company.')
+          setMode('signin')
+        }
       }
     } catch (err) {
       setError(err.message)

@@ -18,6 +18,8 @@ export default function Settings() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('viewer')
   const [pendingCompanies, setPendingCompanies] = useState([])
+  const [loadingPending, setLoadingPending] = useState(false)
+  const [actionInProgress, setActionInProgress] = useState(null)
   const isPlatformAdmin = user?.email === 'crscentral.rm@gmail.com'
 
   useEffect(() => {
@@ -43,14 +45,51 @@ export default function Settings() {
   }, [tab])
 
   async function loadPendingCompanies() {
-    const { data } = await supabase.from('companies').select('*').eq('approval_status', 'pending').order('created_at')
-    setPendingCompanies(data || [])
+    setLoadingPending(true)
+    const { data, error } = await supabase
+      .from('companies')
+      .select('*, members:company_members(role, user_id, profile:user_profiles(email, full_name))')
+      .eq('approval_status', 'pending')
+      .order('created_at', { ascending: false })
+    if (!error && data) {
+      setPendingCompanies(data)
+    }
+    setLoadingPending(false)
   }
 
-  async function decideCompany(companyId, approve) {
-    const { error } = await supabase.rpc('approve_company', { p_company_id: companyId, p_approve: approve })
-    if (error) { alert(error.message); return }
-    loadPendingCompanies()
+  async function decideCompany(company, approve) {
+    setActionInProgress(company.id)
+    try {
+      const ownerMember = company.members?.find(m => m.role === 'owner')
+      const applicantEmail = ownerMember?.profile?.email || company.email
+      const applicantName = ownerMember?.profile?.full_name || ''
+
+      const { error } = await supabase.rpc('approve_company', {
+        p_company_id: company.id,
+        p_approve: approve,
+      })
+      if (error) {
+        alert(error.message)
+        return
+      }
+
+      if (approve && applicantEmail) {
+        // Send approval confirmation email to applicant
+        supabase.functions.invoke('notify-approval-result', {
+          body: {
+            companyId: company.id,
+            companyName: company.name,
+            applicantEmail,
+            applicantName,
+            action: 'approve',
+          },
+        }).catch((err) => console.error('Failed sending approval email to applicant:', err))
+      }
+
+      await loadPendingCompanies()
+    } finally {
+      setActionInProgress(null)
+    }
   }
 
   async function saveProfile() {
@@ -87,7 +126,7 @@ export default function Settings() {
     { key: 'security', label: 'Security', desc: 'Password and authentication', icon: Shield },
     { key: 'notifications', label: 'Notifications', desc: 'Email and app notifications', icon: Bell },
     { key: 'access', label: 'User Access & Permissions', desc: 'Invite users and set their access permissions', icon: Users },
-    ...(isPlatformAdmin ? [{ key: 'admin', label: 'Platform Admin', desc: 'Approve new companies signing up', icon: ShieldCheck }] : []),
+    ...(isPlatformAdmin ? [{ key: 'admin', label: 'Pending Company Approvals', desc: 'Review & approve new companies signing up', icon: ShieldCheck }] : []),
   ]
 
   return (
@@ -200,27 +239,65 @@ export default function Settings() {
         </div>
       )}
       {tab === 'admin' && isPlatformAdmin && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 max-w-2xl">
-          <h3 className="font-semibold text-slate-700 mb-1">Pending Company Approvals</h3>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 max-w-3xl">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="font-semibold text-slate-800 text-base">Pending Company Approvals</h3>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+              {pendingCompanies.length} pending
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mb-4">
             New companies created via self-service sign-up wait here until you approve them.
           </p>
-          {pendingCompanies.length === 0 ? (
-            <p className="text-sm text-slate-400">No companies awaiting approval.</p>
+
+          {loadingPending ? (
+            <p className="text-sm text-slate-400 py-4">Loading pending approvals…</p>
+          ) : pendingCompanies.length === 0 ? (
+            <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl">
+              <ShieldCheck size={32} className="mx-auto text-slate-300 mb-2" />
+              <p className="text-sm text-slate-500 font-medium">No companies awaiting approval</p>
+              <p className="text-xs text-slate-400 mt-1">All self-service sign-ups have been processed.</p>
+            </div>
           ) : (
-            <div className="space-y-2">
-              {pendingCompanies.map(c => (
-                <div key={c.id} className="flex items-center justify-between border border-slate-100 rounded-lg px-3 py-2.5">
-                  <div>
-                    <div className="text-sm font-medium text-slate-700">{c.name}</div>
-                    <div className="text-xs text-slate-400">{c.base_currency} • created {new Date(c.created_at).toLocaleDateString()}</div>
+            <div className="space-y-3">
+              {pendingCompanies.map(c => {
+                const ownerMember = c.members?.find(m => m.role === 'owner')
+                const ownerEmail = ownerMember?.profile?.email || c.email || 'N/A'
+                const ownerName = ownerMember?.profile?.full_name || ''
+                const isWorking = actionInProgress === c.id
+
+                return (
+                  <div key={c.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-slate-200 rounded-xl p-4 bg-slate-50/50 hover:bg-white transition-colors">
+                    <div>
+                      <div className="font-semibold text-slate-800 text-sm">{c.name}</div>
+                      <div className="text-xs text-slate-600 mt-1">
+                        <strong>Applicant:</strong> {ownerName ? `${ownerName} (${ownerEmail})` : ownerEmail}
+                      </div>
+                      <div className="text-xs text-slate-400 mt-0.5">
+                        Base Currency: <span className="font-medium text-slate-600">{c.base_currency}</span> • Created {new Date(c.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      <button
+                        onClick={() => decideCompany(c, true)}
+                        disabled={isWorking}
+                        className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Check size={14} />
+                        {isWorking ? 'Processing…' : 'Approve'}
+                      </button>
+                      <button
+                        onClick={() => decideCompany(c, false)}
+                        disabled={isWorking}
+                        className="flex items-center gap-1.5 border border-red-200 bg-white hover:bg-red-50 text-red-600 text-xs font-semibold px-3.5 py-2 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <X size={14} />
+                        Reject
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => decideCompany(c.id, true)} className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg"><Check size={13} /> Approve</button>
-                    <button onClick={() => decideCompany(c.id, false)} className="flex items-center gap-1 border border-red-200 text-red-600 text-xs font-medium px-3 py-1.5 rounded-lg"><X size={13} /> Reject</button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
