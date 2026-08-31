@@ -9,21 +9,21 @@ import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exp
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
 
 export default function Reports() {
-  const { activeCompany } = useAuth()
+  const { activeCompany, activeProduct } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [report, setReport] = useState('balance_sheet')
   const [accounts, setAccounts] = useState([])
   const [balances, setBalances] = useState({})
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
-  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, cp.range.from, cp.range.to])
+  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadData() {
-    const { data: accs } = await supabase.from('accounts').select('*').eq('company_id', activeCompany.id).order('code')
+    const { data: accs } = await supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('code')
     // Balance Sheet (Assets/Liabilities/Equity) is always as-of-today (cumulative since
     // inception) -- that's what a balance sheet means. Income Statement / Trial Balance
     // respect the selected period, since those are period-scoped by nature.
-    const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date, accounts!inner(type)').eq('company_id', activeCompany.id)
+    const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date, accounts!inner(type)').eq('company_id', activeCompany.id).eq('product', activeProduct)
     const bal = {}
     ;(entries || []).forEach(e => {
       const isBalanceSheetAccount = ['Assets', 'Liabilities', 'Equity'].includes(e.accounts?.type)
@@ -47,6 +47,23 @@ export default function Reports() {
   const totalLiabilities = -sumType('Liabilities')
   const retainedEarnings = totalRevenue - totalExpenses
 
+  // EBITDA waterfall: below-the-line accounts (subtype 'Below GOP' or 'Below EBITDA',
+  // seeded for Hotel/Restaurant) split into "before EBITDA" items (Management Fees,
+  // Property Tax, Insurance, Rent/Lease, License & Govt Fees, Occupancy) and the two
+  // that specifically come AFTER EBITDA (Depreciation & Amortization, Loan Interest).
+  // Basic has no such accounts, so EBITDA naturally equals Net Income there -- correct,
+  // just not a distinct number.
+  const DA_INTEREST_NAMES = ['Depreciation & Amortization', 'Loan Interest']
+  const belowLineAccounts = accounts.filter(a => a.type === 'Expenses' && ['Below GOP', 'Below EBITDA'].includes(a.subtype))
+  const daInterestAccounts = belowLineAccounts.filter(a => DA_INTEREST_NAMES.includes(a.name))
+  const otherBelowLineAccounts = belowLineAccounts.filter(a => !DA_INTEREST_NAMES.includes(a.name))
+  const operatingAccounts = accounts.filter(a => a.type === 'Expenses' && !['Below GOP', 'Below EBITDA'].includes(a.subtype))
+  const sumAccounts = (list, balMap = balances) => list.reduce((s, a) => s + (balMap[a.id] || 0), 0)
+  const operatingExpenses = sumAccounts(operatingAccounts)
+  const otherBelowLine = sumAccounts(otherBelowLineAccounts)
+  const daInterest = sumAccounts(daInterestAccounts)
+  const ebitda = totalRevenue - operatingExpenses - otherBelowLine
+
   const reportTitles = { balance_sheet: 'Balance Sheet', income_statement: 'Income Statement', trial_balance: 'Trial Balance' }
 
   async function generateFinancialReport(selections, format) {
@@ -54,7 +71,7 @@ export default function Reports() {
     const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
 
-    const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date, accounts!inner(type)').eq('company_id', activeCompany.id)
+    const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date, accounts!inner(type)').eq('company_id', activeCompany.id).eq('product', activeProduct)
     const bal = {}
     ;(entries || []).forEach(e => {
       const isBalanceSheetAccount = ['Assets', 'Liabilities', 'Equity'].includes(e.accounts?.type)
@@ -66,6 +83,15 @@ export default function Reports() {
     const by = (type) => accounts.filter(a => a.type === type)
     const sum = (type) => by(type).reduce((s, a) => s + (bal[a.id] || 0), 0)
     const rev = -sum('Revenue'), exp = sum('Expenses'), assets = sum('Assets'), liab = -sum('Liabilities')
+
+    const DA_INTEREST_NAMES = ['Depreciation & Amortization', 'Loan Interest']
+    const belowLine = accounts.filter(a => a.type === 'Expenses' && ['Below GOP', 'Below EBITDA'].includes(a.subtype))
+    const daInterestAccs = belowLine.filter(a => DA_INTEREST_NAMES.includes(a.name))
+    const otherBelowLineAccs = belowLine.filter(a => !DA_INTEREST_NAMES.includes(a.name))
+    const operatingAccs = accounts.filter(a => a.type === 'Expenses' && !['Below GOP', 'Below EBITDA'].includes(a.subtype))
+    const sumAccs = (list) => list.reduce((s, a) => s + (bal[a.id] || 0), 0)
+    const opExp = sumAccs(operatingAccs), otherBL = sumAccs(otherBelowLineAccs), daInt = sumAccs(daInterestAccs)
+    const ebitdaVal = rev - opExp - otherBL
 
     let sections = []
     const reportKey = selections.reportType
@@ -82,8 +108,11 @@ export default function Reports() {
         rows: [
           ...by('Revenue').map(a => [a.name, fmt(-(bal[a.id] || 0))]),
           ['Total Revenue', fmt(rev)],
-          ...by('Expenses').map(a => [a.name, fmt(bal[a.id] || 0)]),
-          ['Total Expenses', fmt(exp)],
+          ...operatingAccs.map(a => [a.name, fmt(bal[a.id] || 0)]),
+          ['Total Operating Expenses', fmt(opExp)],
+          ...(otherBelowLineAccs.length > 0 ? [...otherBelowLineAccs.map(a => [a.name, fmt(bal[a.id] || 0)]), ['Management Fees, Taxes, Rent & Licenses', fmt(otherBL)]] : []),
+          ['EBITDA', fmt(ebitdaVal)],
+          ...(daInterestAccs.length > 0 ? [...daInterestAccs.map(a => [a.name, fmt(bal[a.id] || 0)]), ['Depreciation & Interest', fmt(daInt)]] : []),
           ['Net Income', fmt(rev - exp)],
         ],
       }]
@@ -167,14 +196,37 @@ export default function Reports() {
               </div>
             </div>
             <div>
-              <div className="bg-rose-600 text-white text-sm font-semibold px-3 py-2 rounded-t-lg">EXPENSES</div>
+              <div className="bg-rose-600 text-white text-sm font-semibold px-3 py-2 rounded-t-lg">OPERATING EXPENSES</div>
               <div className="border border-t-0 border-slate-100 rounded-b-lg divide-y divide-slate-50">
-                {byType('Expenses').map(a => (
+                {operatingAccounts.map(a => (
                   <Row key={a.id} label={a.name} value={cp.fmt(balances[a.id] || 0)} />
                 ))}
-                <Row label="Total Expenses" value={cp.fmt(totalExpenses)} bold />
+                <Row label="Total Operating Expenses" value={cp.fmt(operatingExpenses)} bold />
               </div>
             </div>
+            {otherBelowLineAccounts.length > 0 && (
+              <div>
+                <div className="bg-amber-600 text-white text-sm font-semibold px-3 py-2 rounded-t-lg">MANAGEMENT FEES, TAXES, RENT & LICENSES</div>
+                <div className="border border-t-0 border-slate-100 rounded-b-lg divide-y divide-slate-50">
+                  {otherBelowLineAccounts.map(a => (
+                    <Row key={a.id} label={a.name} value={cp.fmt(balances[a.id] || 0)} />
+                  ))}
+                  <Row label="Total" value={cp.fmt(otherBelowLine)} bold />
+                </div>
+              </div>
+            )}
+            <Row label="EBITDA" value={cp.fmt(ebitda)} bold large />
+            {daInterestAccounts.length > 0 && (
+              <div>
+                <div className="bg-slate-600 text-white text-sm font-semibold px-3 py-2 rounded-t-lg">DEPRECIATION &amp; INTEREST</div>
+                <div className="border border-t-0 border-slate-100 rounded-b-lg divide-y divide-slate-50">
+                  {daInterestAccounts.map(a => (
+                    <Row key={a.id} label={a.name} value={cp.fmt(balances[a.id] || 0)} />
+                  ))}
+                  <Row label="Total" value={cp.fmt(daInterest)} bold />
+                </div>
+              </div>
+            )}
             <Row label="Net Income" value={cp.fmt(retainedEarnings)} bold large />
           </div>
         )}
