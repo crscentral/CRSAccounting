@@ -18,7 +18,7 @@ const TYPE_COLORS = {
 }
 
 export default function ChartOfAccounts() {
-  const { activeCompany, can } = useAuth()
+  const { activeCompany, activeProduct, can } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [accounts, setAccounts] = useState([])
   const [filter, setFilter] = useState('All')
@@ -26,10 +26,10 @@ export default function ChartOfAccounts() {
   const [editingAccount, setEditingAccount] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
-  useEffect(() => { if (activeCompany) loadAccounts() }, [activeCompany])
+  useEffect(() => { if (activeCompany) loadAccounts() }, [activeCompany, activeProduct])
 
   async function loadAccounts() {
-    const { data } = await supabase.from('accounts').select('*').eq('company_id', activeCompany.id).order('code')
+    const { data } = await supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('code')
     setAccounts(data || [])
   }
 
@@ -119,6 +119,7 @@ export default function ChartOfAccounts() {
       {modalOpen && (
         <AccountFormModal
           companyId={activeCompany.id}
+          product={activeProduct}
           account={editingAccount}
           onClose={() => setModalOpen(false)}
           onSaved={loadAccounts}
