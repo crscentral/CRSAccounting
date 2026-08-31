@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { getMTDRange, getYTDRange } from '../lib/fiscalYear'
 import InvoiceDownloadMenu from './InvoiceDownloadMenu'
 
-export default function ContactDetailModal({ contact, company, role, onClose, onEdit, fmt }) {
+export default function ContactDetailModal({ contact, company, product, role, onClose, onEdit, fmt }) {
   const [invoices, setInvoices] = useState([])
   const isCustomer = contact.type === 'customer'
 
@@ -12,7 +12,7 @@ export default function ContactDetailModal({ contact, company, role, onClose, on
 
   async function loadInvoices() {
     const table = isCustomer ? 'sales_invoices' : 'purchase_invoices'
-    const { data } = await supabase.from(table).select('*').eq('contact_id', contact.id).order('invoice_date', { ascending: false })
+    const { data } = await supabase.from(table).select('*').eq('contact_id', contact.id).eq('product', product).order('invoice_date', { ascending: false })
     setInvoices(data || [])
   }
 
