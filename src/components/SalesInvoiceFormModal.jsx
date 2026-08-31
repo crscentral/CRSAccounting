@@ -9,10 +9,12 @@ import InvoicePreviewModal from './InvoicePreviewModal'
 
 const emptyItem = () => ({ description: '', qty: 1, unit_price: 0, tax_percent: 0 })
 
-export default function SalesInvoiceFormModal({ companyId, company, contacts, invoice, onClose, onSaved }) {
+export default function SalesInvoiceFormModal({ companyId, product, company, contacts, invoice, onClose, onSaved }) {
   const { activeRole } = useAuth()
   const [invoiceType, setInvoiceType] = useState(invoice?.invoice_type || 'sales')
   const [invoiceNumber, setInvoiceNumber] = useState(invoice?.invoice_number || `INV-${Math.floor(Math.random() * 900000 + 100000)}`)
+  const [revenueAccounts, setRevenueAccounts] = useState([])
+  const [revenueAccountId, setRevenueAccountId] = useState(invoice?.revenue_account_id || '')
   const [contactId, setContactId] = useState(invoice?.contact_id || '')
   const [newCustomerMode, setNewCustomerMode] = useState(false)
   const [customerName, setCustomerName] = useState('')
@@ -41,6 +43,15 @@ export default function SalesInvoiceFormModal({ companyId, company, contacts, in
   const [previewData, setPreviewData] = useState(null)
 
   useEffect(() => { if (invoice) loadItems() }, [invoice])
+
+  useEffect(() => {
+    if (product === 'basic') return
+    supabase.from('accounts').select('id, code, name, subtype').eq('company_id', companyId).eq('product', product).eq('type', 'Revenue').order('code')
+      .then(({ data }) => {
+        setRevenueAccounts(data || [])
+        if (!revenueAccountId && data && data.length > 0) setRevenueAccountId(data[0].id)
+      })
+  }, [companyId, product])
 
   // Defensive safety net: if the company's LUT data loads/updates *after* this form
   // already mounted (e.g. a stale cached company object in the session), and we're
@@ -97,6 +108,7 @@ export default function SalesInvoiceFormModal({ companyId, company, contacts, in
       is_export_lut: isExportLut, lut_ack_number: lutAckNumber || null, lut_date: lutDate || null,
       service_period: servicePeriod || null, billing_terms: billingTerms,
       customer_email: customerEmail || null, customer_phone: customerPhone || null, customer_address: customerAddress || null,
+      revenue_account_id: product === 'basic' ? null : (revenueAccountId || null),
     }
   }
 
@@ -133,7 +145,7 @@ export default function SalesInvoiceFormModal({ companyId, company, contacts, in
       const amountUsd = currency === 'USD' ? grandTotal : grandTotal / fxRate
 
       const payload = {
-        company_id: companyId, contact_id: finalContactId || null, fx_rate_locked: fxRate,
+        company_id: companyId, product, contact_id: finalContactId || null, fx_rate_locked: fxRate,
         amount_usd: Math.round(amountUsd * 100) / 100, ...buildPayload(),
       }
 
@@ -216,6 +228,16 @@ export default function SalesInvoiceFormModal({ companyId, company, contacts, in
             </select>
           </Field>
         </div>
+
+        {product !== 'basic' && (
+          <Field label="Revenue Account *">
+            <select value={revenueAccountId} onChange={e => setRevenueAccountId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">Select revenue type…</option>
+              {revenueAccounts.map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}{a.subtype ? ` (${a.subtype})` : ''}</option>)}
+            </select>
+            <p className="text-[11px] text-slate-400 mt-1">This determines which revenue line this invoice posts to (e.g. Room Revenue vs Extra Bed Revenue).</p>
+          </Field>
+        )}
 
         <div className="bg-gold-50 border border-gold-100 rounded-lg p-4">
           <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
