@@ -12,7 +12,7 @@ import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 
 export default function Dashboard() {
-  const { activeCompany } = useAuth()
+  const { activeCompany, activeProduct } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [reportModalOpen, setReportModalOpen] = useState(false)
   const [sales, setSales] = useState([])
@@ -22,18 +22,18 @@ export default function Dashboard() {
   const [allPurchases, setAllPurchases] = useState([])
   const [recentTx, setRecentTx] = useState([])
 
-  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, cp.range.from, cp.range.to])
+  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadData() {
     const [{ data: s }, { data: p }, { data: r }, { data: allS }, { data: allP }] = await Promise.all([
-      supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id)
+      supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct)
         .gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
-      supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id)
+      supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct)
         .gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
-      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id)
+      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
         .gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
-      supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id),
-      supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id),
+      supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).eq('product', activeProduct),
+      supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).eq('product', activeProduct),
     ])
     setSales(s || [])
     setPurchases(p || [])
@@ -43,9 +43,9 @@ export default function Dashboard() {
 
     // Recent Transactions: latest 5 across sales, purchases, and receipts, all-time (not period-filtered)
     const [{ data: recentS }, { data: recentP }, { data: recentR }] = await Promise.all([
-      supabase.from('sales_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, contact:contacts(name)').eq('company_id', activeCompany.id).order('invoice_date', { ascending: false }).limit(5),
-      supabase.from('purchase_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).order('invoice_date', { ascending: false }).limit(5),
-      supabase.from('payment_receipts').select('receipt_date, amount_usd, currency, amount').eq('company_id', activeCompany.id).order('receipt_date', { ascending: false }).limit(5),
+      supabase.from('sales_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }).limit(5),
+      supabase.from('purchase_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }).limit(5),
+      supabase.from('payment_receipts').select('receipt_date, amount_usd, currency, amount').eq('company_id', activeCompany.id).eq('product', activeProduct).order('receipt_date', { ascending: false }).limit(5),
     ])
     const combined = [
       ...(recentS || []).map(r => ({ date: r.invoice_date, label: r.contact?.name || r.invoice_number, amount: r.amount, currency: r.currency })),
@@ -63,9 +63,9 @@ export default function Dashboard() {
     const fmt = (usd) => formatMoney(conv(usd), selections.currency)
 
     const [{ data: s }, { data: p }, { data: r }] = await Promise.all([
-      supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).gte('invoice_date', range.from).lte('invoice_date', range.to),
-      supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).gte('invoice_date', range.from).lte('invoice_date', range.to),
-      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).gte('receipt_date', range.from).lte('receipt_date', range.to),
+      supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
+      supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
+      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', range.from).lte('receipt_date', range.to),
     ])
     const sSel = s || [], pSel = p || [], rSel = r || []
     const sections = []
@@ -112,8 +112,8 @@ export default function Dashboard() {
     if (selections.sections.includes('Company Overview - YTD')) {
       const ytd = getYTDRange(activeCompany.fiscal_year_start_month || 1)
       const [{ data: allS }, { data: allP }] = await Promise.all([
-        supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).gte('invoice_date', ytd.from).lte('invoice_date', ytd.to),
-        supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).gte('invoice_date', ytd.from).lte('invoice_date', ytd.to),
+        supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', ytd.from).lte('invoice_date', ytd.to),
+        supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', ytd.from).lte('invoice_date', ytd.to),
       ])
       const rev = (allS || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
       const exp = (allP || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
@@ -122,8 +122,8 @@ export default function Dashboard() {
 
     if (selections.sections.includes('Company Overview - All Time')) {
       const [{ data: allS }, { data: allP }] = await Promise.all([
-        supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id),
-        supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id),
+        supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct),
       ])
       const rev = (allS || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
       const exp = (allP || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
