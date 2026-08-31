@@ -19,7 +19,7 @@ const STATUS_COLORS = {
 }
 
 export default function SalesInvoices() {
-  const { activeCompany, can, activeRole } = useAuth()
+  const { activeCompany, activeProduct, can, activeRole } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [tab, setTab] = useState('invoices')
   const [invoices, setInvoices] = useState([])
@@ -29,12 +29,12 @@ export default function SalesInvoices() {
   const [editingInvoice, setEditingInvoice] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
-  useEffect(() => { if (activeCompany) loadData() }, [activeCompany])
+  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct])
 
   async function loadData() {
     const [{ data: inv }, { data: rec }, { data: con }] = await Promise.all([
-      supabase.from('sales_invoices').select('*, contact:contacts(name, email, phone, address)').eq('company_id', activeCompany.id).order('invoice_date', { ascending: false }),
-      supabase.from('payment_receipts').select('*, invoice:sales_invoices(invoice_number)').eq('company_id', activeCompany.id).order('receipt_date', { ascending: false }),
+      supabase.from('sales_invoices').select('*, contact:contacts(name, email, phone, address)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }),
+      supabase.from('payment_receipts').select('*, invoice:sales_invoices(invoice_number)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('receipt_date', { ascending: false }),
       supabase.from('contacts').select('*').eq('company_id', activeCompany.id),
     ])
     setInvoices(inv || [])
@@ -59,7 +59,7 @@ export default function SalesInvoices() {
 
     const sections = []
     if (selections.dataType === 'Invoices' || selections.dataType === 'Both') {
-      const { data: inv } = await supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).gte('invoice_date', range.from).lte('invoice_date', range.to).order('invoice_date', { ascending: false })
+      const { data: inv } = await supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to).order('invoice_date', { ascending: false })
       sections.push({
         heading: 'Invoices',
         columns: ['Invoice #', 'Customer', 'Date', 'Due', 'Amount', `Amount (${selections.currency})`, 'Status'],
@@ -67,7 +67,7 @@ export default function SalesInvoices() {
       })
     }
     if (selections.dataType === 'Payment Receipts' || selections.dataType === 'Both') {
-      const { data: rec } = await supabase.from('payment_receipts').select('*, invoice:sales_invoices(invoice_number)').eq('company_id', activeCompany.id).gte('receipt_date', range.from).lte('receipt_date', range.to).order('receipt_date', { ascending: false })
+      const { data: rec } = await supabase.from('payment_receipts').select('*, invoice:sales_invoices(invoice_number)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', range.from).lte('receipt_date', range.to).order('receipt_date', { ascending: false })
       sections.push({
         heading: 'Payment Receipts',
         columns: ['Invoice #', 'Date', 'Amount', `Amount (${selections.currency})`, 'Method'],
@@ -211,6 +211,7 @@ export default function SalesInvoices() {
       {modalOpen && (
         <SalesInvoiceFormModal
           companyId={activeCompany.id}
+          product={activeProduct}
           company={activeCompany}
           contacts={contacts}
           invoice={editingInvoice}
