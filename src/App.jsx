@@ -16,6 +16,11 @@ import Analytics from './pages/Analytics'
 import FinancialPerformance from './pages/FinancialPerformance'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import RestaurantRevenue from './pages/RestaurantRevenue'
+import CapitalTransactions from './pages/CapitalTransactions'
+import Comparison from './pages/Comparison'
+import HistoricalImport from './pages/HistoricalImport'
+import PortfolioDashboard from './pages/PortfolioDashboard'
 
 function Gate({ children }) {
   const { session, loading, companies, activeCompany } = useAuth()
@@ -39,6 +44,7 @@ function AppRoutes() {
       <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
       <Route element={<Gate><AppShell /></Gate>}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/overview" element={<PortfolioDashboard />} />
         <Route path="/companies" element={<Companies />} />
         <Route path="/accounts" element={<ChartOfAccounts />} />
         <Route path="/contacts" element={<Contacts />} />
@@ -49,6 +55,10 @@ function AppRoutes() {
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/financial-performance" element={<FinancialPerformance />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/restaurant-revenue" element={<RestaurantRevenue />} />
+        <Route path="/capital" element={<CapitalTransactions />} />
+        <Route path="/compare" element={<Comparison />} />
+        <Route path="/import" element={<HistoricalImport />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
