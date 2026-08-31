@@ -9,21 +9,21 @@ import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 
 export default function Transactions() {
-  const { activeCompany } = useAuth()
+  const { activeCompany, activeProduct } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [rows, setRows] = useState([])
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
-  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, cp.range.from, cp.range.to])
+  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadData() {
     const [{ data: si }, { data: pi }, { data: pr }] = await Promise.all([
       supabase.from('sales_invoices').select('id, invoice_number, invoice_date, amount_usd, currency, amount, contact:contacts(name)')
-        .eq('company_id', activeCompany.id).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
+        .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('purchase_invoices').select('id, invoice_number, invoice_date, amount_usd, currency, amount, supplier_name_freeform, contact:contacts(name)')
-        .eq('company_id', activeCompany.id).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
+        .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('payment_receipts').select('id, receipt_date, amount_usd, currency, amount')
-        .eq('company_id', activeCompany.id).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
+        .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
     ])
 
     const combined = [
