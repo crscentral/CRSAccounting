@@ -13,20 +13,20 @@ import { DollarSign, CheckCircle2, TrendingUp, TrendingDown, AlertTriangle } fro
 const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']
 
 export default function Analytics() {
-  const { activeCompany } = useAuth()
+  const { activeCompany, activeProduct } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [reportModalOpen, setReportModalOpen] = useState(false)
   const [sales, setSales] = useState([])
   const [purchases, setPurchases] = useState([])
   const [receipts, setReceipts] = useState([])
 
-  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, cp.range.from, cp.range.to])
+  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadData() {
     const [{ data: s }, { data: p }, { data: r }] = await Promise.all([
-      supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
-      supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
-      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
+      supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
+      supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
+      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
     ])
     setSales(s || []); setPurchases(p || []); setReceipts(r || [])
   }
@@ -38,9 +38,9 @@ export default function Analytics() {
     const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
 
     const [{ data: s }, { data: p }, { data: r }] = await Promise.all([
-      supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).gte('invoice_date', range.from).lte('invoice_date', range.to),
-      supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).gte('invoice_date', range.from).lte('invoice_date', range.to),
-      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).gte('receipt_date', range.from).lte('receipt_date', range.to),
+      supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
+      supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
+      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', range.from).lte('receipt_date', range.to),
     ])
     const sSel = s || [], pSel = p || [], rSel = r || []
     const totalInvoiced = sSel.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
