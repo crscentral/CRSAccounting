@@ -4,7 +4,7 @@ import Modal, { Field } from './Modal'
 
 const TYPES = ['Assets', 'Liabilities', 'Equity', 'Revenue', 'Expenses']
 
-export default function AccountFormModal({ companyId, account, onClose, onSaved }) {
+export default function AccountFormModal({ companyId, product, account, onClose, onSaved }) {
   const [form, setForm] = useState({
     code: account?.code || '',
     name: account?.name || '',
@@ -27,7 +27,7 @@ export default function AccountFormModal({ companyId, account, onClose, onSaved 
         const { error: err } = await supabase.from('accounts').update(form).eq('id', account.id)
         if (err) throw err
       } else {
-        const { error: err } = await supabase.from('accounts').insert({ ...form, company_id: companyId })
+        const { error: err } = await supabase.from('accounts').insert({ ...form, company_id: companyId, product })
         if (err) throw err
       }
       onSaved()
