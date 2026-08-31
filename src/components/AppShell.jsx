@@ -3,38 +3,46 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Building2, PieChart, Users, FileCheck, FileText,
   ArrowLeftRight, BookText, TrendingUp, BarChart3, FileBarChart, Settings,
-  Menu, X, LogOut, ChevronDown, Download, Share,
+  Menu, X, LogOut, ChevronDown, Download, Share, Layers, UtensilsCrossed, Landmark, Scale, Upload, LayoutGrid,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { useInstallPrompt } from '../lib/useInstallPrompt'
 import logo from '../assets/crs-logo.png'
 
 const NAV_ITEMS = [
+  { to: '/overview', label: 'All Companies', icon: LayoutGrid },
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/companies', label: 'Companies', icon: Building2 },
   { to: '/accounts', label: 'Chart of Accounts', icon: PieChart },
   { to: '/contacts', label: 'Customers & Suppliers', icon: Users },
   { to: '/sales-invoices', label: 'Sales Invoices', icon: FileCheck },
   { to: '/purchase-invoices', label: 'Purchase Invoices', icon: FileText },
+  { to: '/restaurant-revenue', label: 'Table Revenue', icon: UtensilsCrossed, products: ['restaurant'] },
   { to: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { to: '/ledger', label: 'Ledger', icon: BookText },
   { to: '/analytics', label: 'Analytics', icon: TrendingUp },
   { to: '/financial-performance', label: 'Financial Performance', icon: BarChart3 },
   { to: '/reports', label: 'Reports', icon: FileBarChart },
+  { to: '/capital', label: 'Capital & Loans', icon: Landmark },
+  { to: '/compare', label: 'Compare Periods', icon: Scale },
+  { to: '/import', label: 'Import Data', icon: Upload },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 // Bottom tab bar shows only the most-used items on phones; rest live in the drawer.
 const MOBILE_TAB_ITEMS = ['/', '/sales-invoices', '/purchase-invoices', '/analytics']
 
+const PRODUCT_LABELS = { basic: 'CRS Basic Accounting', hotel: 'CRS Hotel Accounting', restaurant: 'CRS Restaurant Accounting' }
+
 export default function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [installBannerDismissed, setInstallBannerDismissed] = useState(
     () => localStorage.getItem('crs_install_banner_dismissed') === '1'
   )
-  const { companies, activeCompany, switchCompany, signOut, activeRole } = useAuth()
+  const { companies, activeCompany, switchCompany, signOut, activeRole, activeProduct, availableProducts, switchProduct } = useAuth()
   const { canInstall, isStandalone, promptInstall } = useInstallPrompt()
   const navigate = useNavigate()
+  const visibleNavItems = NAV_ITEMS.filter(item => !item.products || item.products.includes(activeProduct))
 
   const isIOS = /iphone|ipad|ipod/i.test(window.navigator.userAgent)
   const showInstallBanner = !installBannerDismissed && !isStandalone && (canInstall || isIOS)
@@ -61,7 +69,7 @@ export default function AppShell() {
         />
 
         <nav className="flex-1 overflow-y-auto py-2">
-          {NAV_ITEMS.map(item => (
+          {visibleNavItems.map(item => (
             <NavItem key={item.to} {...item} />
           ))}
         </nav>
@@ -88,8 +96,24 @@ export default function AppShell() {
               <button onClick={() => setDrawerOpen(false)}><X size={22} /></button>
             </div>
             <CompanySwitcherBlock companies={companies} activeCompany={activeCompany} switchCompany={switchCompany} alwaysShowLabel />
+            {availableProducts.length > 1 && (
+              <div className="px-3 lg:px-4 py-3 border-b border-slate-100">
+                <div className="text-[11px] font-semibold text-slate-400 uppercase mb-1.5">Product</div>
+                <div className="space-y-1">
+                  {availableProducts.map(product => (
+                    <button
+                      key={product}
+                      onClick={() => switchProduct(product)}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-sm ${product === activeProduct ? 'bg-navy-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                    >
+                      {PRODUCT_LABELS[product]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <nav className="flex-1 overflow-y-auto py-2" onClick={() => setDrawerOpen(false)}>
-              {NAV_ITEMS.map(item => <NavItem key={item.to} {...item} alwaysShowLabel />)}
+              {visibleNavItems.map(item => <NavItem key={item.to} {...item} alwaysShowLabel />)}
             </nav>
             <button onClick={signOut} className="flex items-center gap-3 px-5 py-4 text-sm text-slate-500 border-t border-slate-100">
               <LogOut size={18} /> Log Out
@@ -103,15 +127,20 @@ export default function AppShell() {
         {/* Mobile top bar */}
         <header className="md:hidden h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 sticky top-0 z-30">
           <button onClick={() => setDrawerOpen(true)}><Menu size={22} className="text-navy-700" /></button>
-          <div className="flex items-center gap-2">
-            <img src={logo} alt="" className="h-6 w-6 object-contain" />
-            <span className="font-semibold text-navy-700 text-sm">{activeCompany?.name || 'CRS Accounting'}</span>
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-2">
+              <img src={logo} alt="" className="h-6 w-6 object-contain" />
+              <span className="font-semibold text-navy-700 text-sm">{activeCompany?.name || 'CRS Accounting'}</span>
+            </div>
+            {availableProducts.length > 0 && (
+              <span className="text-[10px] text-slate-400 -mt-0.5">{PRODUCT_LABELS[activeProduct]}</span>
+            )}
           </div>
           <div className="w-6" />
         </header>
 
         {/* Persistent "you are here" bar — visible on every page, every screen size */}
-        <ActiveCompanyBar companies={companies} activeCompany={activeCompany} switchCompany={switchCompany} activeRole={activeRole} />
+        <ActiveCompanyBar companies={companies} activeCompany={activeCompany} switchCompany={switchCompany} activeRole={activeRole} activeProduct={activeProduct} availableProducts={availableProducts} switchProduct={switchProduct} />
 
         {showInstallBanner && (
           <InstallBanner isIOS={isIOS} canInstall={canInstall} onInstall={promptInstall} onDismiss={dismissInstallBanner} />
@@ -124,7 +153,7 @@ export default function AppShell() {
 
       {/* Mobile bottom tab bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around py-1.5 z-30">
-        {NAV_ITEMS.filter(i => MOBILE_TAB_ITEMS.includes(i.to)).map(item => (
+        {visibleNavItems.filter(i => MOBILE_TAB_ITEMS.includes(i.to)).map(item => (
           <NavLink
             key={item.to} to={item.to} end={item.end}
             className={({ isActive }) => `flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-[11px] ${isActive ? 'text-navy-600' : 'text-slate-400'}`}
@@ -184,7 +213,7 @@ function NavItem({ to, label, icon: Icon, end, alwaysShowLabel }) {
   )
 }
 
-function ActiveCompanyBar({ companies, activeCompany, switchCompany, activeRole }) {
+function ActiveCompanyBar({ companies, activeCompany, switchCompany, activeRole, activeProduct, availableProducts, switchProduct }) {
   const [open, setOpen] = useState(false)
   if (!activeCompany) return null
 
@@ -213,8 +242,46 @@ function ActiveCompanyBar({ companies, activeCompany, switchCompany, activeRole 
           </div>
         )}
       </div>
-      {activeRole && (
-        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/10 capitalize">{activeRole}</span>
+      <div className="flex items-center gap-3">
+        <ProductSwitcher activeProduct={activeProduct} availableProducts={availableProducts} switchProduct={switchProduct} />
+        {activeRole && (
+          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/10 capitalize">{activeRole}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ProductSwitcher({ activeProduct, availableProducts, switchProduct }) {
+  const [open, setOpen] = useState(false)
+  if (!activeProduct || availableProducts.length === 0) return null
+
+  if (availableProducts.length === 1) {
+    return (
+      <span className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/10">
+        <Layers size={12} className="text-gold-300" /> {PRODUCT_LABELS[activeProduct]}
+      </span>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20">
+        <Layers size={12} className="text-gold-300" /> {PRODUCT_LABELS[activeProduct]}
+        <ChevronDown size={12} className="text-navy-200" />
+      </button>
+      {open && (
+        <div className="absolute z-30 top-full right-0 mt-1 w-56 bg-white border border-slate-200 rounded-lg shadow-lg text-slate-700">
+          {availableProducts.map(product => (
+            <button
+              key={product}
+              onClick={() => { switchProduct(product); setOpen(false) }}
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-navy-50 ${product === activeProduct ? 'font-semibold text-navy-700' : ''}`}
+            >
+              {PRODUCT_LABELS[product]}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )
