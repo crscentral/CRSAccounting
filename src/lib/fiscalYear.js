@@ -18,6 +18,15 @@ function ymd(d) {
   return d.toISOString().slice(0, 10)
 }
 
+/** Returns { from, to } for one full calendar year. If it's the current year, `to` is
+ * today; otherwise `to` is Dec 31 of that year. */
+export function getYearRange(year, today = new Date()) {
+  const from = new Date(Date.UTC(year, 0, 1))
+  const isCurrentYear = today.getUTCFullYear() === year
+  const to = isCurrentYear ? today : new Date(Date.UTC(year, 11, 31))
+  return { from: ymd(from), to: ymd(to) }
+}
+
 /** Returns { from, to } for one specific calendar month. If that month is the current
  * month, `to` is today (same MTD behaviour as before); otherwise `to` is the last day
  * of that month. */
