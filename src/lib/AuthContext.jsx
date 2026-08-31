@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [companies, setCompanies] = useState([]) // [{company, role}]
   const [activeCompanyId, setActiveCompanyId] = useState(localStorage.getItem('crs_active_company') || null)
+  const [activeProduct, setActiveProduct] = useState(localStorage.getItem('crs_active_product') || 'basic')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -28,7 +29,7 @@ export function AuthProvider({ children }) {
   async function loadCompanies() {
     const { data, error } = await supabase
       .from('company_members')
-      .select('role, company:companies(*)')
+      .select('role, company:companies(*, company_products(product))')
       .eq('user_id', session.user.id)
     if (error) { console.error(error); return }
     setCompanies(data || [])
@@ -43,9 +44,25 @@ export function AuthProvider({ children }) {
     localStorage.setItem('crs_active_company', id)
   }
 
+  function switchProduct(product) {
+    setActiveProduct(product)
+    localStorage.setItem('crs_active_product', product)
+  }
+
   const activeMembership = companies.find(c => c.company.id === activeCompanyId) || companies[0]
   const activeCompany = activeMembership?.company || null
   const activeRole = activeMembership?.role || null
+  const availableProducts = (activeCompany?.company_products || []).map(p => p.product)
+
+  // If the currently-selected product isn't actually enabled for the active company
+  // (e.g. just switched companies, or an admin revoked a product), fall back to
+  // whichever product IS enabled -- 'basic' if present, otherwise the first one.
+  useEffect(() => {
+    if (availableProducts.length === 0) return
+    if (!availableProducts.includes(activeProduct)) {
+      switchProduct(availableProducts.includes('basic') ? 'basic' : availableProducts[0])
+    }
+  }, [activeCompany?.id, availableProducts.join(',')])
 
   async function signOut() {
     await supabase.auth.signOut()
@@ -58,6 +75,9 @@ export function AuthProvider({ children }) {
     activeCompany,
     activeRole,
     switchCompany,
+    activeProduct,
+    availableProducts,
+    switchProduct,
     signOut,
     loading,
     refreshCompanies: loadCompanies,
