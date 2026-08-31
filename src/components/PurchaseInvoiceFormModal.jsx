@@ -9,7 +9,7 @@ import InvoicePreviewModal from './InvoicePreviewModal'
 
 const emptyItem = () => ({ product_name: '', hsn_sac: '', qty: 1, unit_price: 0, tax_percent: 0 })
 
-export default function PurchaseInvoiceFormModal({ companyId, company, contacts, accounts, invoice, onClose, onSaved }) {
+export default function PurchaseInvoiceFormModal({ companyId, product, company, contacts, accounts, invoice, onClose, onSaved }) {
   const { activeRole } = useAuth()
   const [invoiceNumber, setInvoiceNumber] = useState(invoice?.invoice_number || `PINV-${Math.floor(Math.random() * 90000000 + 10000000)}`)
   const [contactId, setContactId] = useState(invoice?.contact_id || '')
@@ -106,7 +106,7 @@ export default function PurchaseInvoiceFormModal({ companyId, company, contacts,
       const amountUsd = currency === 'USD' ? netPayable : netPayable / fxRate
 
       const payload = {
-        company_id: companyId,
+        company_id: companyId, product,
         invoice_number: invoiceNumber.trim(),
         contact_id: finalContactId || null,
         supplier_name_freeform: !finalContactId ? supplierName.trim() : null,
