@@ -13,7 +13,7 @@ import { DollarSign, TrendingDown, TrendingUp } from 'lucide-react'
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 export default function FinancialPerformance() {
-  const { activeCompany, can } = useAuth()
+  const { activeCompany, activeProduct, can } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [tab, setTab] = useState('profit')
   const [reportModalOpen, setReportModalOpen] = useState(false)
@@ -25,14 +25,14 @@ export default function FinancialPerformance() {
   const [forecast, setForecast] = useState([])
   const [forecastYear, setForecastYear] = useState(new Date().getFullYear() + 1)
 
-  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, cp.range.from, cp.range.to])
-  useEffect(() => { if (activeCompany) loadForecast() }, [activeCompany, forecastYear])
+  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
+  useEffect(() => { if (activeCompany) loadForecast() }, [activeCompany, activeProduct, forecastYear])
 
   async function loadData() {
     const [{ data: s }, { data: p }, { data: entries }] = await Promise.all([
-      supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
-      supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
-      supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
+      supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
+      supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
+      supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
     ])
     setSales(s || []); setPurchases(p || [])
 
@@ -55,15 +55,15 @@ export default function FinancialPerformance() {
   }
 
   async function loadForecast() {
-    const { data } = await supabase.from('forecast_entries').select('*').eq('company_id', activeCompany.id).eq('forecast_year', forecastYear).order('forecast_month')
+    const { data } = await supabase.from('forecast_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('forecast_year', forecastYear).order('forecast_month')
     setForecast(data || [])
   }
 
   async function saveForecastRow(month, revenue, expenses) {
     await supabase.from('forecast_entries').upsert({
-      company_id: activeCompany.id, forecast_year: forecastYear, forecast_month: month,
+      company_id: activeCompany.id, product: activeProduct, forecast_year: forecastYear, forecast_month: month,
       revenue_usd: revenue, expenses_usd: expenses,
-    }, { onConflict: 'company_id,forecast_year,forecast_month' })
+    }, { onConflict: 'company_id,product,forecast_year,forecast_month' })
     loadForecast()
   }
 
@@ -73,9 +73,9 @@ export default function FinancialPerformance() {
     const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
 
     const [{ data: s }, { data: p }, { data: entries }] = await Promise.all([
-      supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).gte('invoice_date', range.from).lte('invoice_date', range.to),
-      supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).gte('invoice_date', range.from).lte('invoice_date', range.to),
-      supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).gte('entry_date', range.from).lte('entry_date', range.to),
+      supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
+      supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
+      supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to),
     ])
     const rev = (s || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
     const exp = (p || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
@@ -117,7 +117,7 @@ export default function FinancialPerformance() {
     const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
 
     const years = selections.forecastYears === 'Selected Year Only' ? [forecastYear] : Array.from({ length: 5 }, (_, i) => new Date().getFullYear() + i)
-    const { data } = await supabase.from('forecast_entries').select('*').eq('company_id', activeCompany.id).in('forecast_year', years).order('forecast_year').order('forecast_month')
+    const { data } = await supabase.from('forecast_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).in('forecast_year', years).order('forecast_year').order('forecast_month')
 
     const rows = (data || []).map(f => {
       const profit = Number(f.revenue_usd) - Number(f.expenses_usd)
