@@ -10,7 +10,7 @@ import ContactFormModal from '../components/ContactFormModal'
 import ContactDetailModal from '../components/ContactDetailModal'
 
 export default function Contacts() {
-  const { activeCompany, can, activeRole } = useAuth()
+  const { activeCompany, activeProduct, can, activeRole } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [tab, setTab] = useState('customers')
   const [customers, setCustomers] = useState([])
@@ -22,13 +22,13 @@ export default function Contacts() {
   const [viewingContact, setViewingContact] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
-  useEffect(() => { if (activeCompany) loadAll() }, [activeCompany])
+  useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct])
 
   async function loadAll() {
     const [{ data: contacts }, { data: si }, { data: pi }] = await Promise.all([
       supabase.from('contacts').select('*').eq('company_id', activeCompany.id).order('name'),
-      supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id),
-      supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id),
+      supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+      supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
     ])
     setCustomers((contacts || []).filter(c => c.type === 'customer'))
     setSuppliers((contacts || []).filter(c => c.type === 'supplier'))
@@ -180,6 +180,7 @@ export default function Contacts() {
         <ContactDetailModal
           contact={viewingContact}
           company={activeCompany}
+          product={activeProduct}
           role={activeRole}
           fmt={cp.fmt}
           onClose={() => setViewingContact(null)}
