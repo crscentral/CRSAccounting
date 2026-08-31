@@ -10,18 +10,18 @@ import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 
 export default function Ledger() {
-  const { activeCompany, can } = useAuth()
+  const { activeCompany, activeProduct, can } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [accounts, setAccounts] = useState([])
   const [accountId, setAccountId] = useState('')
   const [entries, setEntries] = useState([])
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
-  useEffect(() => { if (activeCompany) loadAccounts() }, [activeCompany])
+  useEffect(() => { if (activeCompany) loadAccounts() }, [activeCompany, activeProduct])
   useEffect(() => { if (accountId) loadEntries() }, [accountId, cp.range.from, cp.range.to])
 
   async function loadAccounts() {
-    const { data } = await supabase.from('accounts').select('*').eq('company_id', activeCompany.id).order('code')
+    const { data } = await supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('code')
     setAccounts(data || [])
     if (data && data.length > 0) setAccountId(data.find(a => a.code === '4010')?.id || data[0].id)
   }
