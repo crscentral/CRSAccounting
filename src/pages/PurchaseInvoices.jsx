@@ -19,7 +19,7 @@ const STATUS_COLORS = {
 }
 
 export default function PurchaseInvoices() {
-  const { activeCompany, can, activeRole } = useAuth()
+  const { activeCompany, activeProduct, can, activeRole } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [invoices, setInvoices] = useState([])
   const [contacts, setContacts] = useState([])
@@ -28,13 +28,13 @@ export default function PurchaseInvoices() {
   const [editingInvoice, setEditingInvoice] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
-  useEffect(() => { if (activeCompany) loadData() }, [activeCompany])
+  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct])
 
   async function loadData() {
     const [{ data: inv }, { data: con }, { data: acc }] = await Promise.all([
-      supabase.from('purchase_invoices').select('*, contact:contacts(name, email, phone, address, tax_id)').eq('company_id', activeCompany.id).order('invoice_date', { ascending: false }),
+      supabase.from('purchase_invoices').select('*, contact:contacts(name, email, phone, address, tax_id)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }),
       supabase.from('contacts').select('*').eq('company_id', activeCompany.id),
-      supabase.from('accounts').select('*').eq('company_id', activeCompany.id),
+      supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
     ])
     setInvoices(inv || [])
     setContacts(con || [])
@@ -56,7 +56,7 @@ export default function PurchaseInvoices() {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
 
-    const { data: inv } = await supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).gte('invoice_date', range.from).lte('invoice_date', range.to).order('invoice_date', { ascending: false })
+    const { data: inv } = await supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to).order('invoice_date', { ascending: false })
     const sections = [{
       heading: 'Purchase Invoices',
       columns: ['Invoice #', 'Date', 'Supplier', 'Currency', 'Amount', `Amount (${selections.currency})`, 'Status'],
@@ -175,6 +175,7 @@ export default function PurchaseInvoices() {
       {modalOpen && (
         <PurchaseInvoiceFormModal
           companyId={activeCompany.id}
+          product={activeProduct}
           company={activeCompany}
           contacts={contacts}
           accounts={accounts}
