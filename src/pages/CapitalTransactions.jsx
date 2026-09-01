@@ -3,11 +3,13 @@ import { Plus, Trash2, Landmark, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
-import { getLatestRate } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import Modal, { Field } from '../components/Modal'
 import { CURRENCY_LIST } from '../lib/currencies'
+import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
+import { resolveReportPeriod } from '../lib/fiscalYear'
 
 export default function CapitalTransactions() {
   const { activeCompany, activeProduct, can } = useAuth()
@@ -18,14 +20,15 @@ export default function CapitalTransactions() {
   const [dividends, setDividends] = useState([])
   const [loanModalOpen, setLoanModalOpen] = useState(false)
   const [dividendModalOpen, setDividendModalOpen] = useState(false)
+  const [reportModalOpen, setReportModalOpen] = useState(false)
 
-  useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct])
+  useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadAll() {
     const [{ data: acc }, { data: loans }, { data: divs }] = await Promise.all([
       supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('code'),
-      supabase.from('loan_principal_payments').select('*, loan_account:accounts!loan_principal_payments_loan_account_id_fkey(name, code)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('payment_date', { ascending: false }),
-      supabase.from('owner_dividends').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('payment_date', { ascending: false }),
+      supabase.from('loan_principal_payments').select('*, loan_account:accounts!loan_principal_payments_loan_account_id_fkey(name, code)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', cp.range.from).lte('payment_date', cp.range.to).order('payment_date', { ascending: false }),
+      supabase.from('owner_dividends').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', cp.range.from).lte('payment_date', cp.range.to).order('payment_date', { ascending: false }),
     ])
     setAccounts(acc || [])
     setLoanPayments(loans || [])
@@ -46,6 +49,38 @@ export default function CapitalTransactions() {
     loadAll()
   }
 
+  async function generateCapitalReport(selections, format) {
+    const range = resolveReportPeriod(selections.period, 1, selections.customFrom, selections.customTo)
+    const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
+    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+
+    const sections = []
+    if (selections.sections.includes('Loan Principal Repayments')) {
+      const { data } = await supabase.from('loan_principal_payments').select('*, loan_account:accounts!loan_principal_payments_loan_account_id_fkey(name, code)')
+        .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
+      sections.push({
+        heading: 'Loan Principal Repayments',
+        columns: ['Date', 'Loan Account', 'Amount', `Amount (${selections.currency})`, 'Notes'],
+        rows: (data || []).map(r => [r.payment_date, r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
+      })
+    }
+    if (selections.sections.includes('Owner Dividends')) {
+      const { data } = await supabase.from('owner_dividends').select('*')
+        .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
+      sections.push({
+        heading: 'Owner Dividends',
+        columns: ['Date', 'Owner', 'Amount', `Amount (${selections.currency})`, 'Notes'],
+        rows: (data || []).map(r => [r.payment_date, r.owner_name, `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
+      })
+    }
+
+    const title = 'Capital & Loans'
+    const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
+    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'capital_loans_report' })
+    if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'capital_loans_report' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'capital_loans_report' })
+  }
+
   if (!activeCompany) return null
 
   const liabilityAccounts = accounts.filter(a => a.type === 'Liabilities')
@@ -64,15 +99,22 @@ export default function CapitalTransactions() {
       <PageHeader
         title="Capital & Loans"
         subtitle={`${activeCompany.name} • Loan principal repayments and owner dividends — balance sheet only, never part of P&L`}
+        currencyProps={cp.currencyProps}
+        periodProps={cp.periodProps}
         actions={
-          can(['owner', 'admin']) && (
-            <button
-              onClick={() => tab === 'loans' ? setLoanModalOpen(true) : setDividendModalOpen(true)}
-              className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
-            >
-              <Plus size={16} /> {tab === 'loans' ? 'New Repayment' : 'New Dividend'}
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400">
+              Download Report
             </button>
-          )
+            {can(['owner', 'admin']) && (
+              <button
+                onClick={() => tab === 'loans' ? setLoanModalOpen(true) : setDividendModalOpen(true)}
+                className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
+              >
+                <Plus size={16} /> {tab === 'loans' ? 'New Repayment' : 'New Dividend'}
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -143,6 +185,19 @@ export default function CapitalTransactions() {
           product={activeProduct}
           onClose={() => setDividendModalOpen(false)}
           onSaved={loadAll}
+        />
+      )}
+
+      {reportModalOpen && (
+        <ReportOptionsModal
+          title="Capital & Loans"
+          fields={[
+            { type: 'checkboxGroup', key: 'sections', label: 'Include Sections', options: ['Loan Principal Repayments', 'Owner Dividends'], default: ['Loan Principal Repayments', 'Owner Dividends'] },
+            { type: 'currency', key: 'currency', default: cp.displayCurrency },
+            { type: 'period', key: 'period', default: 'ALL_TIME' },
+          ]}
+          onGenerate={generateCapitalReport}
+          onClose={() => setReportModalOpen(false)}
         />
       )}
     </div>
