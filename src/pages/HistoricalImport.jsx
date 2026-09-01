@@ -6,6 +6,7 @@ import { useAuth } from '../lib/AuthContext'
 import { getLatestRate } from '../lib/fx'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
+import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 
 const TEMPLATE_HEADERS = ['Date (YYYY-MM-DD)', 'Account Code', 'Debit Amount', 'Credit Amount', 'Currency', 'Description']
 
@@ -18,9 +19,23 @@ export default function HistoricalImport() {
   const [fileName, setFileName] = useState('')
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState(null)
+  const [reportModalOpen, setReportModalOpen] = useState(false)
   const fileInputRef = useRef(null)
 
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct])
+
+  function generateImportsReport(selections, format) {
+    const sections = [{
+      heading: 'Import History',
+      columns: ['Imported', 'File', 'Entries'],
+      rows: imports.map(i => [new Date(i.created_at).toLocaleDateString(), i.filename || '—', i.row_count]),
+    }]
+    const title = 'Historical Data Imports'
+    const subtitle = `${activeCompany.name} • ${imports.length} import(s) on record`
+    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'historical_imports_log' })
+    if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'historical_imports_log' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'historical_imports_log' })
+  }
 
   async function loadAll() {
     const [{ data: acc }, { data: imp }] = await Promise.all([
@@ -153,6 +168,11 @@ export default function HistoricalImport() {
       <PageHeader
         title="Import Historical Data"
         subtitle={`${activeCompany.name} • Bring in past-year figures so you can compare them against current and future data`}
+        actions={
+          <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400">
+            Download Report
+          </button>
+        }
       />
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mb-6">
@@ -234,6 +254,15 @@ export default function HistoricalImport() {
           emptyMessage="No historical data imported yet."
         />
       </div>
+
+      {reportModalOpen && (
+        <ReportOptionsModal
+          title="Historical Data Imports"
+          fields={[]}
+          onGenerate={generateImportsReport}
+          onClose={() => setReportModalOpen(false)}
+        />
+      )}
     </div>
   )
 }
