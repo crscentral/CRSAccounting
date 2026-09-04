@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Building2, PieChart, Users, FileCheck, FileText,
   ArrowLeftRight, BookText, TrendingUp, BarChart3, FileBarChart, Settings,
   Menu, X, LogOut, ChevronDown, Download, Share, Layers, UtensilsCrossed, Landmark, Scale, Upload, LayoutGrid,
+  BedDouble, Target, ClipboardList, Receipt, Wallet,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { useInstallPrompt } from '../lib/useInstallPrompt'
@@ -15,8 +16,13 @@ const NAV_ITEMS = [
   { to: '/companies', label: 'Companies', icon: Building2 },
   { to: '/accounts', label: 'Chart of Accounts', icon: PieChart },
   { to: '/contacts', label: 'Customers & Suppliers', icon: Users },
-  { to: '/sales-invoices', label: 'Sales Invoices', icon: FileCheck },
-  { to: '/purchase-invoices', label: 'Purchase Invoices', icon: FileText },
+  { to: '/sales-invoices', label: 'Sales Invoices', icon: FileCheck, products: ['basic'] },
+  { to: '/purchase-invoices', label: 'Purchase Invoices', icon: FileText, products: ['basic'] },
+  { to: '/hotel-stats', label: 'Revenue & Occupancy', icon: BedDouble, products: ['hotel'] },
+  { to: '/hotel-budget', label: 'Room Revenue Budget', icon: Target, products: ['hotel'] },
+  { to: '/hotel-revenue', label: 'Daily Revenue Collection', icon: Wallet, products: ['hotel'] },
+  { to: '/hotel-expenses', label: 'Expenses', icon: Receipt, products: ['hotel'] },
+  { to: '/hotel-guest-invoices', label: 'Guest Invoices', icon: ClipboardList, products: ['hotel'] },
   { to: '/restaurant-revenue', label: 'Table Revenue', icon: UtensilsCrossed, products: ['restaurant'] },
   { to: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { to: '/ledger', label: 'Ledger', icon: BookText },
