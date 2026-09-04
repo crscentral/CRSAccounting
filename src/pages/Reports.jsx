@@ -62,7 +62,8 @@ export default function Reports() {
   const operatingExpenses = sumAccounts(operatingAccounts)
   const otherBelowLine = sumAccounts(otherBelowLineAccounts)
   const daInterest = sumAccounts(daInterestAccounts)
-  const ebitda = totalRevenue - operatingExpenses - otherBelowLine
+  const gop = totalRevenue - operatingExpenses
+  const ebitda = gop - otherBelowLine
 
   const reportTitles = { balance_sheet: 'Balance Sheet', income_statement: 'Income Statement', trial_balance: 'Trial Balance' }
 
@@ -91,7 +92,8 @@ export default function Reports() {
     const operatingAccs = accounts.filter(a => a.type === 'Expenses' && !['Below GOP', 'Below EBITDA'].includes(a.subtype))
     const sumAccs = (list) => list.reduce((s, a) => s + (bal[a.id] || 0), 0)
     const opExp = sumAccs(operatingAccs), otherBL = sumAccs(otherBelowLineAccs), daInt = sumAccs(daInterestAccs)
-    const ebitdaVal = rev - opExp - otherBL
+    const gopVal = rev - opExp
+    const ebitdaVal = gopVal - otherBL
 
     let sections = []
     const reportKey = selections.reportType
@@ -110,6 +112,7 @@ export default function Reports() {
           ['Total Revenue', fmt(rev)],
           ...operatingAccs.map(a => [a.name, fmt(bal[a.id] || 0)]),
           ['Total Operating Expenses', fmt(opExp)],
+          [gopVal >= 0 ? 'GOP (Gross Operating Profit)' : 'GOL (Gross Operating Loss)', fmt(gopVal)],
           ...(otherBelowLineAccs.length > 0 ? [...otherBelowLineAccs.map(a => [a.name, fmt(bal[a.id] || 0)]), ['Management Fees, Taxes, Rent & Licenses', fmt(otherBL)]] : []),
           ['EBITDA', fmt(ebitdaVal)],
           ...(daInterestAccs.length > 0 ? [...daInterestAccs.map(a => [a.name, fmt(bal[a.id] || 0)]), ['Depreciation & Interest', fmt(daInt)]] : []),
@@ -204,6 +207,7 @@ export default function Reports() {
                 <Row label="Total Operating Expenses" value={cp.fmt(operatingExpenses)} bold />
               </div>
             </div>
+            <Row label={`GOP/GOL (${gop >= 0 ? 'Gross Operating Profit' : 'Gross Operating Loss'})`} value={cp.fmt(gop)} bold large />
             {otherBelowLineAccounts.length > 0 && (
               <div>
                 <div className="bg-amber-600 text-white text-sm font-semibold px-3 py-2 rounded-t-lg">MANAGEMENT FEES, TAXES, RENT & LICENSES</div>
