@@ -21,8 +21,41 @@ export default function Dashboard() {
   const [allSales, setAllSales] = useState([])
   const [allPurchases, setAllPurchases] = useState([])
   const [recentTx, setRecentTx] = useState([])
+  const [hotelStats, setHotelStats] = useState(null)
 
   useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
+  useEffect(() => { if (activeCompany && activeProduct === 'hotel') loadHotelStats() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
+
+  async function loadHotelStats() {
+    const [{ data: settings }, { data: stats }, { data: invoices }, { data: budgetRows }] = await Promise.all([
+      supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', 'hotel').maybeSingle(),
+      supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('stat_date', cp.range.from).lte('stat_date', cp.range.to).order('stat_date'),
+      supabase.from('hotel_guest_invoices').select('invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
+      supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', 'hotel'),
+    ])
+    const totalRooms = settings?.total_rooms || 0
+    const totalOccupied = (stats || []).reduce((s, r) => s + r.rooms_occupied, 0)
+    const totalRevenue = (stats || []).reduce((s, r) => s + Number(r.room_revenue_usd), 0)
+    const availableRoomNights = totalRooms * (stats || []).length
+    const occupancyPct = availableRoomNights > 0 ? (totalOccupied / availableRoomNights) * 100 : 0
+    const adr = totalOccupied > 0 ? totalRevenue / totalOccupied : 0
+    const revpar = availableRoomNights > 0 ? totalRevenue / availableRoomNights : 0
+    const invoicesPending = (invoices || []).reduce((s, i) => s + (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd)), 0)
+
+    // Daily Actual vs Budget trend -- budget is the monthly figure spread evenly
+    // across that month's days, matching the same daily-budget logic as the Room
+    // Revenue Budget page.
+    const budgetByMonth = {}
+    ;(budgetRows || []).forEach(b => { budgetByMonth[`${b.budget_year}-${b.budget_month}`] = Number(b.budgeted_room_revenue_usd) })
+    const dailyTrend = (stats || []).map(s => {
+      const [y, m] = s.stat_date.split('-')
+      const key = `${y}-${Number(m)}`
+      const daysInMon = new Date(Number(y), Number(m), 0).getDate()
+      const monthlyBudget = budgetByMonth[key] || 0
+      return { date: s.stat_date, Actual: Number(s.room_revenue_usd), Budget: Math.round((monthlyBudget / daysInMon) * 100) / 100 }
+    })
+    setHotelStats({ occupancyPct, adr, revpar, invoicesPending, totalRevenue, dailyTrend })
+  }
 
   async function loadData() {
     const [{ data: s }, { data: p }, { data: r }, { data: allS }, { data: allP }] = await Promise.all([
@@ -227,6 +260,36 @@ export default function Dashboard() {
         <KpiCard label="Collected" value={cp.fmt(collected)} sublabel="payment receipts" icon={Receipt} tone="gold" />
         <KpiCard label="Outstanding" value={cp.fmt(outstanding)} sublabel="pending + overdue" icon={AlertCircle} tone="slate" />
       </div>
+
+      {activeProduct === 'hotel' && hotelStats && (
+        <div className="mb-6">
+          <h2 className="text-sm font-semibold text-slate-500 uppercase mb-3">Hotel Performance</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <KpiCard label="Occupancy %" value={`${hotelStats.occupancyPct.toFixed(1)}%`} tone="blue" />
+            <KpiCard label="ADR" value={cp.fmt(hotelStats.adr)} tone="green" />
+            <KpiCard label="RevPAR" value={cp.fmt(hotelStats.revpar)} tone="gold" />
+            <KpiCard label="Guest Invoices Pending" value={cp.fmt(hotelStats.invoicesPending)} tone="red" />
+          </div>
+          {hotelStats.dailyTrend.length > 1 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mt-4">
+              <h3 className="font-semibold text-slate-700 mb-4">Room Revenue: Actual vs Daily Budget</h3>
+              <div className="h-64 sm:h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={hotelStats.dailyTrend}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={v => cp.fmt(v)} />
+                    <Legend />
+                    <Bar dataKey="Actual" fill="#1B3A6B" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="Budget" fill="#C9A84C" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mb-6">
         <h2 className="font-semibold text-slate-700 mb-4 flex items-center gap-2">
