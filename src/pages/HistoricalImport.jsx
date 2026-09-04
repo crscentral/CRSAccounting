@@ -22,6 +22,17 @@ export default function HistoricalImport() {
   const [reportModalOpen, setReportModalOpen] = useState(false)
   const fileInputRef = useRef(null)
 
+  // Hotel-only: 5-year Room Revenue actuals + Budget bulk import (separate template
+  // and target tables from the generic ledger importer above -- these feed
+  // hotel_room_stats and hotel_room_revenue_budget directly, not ledger_entries).
+  const [hotelParsedActuals, setHotelParsedActuals] = useState([])
+  const [hotelParsedBudget, setHotelParsedBudget] = useState([])
+  const [hotelErrors, setHotelErrors] = useState([])
+  const [hotelFileName, setHotelFileName] = useState('')
+  const [hotelImporting, setHotelImporting] = useState(false)
+  const [hotelResult, setHotelResult] = useState(null)
+  const hotelFileInputRef = useRef(null)
+
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct])
 
   function generateImportsReport(selections, format) {
@@ -163,6 +174,110 @@ export default function HistoricalImport() {
 
   if (!activeCompany) return null
 
+  function downloadHotelTemplate() {
+    const wb = XLSX.utils.book_new()
+    const actualsSheet = XLSX.utils.aoa_to_sheet([
+      ['Date (YYYY-MM-DD)', 'Rooms Occupied', 'Room Revenue', 'Amount Collected', 'Currency'],
+      ['2025-04-01', 42, 5600, 5600, 'USD'],
+    ])
+    XLSX.utils.book_append_sheet(wb, actualsSheet, 'Room Revenue Actuals')
+    const budgetSheet = XLSX.utils.aoa_to_sheet([
+      ['Year', 'Month (1-12)', 'Budgeted Occupancy %', 'Budgeted ADR', 'Budgeted Room Revenue', 'Currency'],
+      [2025, 4, 75, 130, 117000, 'USD'],
+    ])
+    XLSX.utils.book_append_sheet(wb, budgetSheet, 'Room Revenue Budget')
+    XLSX.writeFile(wb, `hotel_5yr_import_template.xlsx`)
+  }
+
+  function handleHotelFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setHotelFileName(file.name)
+    setHotelResult(null)
+    const reader = new FileReader()
+    reader.onload = (evt) => {
+      const wb = XLSX.read(evt.target.result, { type: 'array' })
+      const errors = []
+      const actuals = []
+      const budgetRows = []
+
+      const actualsSheet = wb.Sheets['Room Revenue Actuals']
+      if (actualsSheet) {
+        const rows = XLSX.utils.sheet_to_json(actualsSheet, { header: 1, raw: false }).slice(1)
+        rows.forEach((row, i) => {
+          const [dateRaw, occRaw, revRaw, collectedRaw, currencyRaw] = row
+          if (!dateRaw && !occRaw && !revRaw) return
+          const date = normalizeDate(dateRaw)
+          if (!date) { errors.push(`Room Revenue Actuals row ${i + 2}: invalid date.`); return }
+          const revenue = parseFloat(revRaw)
+          if (!revenue || revenue <= 0) { errors.push(`Room Revenue Actuals row ${i + 2}: Room Revenue must be a positive number.`); return }
+          actuals.push({
+            date, roomsOccupied: parseInt(occRaw) || 0, revenue,
+            collected: parseFloat(collectedRaw) || revenue,
+            currency: String(currencyRaw || 'USD').trim().toUpperCase() || 'USD',
+          })
+        })
+      }
+
+      const budgetSheet = wb.Sheets['Room Revenue Budget']
+      if (budgetSheet) {
+        const rows = XLSX.utils.sheet_to_json(budgetSheet, { header: 1, raw: false }).slice(1)
+        rows.forEach((row, i) => {
+          const [yearRaw, monthRaw, occRaw, adrRaw, revRaw, currencyRaw] = row
+          if (!yearRaw && !monthRaw && !revRaw) return
+          const year = parseInt(yearRaw), month = parseInt(monthRaw)
+          if (!year || !month || month < 1 || month > 12) { errors.push(`Room Revenue Budget row ${i + 2}: invalid year/month.`); return }
+          budgetRows.push({
+            year, month, occ: parseFloat(occRaw) || 0, adr: parseFloat(adrRaw) || 0, revenue: parseFloat(revRaw) || 0,
+            currency: String(currencyRaw || 'USD').trim().toUpperCase() || 'USD',
+          })
+        })
+      }
+
+      if (!actualsSheet && !budgetSheet) errors.push('No "Room Revenue Actuals" or "Room Revenue Budget" sheet found -- use the downloaded template as-is.')
+      setHotelParsedActuals(actuals)
+      setHotelParsedBudget(budgetRows)
+      setHotelErrors(errors)
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  async function confirmHotelImport() {
+    setHotelImporting(true)
+    try {
+      const rateCache = { USD: 1 }
+      const rateFor = async (c) => { if (!(c in rateCache)) rateCache[c] = (await getLatestRate(c)) || 1; return rateCache[c] }
+
+      for (const row of hotelParsedActuals) {
+        const rate = await rateFor(row.currency)
+        await supabase.from('hotel_room_stats').upsert({
+          company_id: activeCompany.id, product: activeProduct, stat_date: row.date, rooms_occupied: row.roomsOccupied,
+          currency: row.currency, fx_rate_locked: rate,
+          room_revenue: row.revenue, room_revenue_collected: row.collected,
+          room_revenue_usd: Math.round(row.revenue / rate * 100) / 100,
+          room_revenue_collected_usd: Math.round(row.collected / rate * 100) / 100,
+        }, { onConflict: 'company_id,product,stat_date' })
+      }
+
+      for (const row of hotelParsedBudget) {
+        const rate = await rateFor(row.currency)
+        await supabase.from('hotel_room_revenue_budget').upsert({
+          company_id: activeCompany.id, product: activeProduct, budget_year: row.year, budget_month: row.month,
+          budgeted_occupancy_pct: row.occ, budgeted_adr: row.adr, budgeted_room_revenue: row.revenue,
+          currency: row.currency, fx_rate_locked: rate, budgeted_room_revenue_usd: Math.round(row.revenue / rate * 100) / 100,
+        }, { onConflict: 'company_id,product,budget_year,budget_month' })
+      }
+
+      setHotelResult({ success: true, actualsCount: hotelParsedActuals.length, budgetCount: hotelParsedBudget.length })
+      setHotelParsedActuals([]); setHotelParsedBudget([]); setHotelErrors([]); setHotelFileName('')
+      if (hotelFileInputRef.current) hotelFileInputRef.current.value = ''
+    } catch (err) {
+      setHotelResult({ success: false, message: err.message })
+    } finally {
+      setHotelImporting(false)
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -235,6 +350,51 @@ export default function HistoricalImport() {
             <div className={`mt-4 rounded-lg p-3 text-sm ${result.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
               {result.success ? `Imported ${result.count} entries successfully.` : `Import failed: ${result.message}`}
             </div>
+          )}
+        </div>
+      )}
+
+      {activeProduct === 'hotel' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mb-6">
+          <h3 className="font-semibold text-slate-700 mb-2">Hotel: 5-Year Room Revenue &amp; Budget Import</h3>
+          <p className="text-sm text-slate-500 mb-4">
+            Separate from the generic import above — this template has two sheets: "Room Revenue Actuals" (day-by-day Rooms Occupied, Room Revenue, Amount Collected) and "Room Revenue Budget" (month-by-month Occupancy %, ADR, Budgeted Revenue). Fill in up to 5 years of history in either or both sheets.
+          </p>
+          <button onClick={downloadHotelTemplate} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400 mb-4">
+            <Download size={15} /> Download Hotel Template
+          </button>
+
+          {can(['owner', 'admin', 'accountant']) && (
+            <>
+              <input ref={hotelFileInputRef} type="file" accept=".xlsx,.xls" onChange={handleHotelFileChange}
+                className="block w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-navy-600 file:text-white file:text-sm file:font-medium hover:file:bg-navy-700" />
+
+              {hotelErrors.length > 0 && (
+                <div className="mt-4 bg-red-50 border border-red-100 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-red-700 text-sm font-medium mb-1"><AlertTriangle size={15} /> {hotelErrors.length} row(s) had problems and were skipped:</div>
+                  <ul className="text-xs text-red-600 space-y-0.5 max-h-32 overflow-y-auto">
+                    {hotelErrors.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {(hotelParsedActuals.length > 0 || hotelParsedBudget.length > 0) && (
+                <div className="mt-4">
+                  <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium mb-3">
+                    <CheckCircle2 size={15} /> {hotelParsedActuals.length} day(s) of actuals and {hotelParsedBudget.length} budget month(s) ready to import
+                  </div>
+                  <button onClick={confirmHotelImport} disabled={hotelImporting} className="bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60">
+                    {hotelImporting ? 'Importing…' : 'Import Hotel Data'}
+                  </button>
+                </div>
+              )}
+
+              {hotelResult && (
+                <div className={`mt-4 rounded-lg p-3 text-sm ${hotelResult.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                  {hotelResult.success ? `Imported ${hotelResult.actualsCount} day(s) of actuals and ${hotelResult.budgetCount} budget month(s).` : `Import failed: ${hotelResult.message}`}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
