@@ -21,6 +21,11 @@ import CapitalTransactions from './pages/CapitalTransactions'
 import Comparison from './pages/Comparison'
 import HistoricalImport from './pages/HistoricalImport'
 import PortfolioDashboard from './pages/PortfolioDashboard'
+import HotelOccupancyStats from './pages/HotelOccupancyStats'
+import HotelBudget from './pages/HotelBudget'
+import HotelRevenue from './pages/HotelRevenue'
+import HotelExpenses from './pages/HotelExpenses'
+import HotelGuestInvoices from './pages/HotelGuestInvoices'
 
 function Gate({ children }) {
   const { session, loading, companies, activeCompany } = useAuth()
@@ -50,6 +55,11 @@ function AppRoutes() {
         <Route path="/contacts" element={<Contacts />} />
         <Route path="/sales-invoices" element={<SalesInvoices />} />
         <Route path="/purchase-invoices" element={<PurchaseInvoices />} />
+        <Route path="/hotel-stats" element={<HotelOccupancyStats />} />
+        <Route path="/hotel-budget" element={<HotelBudget />} />
+        <Route path="/hotel-revenue" element={<HotelRevenue />} />
+        <Route path="/hotel-expenses" element={<HotelExpenses />} />
+        <Route path="/hotel-guest-invoices" element={<HotelGuestInvoices />} />
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/ledger" element={<Ledger />} />
         <Route path="/analytics" element={<Analytics />} />
