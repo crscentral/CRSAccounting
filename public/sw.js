@@ -1,9 +1,17 @@
 // Minimal service worker: exists mainly to satisfy PWA installability requirements
-// (Chrome/Android's automatic install prompt requires one) and to speed up repeat loads
-// of the app shell. Deliberately does NOT cache Supabase API responses — your financial
-// data should always come fresh from the network, never from a stale cache.
+// (Chrome/Android's automatic install prompt requires one) and to give the app
+// something to fall back to if you're genuinely offline. Deliberately does NOT cache
+// Supabase API responses — your financial data should always come fresh from the
+// network, never from a stale cache.
+//
+// NETWORK-FIRST: always try the network first for everything. Only serve the cached
+// copy if the network request actually fails (i.e. you're offline). This is what
+// makes new deploys show up immediately instead of needing a manual refresh -- a
+// cache-first strategy would keep serving the page shell from the very first visit
+// forever, since this file's own bytes rarely change and browsers only re-check a
+// service worker for updates when its file content changes.
 
-const CACHE_NAME = 'crs-accounting-shell-v1'
+const CACHE_NAME = 'crs-accounting-shell-v2'
 const APP_SHELL = [
   '/CRSAccounting/',
   '/CRSAccounting/index.html',
@@ -36,8 +44,14 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // App shell / static assets: try cache first, fall back to network.
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(event.request)
+      .then((response) => {
+        // Keep the offline fallback copy up to date with whatever we just fetched.
+        const copy = response.clone()
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {})
+        return response
+      })
+      .catch(() => caches.match(event.request))
   )
 })
