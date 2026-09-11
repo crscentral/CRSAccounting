@@ -27,9 +27,9 @@ export default function Transactions() {
     ])
 
     const combined = [
-      ...(si || []).map(r => ({ id: `si-${r.id}`, date: r.invoice_date, type: 'Sales Invoice', desc: `${r.invoice_number} — ${r.contact?.name || ''}`, amount_usd: r.amount_usd, direction: 'in' })),
-      ...(pi || []).map(r => ({ id: `pi-${r.id}`, date: r.invoice_date, type: 'Purchase Invoice', desc: `${r.invoice_number} — ${r.contact?.name || r.supplier_name_freeform || ''}`, amount_usd: r.amount_usd, direction: 'out' })),
-      ...(pr || []).map(r => ({ id: `pr-${r.id}`, date: r.receipt_date, type: 'Payment Receipt', desc: 'Payment received', amount_usd: r.amount_usd, direction: 'in' })),
+      ...(si || []).map(r => ({ id: `si-${r.id}`, date: r.invoice_date, type: 'Sales Invoice', desc: `${r.invoice_number} — ${r.contact?.name || ''}`, amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'in' })),
+      ...(pi || []).map(r => ({ id: `pi-${r.id}`, date: r.invoice_date, type: 'Purchase Invoice', desc: `${r.invoice_number} — ${r.contact?.name || r.supplier_name_freeform || ''}`, amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'out' })),
+      ...(pr || []).map(r => ({ id: `pr-${r.id}`, date: r.receipt_date, type: 'Payment Receipt', desc: 'Payment received', amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'in' })),
     ].sort((a, b) => b.date.localeCompare(a.date))
 
     setRows(combined)
@@ -84,6 +84,13 @@ export default function Transactions() {
           </button>
         }
       />
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <StatBox label={`Total Inflow (${cp.displayCurrency})`} value={cp.fmt(rows.filter(r => r.direction === 'in').reduce((s, r) => s + Number(r.amount_usd), 0))} tone="green" />
+        <StatBox label={`Total Outflow (${cp.displayCurrency})`} value={cp.fmt(rows.filter(r => r.direction === 'out').reduce((s, r) => s + Number(r.amount_usd), 0))} tone="red" />
+        <StatBox label={`Net Position (${cp.displayCurrency})`} value={cp.fmt(rows.reduce((s, r) => s + (r.direction === 'in' ? Number(r.amount_usd) : -Number(r.amount_usd)), 0))} tone="slate" />
+      </div>
+
       <DataTable
         columns={[
           { key: 'date', label: 'Date', render: r => <span className="whitespace-nowrap">{formatDate(r.date)}</span> },
@@ -91,9 +98,14 @@ export default function Transactions() {
           { key: 'desc', label: 'Description' },
           {
             key: 'amount_usd', label: 'Amount', render: r => (
-              <span className={r.direction === 'in' ? 'text-emerald-600 font-medium' : 'text-red-600 font-medium'}>
-                {r.direction === 'in' ? '+' : '−'}{cp.fmt(r.amount_usd)}
-              </span>
+              <div className="flex flex-col">
+                <span className={r.direction === 'in' ? 'text-emerald-600 font-medium' : 'text-red-600 font-medium'}>
+                  {r.direction === 'in' ? '+' : '−'} {Number(r.amount)?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {r.currency}
+                </span>
+                <span className="text-xs text-slate-400 font-medium">
+                  ({cp.displayCurrency} {cp.fmt(r.amount_usd).replace(/[^0-9.,]/g, '')})
+                </span>
+              </div>
             )
           },
         ]}
@@ -112,6 +124,16 @@ export default function Transactions() {
           onClose={() => setReportModalOpen(false)}
         />
       )}
+    </div>
+  )
+}
+
+function StatBox({ label, value, tone = 'slate' }) {
+  const tones = { green: 'text-emerald-600', amber: 'text-amber-600', red: 'text-red-600', slate: 'text-slate-800' }
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{label}</div>
+      <div className={`text-xl sm:text-2xl font-bold ${tones[tone]}`}>{value}</div>
     </div>
   )
 }
