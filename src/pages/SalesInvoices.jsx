@@ -10,6 +10,7 @@ import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
 import { resolveReportPeriod, formatDate } from '../lib/fiscalYear'
 import InvoiceDownloadMenu from '../components/InvoiceDownloadMenu'
 import SalesInvoiceFormModal from '../components/SalesInvoiceFormModal'
+import PaymentReceiptFormModal from '../components/PaymentReceiptFormModal'
 
 const STATUS_COLORS = {
   Draft: 'bg-slate-100 text-slate-600',
@@ -27,6 +28,8 @@ export default function SalesInvoices() {
   const [contacts, setContacts] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState(null)
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false)
+  const [editingReceipt, setEditingReceipt] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
   useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
@@ -34,7 +37,7 @@ export default function SalesInvoices() {
   async function loadData() {
     const [{ data: inv }, { data: rec }, { data: con }] = await Promise.all([
       supabase.from('sales_invoices').select('*, contact:contacts(name, email, phone, address)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
-      supabase.from('payment_receipts').select('*, invoice:sales_invoices(invoice_number)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to).order('receipt_date', { ascending: false }),
+      supabase.from('payment_receipts').select('*, invoice:sales_invoices(invoice_number), contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to).order('receipt_date', { ascending: false }),
       supabase.from('contacts').select('*').eq('company_id', activeCompany.id),
     ])
     setInvoices(inv || [])
@@ -67,7 +70,7 @@ export default function SalesInvoices() {
       })
     }
     if (selections.dataType === 'Payment Receipts' || selections.dataType === 'Both') {
-      const { data: rec } = await supabase.from('payment_receipts').select('*, invoice:sales_invoices(invoice_number)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', range.from).lte('receipt_date', range.to).order('receipt_date', { ascending: false })
+      const { data: rec } = await supabase.from('payment_receipts').select('*, invoice:sales_invoices(invoice_number), contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', range.from).lte('receipt_date', range.to).order('receipt_date', { ascending: false })
       sections.push({
         heading: 'Payment Receipts',
         columns: ['Invoice #', 'Date', 'Amount', `Amount (${selections.currency})`, 'Method'],
@@ -80,6 +83,14 @@ export default function SalesInvoices() {
     if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'sales_receipts_report' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'sales_receipts_report' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'sales_receipts_report' })
+  }
+
+
+  async function handleReceiptDelete(r) {
+    if (!confirm('Delete this receipt?')) return
+    const { error } = await supabase.from('payment_receipts').delete().eq('id', r.id)
+    if (error) alert(error.message)
+    else loadData()
   }
 
   if (!activeCompany) return null
@@ -118,9 +129,15 @@ export default function SalesInvoices() {
               Download Report
             </button>
             {can(['owner', 'admin', 'accountant']) && (
-              <button onClick={() => { setEditingInvoice(null); setModalOpen(true) }} className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
-                <Plus size={16} /> New Invoice
-              </button>
+              tab === 'invoices' ? (
+                <button onClick={() => { setEditingInvoice(null); setModalOpen(true) }} className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
+                  <Plus size={16} /> New Invoice
+                </button>
+              ) : (
+                <button onClick={() => { setEditingReceipt(null); setReceiptModalOpen(true) }} className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
+                  <Plus size={16} /> New Receipt
+                </button>
+              )
             )}
           </div>
         }
