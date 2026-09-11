@@ -16,15 +16,6 @@ export function exportTableToPDF({ title, subtitle, columns, rows, filename }) {
     doc.setTextColor(100)
     doc.text(subtitle, 14, 25)
   }
-  
-  if (logoUrl) {
-    const logo = await loadImageAsDataUrl(logoUrl)
-    if (logo?.dataUrl) {
-      const logoH = 12
-      const logoW = logoH * logo.ratio
-      doc.addImage(logo.dataUrl, 'PNG', pageWidth - 14 - logoW, 10, logoW, logoH)
-    }
-  }
   autoTable(doc, {
     startY: subtitle ? 32 : 26,
     head: [columns],
