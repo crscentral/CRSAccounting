@@ -130,7 +130,7 @@ export default function Reports() {
     const subtitle = reportKey === 'balance_sheet'
       ? `${activeCompany.name} • As of today • ${selections.currency}`
       : `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === \'pdf\' || format === \'preview\') await exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: reportKey , logoUrl: activeCompany?.logo_url})
+    if (format === 'pdf' || format === 'preview') await exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: reportKey , logoUrl: activeCompany?.logo_url})
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: reportKey })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: reportKey , logoUrl: activeCompany?.logo_url})
   }
