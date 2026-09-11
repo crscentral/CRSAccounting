@@ -16,6 +16,15 @@ export function exportTableToPDF({ title, subtitle, columns, rows, filename }) {
     doc.setTextColor(100)
     doc.text(subtitle, 14, 25)
   }
+  
+  if (logoUrl) {
+    const logo = await loadImageAsDataUrl(logoUrl)
+    if (logo?.dataUrl) {
+      const logoH = 12
+      const logoW = logoH * logo.ratio
+      doc.addImage(logo.dataUrl, 'PNG', pageWidth - 14 - logoW, 10, logoW, logoH)
+    }
+  }
   autoTable(doc, {
     startY: subtitle ? 32 : 26,
     head: [columns],
@@ -549,7 +558,7 @@ function renderGroupedBarChartDataUrl({ categories, series, width = 800, height 
  * ({ heading, keyValuePairs: [[label, value], ...] }), or a chart
  * ({ heading, chart: { categories, series } }).
  */
-export function exportMultiSectionPDF({ title, subtitle, sections, filename, preview = false }) {
+export async function exportMultiSectionPDF({ title, subtitle, sections, filename, logoUrl, preview = false }) {
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -561,6 +570,15 @@ export function exportMultiSectionPDF({ title, subtitle, sections, filename, pre
     doc.setFontSize(10)
     doc.setTextColor(100)
     doc.text(subtitle, 14, 25)
+  }
+  
+  if (logoUrl) {
+    const logo = await loadImageAsDataUrl(logoUrl)
+    if (logo?.dataUrl) {
+      const logoH = 12
+      const logoW = logoH * logo.ratio
+      doc.addImage(logo.dataUrl, 'PNG', pageWidth - 14 - logoW, 10, logoW, logoH)
+    }
   }
 
   let y = subtitle ? 33 : 27
@@ -640,7 +658,7 @@ export function exportMultiSectionExcel({ title, sections, filename }) {
 }
 
 /** Multi-section Word export. */
-export function exportMultiSectionWord({ title, subtitle, sections, filename }) {
+export function exportMultiSectionWord({ title, subtitle, sections, filename, logoUrl }) {
   const esc = escapeHtml
   const sectionsHtml = sections.map(section => {
     let inner = ''
@@ -665,6 +683,7 @@ export function exportMultiSectionWord({ title, subtitle, sections, filename }) 
     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
     <head><meta charset="utf-8"><title>${esc(title)}</title></head>
     <body style="font-family:Arial,sans-serif;">
+      ${logoUrl ? `<img src="${logoUrl}" style="max-height:50px;float:right;" />` : ''}
       <h1 style="color:#1B3A6B;margin-bottom:0;">${esc(title)}</h1>
       ${subtitle ? `<p style="color:#666;">${esc(subtitle)}</p>` : ''}
       ${sectionsHtml}

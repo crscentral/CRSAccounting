@@ -65,9 +65,9 @@ export default function PurchaseInvoices() {
 
     const title = 'Purchase Invoices'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'purchase_invoices_report' })
+    if (format === \'pdf\' || format === \'preview\') await exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'purchase_invoices_report' , logoUrl: activeCompany?.logo_url})
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'purchase_invoices_report' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'purchase_invoices_report' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'purchase_invoices_report' , logoUrl: activeCompany?.logo_url})
   }
 
   if (!activeCompany) return null
