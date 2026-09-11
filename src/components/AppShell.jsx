@@ -228,6 +228,7 @@ function ActiveCompanyBar({ toggleSidebar, companies, activeCompany, switchCompa
     <div className="hidden md:flex items-center justify-between px-6 lg:px-8 h-11 bg-navy-700 text-white text-sm sticky top-0 z-20">
         <div className="flex items-center gap-4">
           <button onClick={toggleSidebar} className="text-white hover:text-slate-300"><Menu size={18} /></button>
+      </div>
       <div className="relative">
         <button
           onClick={() => companies.length > 1 && setOpen(o => !o)}
