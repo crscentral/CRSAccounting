@@ -214,16 +214,33 @@ export default function SalesInvoices() {
           </div>
         </>
       ) : (
-        <DataTable
-          columns={[
-            { key: 'invoice', label: 'Invoice #', render: r => r.invoice?.invoice_number || '—' },
-            { key: 'receipt_date', label: 'Date', render: r => <span className="whitespace-nowrap">{formatDate(r.receipt_date)}</span> },
-            { key: 'amount', label: 'Amount', render: r => `${r.amount.toLocaleString()} ${r.currency}` },
-            { key: 'amount_usd', label: 'Amount (USD)', render: r => cp.fmt(r.amount_usd) },
-            { key: 'method', label: 'Method' },
-          ]}
-          rows={receipts}
-        />
+        <>
+          <DataTable
+            columns={[
+              { key: 'receipt_number', label: 'Receipt #', render: r => r.receipt_number || '—' },
+              { key: 'invoice', label: 'Invoice #', render: r => r.invoice?.invoice_number || '—' },
+              { key: 'receipt_date', label: 'Date', render: r => <span className="whitespace-nowrap">{formatDate(r.receipt_date)}</span> },
+              { key: 'customer', label: 'Customer', render: r => r.customer_name_freeform || r.contact?.name || '—' },
+              { key: 'amount', label: 'Amount', render: r => `${r.amount.toLocaleString()} ${r.currency}` },
+              { key: 'amount_usd', label: 'Amount (USD)', render: r => cp.fmt(r.amount_usd) },
+              { key: 'method', label: 'Method' },
+              {
+                key: 'actions', label: '', render: r => (
+                  <div className="flex gap-2 justify-end md:justify-start">
+                    {can(['owner', 'admin', 'accountant']) && (
+                      <>
+                        <button onClick={() => { setEditingReceipt(r); setReceiptModalOpen(true) }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
+                        <button onClick={() => handleReceiptDelete(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+                      </>
+                    )}
+                  </div>
+                )
+              }
+            ]}
+            rows={receipts}
+          />
+          <ReceiptCurrencySummary receipts={receipts} />
+        </>
       )}
 
       {modalOpen && (
@@ -238,15 +255,17 @@ export default function SalesInvoices() {
         />
       )}
 
-            <PaymentReceiptFormModal
-        open={receiptModalOpen}
-        onClose={() => setReceiptModalOpen(false)}
-        companyId={activeCompany?.id}
-        product={activeProduct}
-        initialData={editingReceipt}
-        onSuccess={loadData}
-        invoices={invoices}
-      />
+            {receiptModalOpen && (
+        <PaymentReceiptFormModal
+          open={receiptModalOpen}
+          onClose={() => setReceiptModalOpen(false)}
+          companyId={activeCompany?.id}
+          product={activeProduct}
+          initialData={editingReceipt}
+          onSuccess={loadData}
+          invoices={invoices}
+        />
+      )}
 
       {reportModalOpen && (
         <ReportOptionsModal
