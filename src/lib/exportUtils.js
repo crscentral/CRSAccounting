@@ -23,6 +23,16 @@ export function exportTableToPDF({ title, subtitle, columns, rows, filename }) {
     headStyles: { fillColor: [27, 58, 107] },
     styles: { fontSize: 9 },
   })
+  const pageCount = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i)
+    if (loadedLogo?.dataUrl) {
+      const logoH = 12
+      const logoW = logoH * loadedLogo.ratio
+      doc.addImage(loadedLogo.dataUrl, 'PNG', pageWidth - 14 - logoW, 10, logoW, logoH)
+    }
+  }
+
   if (preview) {
     const blob = doc.output('blob')
     const url = URL.createObjectURL(blob)
@@ -352,6 +362,16 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     doc.text(invoice.thank_you_note, pageWidth / 2, finalY + 6, { align: 'center' })
   }
 
+  const pageCount = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i)
+    if (loadedLogo?.dataUrl) {
+      const logoH = 12
+      const logoW = logoH * loadedLogo.ratio
+      doc.addImage(loadedLogo.dataUrl, 'PNG', pageWidth - 14 - logoW, 10, logoW, logoH)
+    }
+  }
+
   if (preview) {
     const blob = doc.output('blob')
     const url = URL.createObjectURL(blob)
@@ -563,13 +583,9 @@ export async function exportMultiSectionPDF({ title, subtitle, sections, filenam
     doc.text(subtitle, 14, 25)
   }
   
+  let loadedLogo = null
   if (logoUrl) {
-    const logo = await loadImageAsDataUrl(logoUrl)
-    if (logo?.dataUrl) {
-      const logoH = 12
-      const logoW = logoH * logo.ratio
-      doc.addImage(logo.dataUrl, 'PNG', pageWidth - 14 - logoW, 10, logoW, logoH)
-    }
+    loadedLogo = await loadImageAsDataUrl(logoUrl)
   }
 
   let y = subtitle ? 33 : 27
@@ -615,6 +631,16 @@ export async function exportMultiSectionPDF({ title, subtitle, sections, filenam
       y += imgH + 12
     }
   })
+
+  const pageCount = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i)
+    if (loadedLogo?.dataUrl) {
+      const logoH = 12
+      const logoW = logoH * loadedLogo.ratio
+      doc.addImage(loadedLogo.dataUrl, 'PNG', pageWidth - 14 - logoW, 10, logoW, logoH)
+    }
+  }
 
   if (preview) {
     const blob = doc.output('blob')
