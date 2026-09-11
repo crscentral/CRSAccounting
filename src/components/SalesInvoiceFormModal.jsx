@@ -140,8 +140,15 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
         finalContactId = newContact.id
       }
 
-      const rate = await getLatestRate(currency)
-      const fxRate = currency === 'USD' ? 1 : (rate || 1)
+      let fxRate = 1
+      if (currency !== 'USD') {
+        if (initialData && initialData.currency === currency && initialData.fx_rate_locked) {
+          fxRate = initialData.fx_rate_locked
+        } else {
+          const rate = await getLatestRate(currency)
+          fxRate = rate || 1
+        }
+      }
       const amountUsd = currency === 'USD' ? grandTotal : grandTotal / fxRate
 
       const payload = {

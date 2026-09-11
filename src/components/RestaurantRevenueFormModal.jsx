@@ -28,7 +28,14 @@ export default function RestaurantRevenueFormModal({ companyId, product, company
     if (!revenueDate || total <= 0) { setError('Date and at least one revenue amount are required.'); return }
     setSaving(true)
     try {
-      const fxRate = currency === 'USD' ? 1 : (await getLatestRate(currency)) || 1
+      let fxRate = 1
+      if (currency !== 'USD') {
+        if (initialData && initialData.currency === currency && initialData.fx_rate_locked) {
+          fxRate = initialData.fx_rate_locked
+        } else {
+          fxRate = (await getLatestRate(currency)) || 1
+        }
+      }
       const payload = {
         company_id: companyId, product,
         revenue_date: revenueDate, meal_period: mealPeriod, table_or_section: tableOrSection.trim() || null,
