@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Download, FileText, FileSpreadsheet, FileType, Loader2 } from 'lucide-react'
+import { Download, FileText, FileSpreadsheet, FileType, Loader2, Eye } from 'lucide-react'
 import { exportInvoicePDF, exportInvoiceExcel, exportInvoiceWord } from '../lib/exportUtils'
 
 /**
@@ -37,15 +37,24 @@ export default function InvoiceDownloadMenu({ type, company, role, getData, icon
 
   if (pdfOnly) {
     return (
-      <button onClick={() => run(exportInvoicePDF)} disabled={loading} className={triggerClassName || 'text-slate-400 hover:text-navy-600 disabled:opacity-50'} title="Download PDF">
-        {loading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-      </button>
+      <div className="flex items-center gap-2">
+        <button onClick={() => run(async (args) => exportInvoicePDF({ ...args, preview: true }))} disabled={loading} className={triggerClassName || 'text-slate-400 hover:text-navy-600 disabled:opacity-50'} title="Preview Invoice">
+          <Eye size={15} />
+        </button>
+        <button onClick={() => run(exportInvoicePDF)} disabled={loading} className={triggerClassName || 'text-slate-400 hover:text-navy-600 disabled:opacity-50'} title="Download PDF">
+          {loading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+        </button>
+      </div>
     )
   }
 
   return (
-    <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(o => !o)} disabled={loading} className={triggerClassName || 'text-slate-400 hover:text-navy-600 disabled:opacity-50'} title="Download">
+    <div className="flex items-center gap-2">
+      <button onClick={() => run(async (args) => exportInvoicePDF({ ...args, preview: true }))} disabled={loading} className={triggerClassName || 'text-slate-400 hover:text-navy-600 disabled:opacity-50'} title="Preview Invoice">
+        <Eye size={15} />
+      </button>
+      <div className="relative" ref={ref}>
+        <button onClick={() => setOpen(o => !o)} disabled={loading} className={triggerClassName || 'text-slate-400 hover:text-navy-600 disabled:opacity-50'} title="Download">
         {loading ? <Loader2 size={15} className="animate-spin" /> : (iconOnly ? <Download size={15} /> : <span className="flex items-center gap-1 text-xs font-medium"><Download size={15} /> Download</span>)}
       </button>
       {open && (
@@ -61,6 +70,7 @@ export default function InvoiceDownloadMenu({ type, company, role, getData, icon
           </button>
         </div>
       )}
+      </div>
     </div>
   )
 }

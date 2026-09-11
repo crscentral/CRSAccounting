@@ -111,3 +111,10 @@ export function resolveReportPeriod(periodValue, fiscalYearStartMonth = 1, custo
       return resolvePeriodRange('ALL_TIME')
   }
 }
+
+export function formatDate(d) {
+  if (!d) return '';
+  const [y, m, day] = d.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${parseInt(day, 10)} ${months[parseInt(m, 10) - 1]}, ${y}`;
+}

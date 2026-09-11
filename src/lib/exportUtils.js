@@ -126,7 +126,7 @@ function loadImageAsDataUrl(url) {
  * (Subtotal/Discount/Tax/Grand Total/Paid/Balance Due), LUT acknowledgement line,
  * payment terms, bank details, and a centered legal-name footer.
  */
-export async function exportInvoicePDF({ type, invoice, items, company, contact, itemDescription }) {
+export async function exportInvoicePDF({ type, invoice, items, company, contact, itemDescription, preview = false }) {
   const doc = new jsPDF()
   const isSales = type === 'sales'
   const pageWidth = doc.internal.pageSize.getWidth()
@@ -352,7 +352,13 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     doc.text(invoice.thank_you_note, pageWidth / 2, finalY + 6, { align: 'center' })
   }
 
-  doc.save(`${invoice.invoice_number}.pdf`)
+  if (preview) {
+    const blob = doc.output('blob')
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+  } else {
+    doc.save(`${invoice.invoice_number}.pdf`)
+  }
 }
 
 /** Exports a single invoice as a formatted Excel workbook (header info + line items + summary). */

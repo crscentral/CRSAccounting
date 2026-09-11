@@ -7,7 +7,7 @@ import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
-import { resolveReportPeriod } from '../lib/fiscalYear'
+import { resolveReportPeriod, formatDate } from '../lib/fiscalYear'
 import InvoiceDownloadMenu from '../components/InvoiceDownloadMenu'
 import SalesInvoiceFormModal from '../components/SalesInvoiceFormModal'
 
@@ -148,8 +148,8 @@ export default function SalesInvoices() {
             columns={[
               { key: 'invoice_number', label: 'Invoice #' },
               { key: 'customer', label: 'Customer', render: r => r.contact?.name || '—' },
-              { key: 'invoice_date', label: 'Date' },
-              { key: 'due_date', label: 'Due' },
+              { key: 'invoice_date', label: 'Date', render: r => <span className="whitespace-nowrap">{formatDate(r.invoice_date)}</span> },
+              { key: 'due_date', label: 'Due', render: r => <span className="whitespace-nowrap">{formatDate(r.due_date)}</span> },
               { key: 'amount', label: 'Amount', render: r => `${r.amount.toLocaleString()} ${r.currency}` },
               { key: 'amount_usd', label: 'Amount (USD)', render: r => cp.fmt(r.amount_usd) },
               { key: 'status', label: 'Status', render: r => <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[r.status]}`}>{r.status}</span> },
@@ -199,7 +199,7 @@ export default function SalesInvoices() {
         <DataTable
           columns={[
             { key: 'invoice', label: 'Invoice #', render: r => r.invoice?.invoice_number || '—' },
-            { key: 'receipt_date', label: 'Date' },
+            { key: 'receipt_date', label: 'Date', render: r => <span className="whitespace-nowrap">{formatDate(r.receipt_date)}</span> },
             { key: 'amount', label: 'Amount', render: r => `${r.amount.toLocaleString()} ${r.currency}` },
             { key: 'amount_usd', label: 'Amount (USD)', render: r => cp.fmt(r.amount_usd) },
             { key: 'method', label: 'Method' },

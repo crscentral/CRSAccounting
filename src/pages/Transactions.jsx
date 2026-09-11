@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
-import { resolveReportPeriod } from '../lib/fiscalYear'
+import { resolveReportPeriod, formatDate } from '../lib/fiscalYear'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
@@ -86,7 +86,7 @@ export default function Transactions() {
       />
       <DataTable
         columns={[
-          { key: 'date', label: 'Date' },
+          { key: 'date', label: 'Date', render: r => <span className="whitespace-nowrap">{formatDate(r.date)}</span> },
           { key: 'type', label: 'Type' },
           { key: 'desc', label: 'Description' },
           {

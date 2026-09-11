@@ -7,7 +7,7 @@ import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
-import { resolveReportPeriod } from '../lib/fiscalYear'
+import { resolveReportPeriod, formatDate } from '../lib/fiscalYear'
 import InvoiceDownloadMenu from '../components/InvoiceDownloadMenu'
 import PurchaseInvoiceFormModal from '../components/PurchaseInvoiceFormModal'
 
@@ -143,7 +143,7 @@ export default function PurchaseInvoices() {
       <DataTable
         columns={[
           { key: 'invoice_number', label: 'Invoice #' },
-          { key: 'date', label: 'Date', render: r => r.invoice_date },
+          { key: 'date', label: 'Date', render: r => <span className="whitespace-nowrap">{formatDate(r.invoice_date)}</span> },
           { key: 'supplier', label: 'Supplier', render: r => r.contact?.name || r.supplier_name_freeform || '—' },
           { key: 'currency', label: 'Currency' },
           { key: 'amount', label: 'Amount', render: r => `${r.amount.toLocaleString()} ${r.currency}` },
