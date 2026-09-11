@@ -97,15 +97,17 @@ export default function Transactions() {
           { key: 'type', label: 'Type' },
           { key: 'desc', label: 'Description' },
           {
-            key: 'amount_usd', label: 'Amount', render: r => (
-              <div className="flex flex-col">
-                <span className={r.direction === 'in' ? 'text-emerald-600 font-medium' : 'text-red-600 font-medium'}>
-                  {r.direction === 'in' ? '+' : '−'} {Number(r.amount)?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {r.currency}
-                </span>
-                <span className="text-xs text-slate-400 font-medium">
-                  ({cp.displayCurrency} {cp.fmt(r.amount_usd).replace(/[^0-9.,]/g, '')})
-                </span>
-              </div>
+            key: 'amount_native', label: 'Original Amount', render: r => (
+              <span className={r.direction === 'in' ? 'text-emerald-600 font-medium' : 'text-red-600 font-medium'}>
+                {r.direction === 'in' ? '+' : '−'} {Number(r.amount)?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {r.currency}
+              </span>
+            )
+          },
+          {
+            key: 'amount_usd', label: `Amount (${cp.displayCurrency})`, render: r => (
+              <span className={r.direction === 'in' ? 'text-emerald-600 font-medium' : 'text-red-600 font-medium'}>
+                {r.direction === 'in' ? '+' : '−'}{cp.fmt(r.amount_usd)}
+              </span>
             )
           },
         ]}
