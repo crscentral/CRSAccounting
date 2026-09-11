@@ -11,6 +11,7 @@ import { resolveReportPeriod, formatDate } from '../lib/fiscalYear'
 import InvoiceDownloadMenu from '../components/InvoiceDownloadMenu'
 import SalesInvoiceFormModal from '../components/SalesInvoiceFormModal'
 import PaymentReceiptFormModal from '../components/PaymentReceiptFormModal'
+import ReceiptCurrencySummary from '../components/ReceiptCurrencySummary'
 
 const STATUS_COLORS = {
   Draft: 'bg-slate-100 text-slate-600',
