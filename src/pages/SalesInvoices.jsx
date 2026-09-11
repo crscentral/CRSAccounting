@@ -238,6 +238,16 @@ export default function SalesInvoices() {
         />
       )}
 
+            <PaymentReceiptFormModal
+        open={receiptModalOpen}
+        onClose={() => setReceiptModalOpen(false)}
+        companyId={activeCompany?.id}
+        product={activeProduct}
+        initialData={editingReceipt}
+        onSuccess={loadData}
+        invoices={invoices}
+      />
+
       {reportModalOpen && (
         <ReportOptionsModal
           title="Sales & Receipts"
