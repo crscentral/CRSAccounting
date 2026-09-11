@@ -108,7 +108,7 @@ export default function HotelBudget() {
     const sections = [{ heading: 'Room Revenue Budget', columns: ['Month', 'Budgeted Occ %', 'Budgeted ADR', 'Budgeted Revenue', 'Actual Revenue', 'Variance'], rows: tableRows }]
     const title = 'Room Revenue Budget'
     const subtitle = `${activeCompany.name} • ${startYear}–${startYear + 4} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'room_revenue_budget' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'room_revenue_budget' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'room_revenue_budget' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'room_revenue_budget' })
   }

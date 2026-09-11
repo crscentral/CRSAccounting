@@ -42,6 +42,7 @@ const PRODUCT_LABELS = { basic: 'CRS Basic Accounting', hotel: 'CRS Hotel Accoun
 
 export default function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [sidebarExpanded, setSidebarExpanded] = useState(true)
   const [installBannerDismissed, setInstallBannerDismissed] = useState(
     () => localStorage.getItem('crs_install_banner_dismissed') === '1'
   )
@@ -61,7 +62,7 @@ export default function AppShell() {
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Desktop / tablet sidebar */}
-      <aside className="hidden md:flex md:flex-col w-20 lg:w-64 border-r border-slate-200 bg-white shrink-0">
+      <aside className={`hidden md:flex md:flex-col border-r border-slate-200 bg-white shrink-0 transition-all duration-300 ${sidebarExpanded ? 'w-20 lg:w-64' : 'w-0 overflow-hidden border-r-0'}`}>
         <div className="h-16 flex items-center gap-2 px-3 lg:px-5 border-b border-slate-100">
           <img src={logo} alt="CRS Accounting" className="h-8 w-8 object-contain shrink-0" />
           <span className="hidden lg:block font-semibold text-navy-700 leading-tight">
@@ -146,7 +147,7 @@ export default function AppShell() {
         </header>
 
         {/* Persistent "you are here" bar — visible on every page, every screen size */}
-        <ActiveCompanyBar companies={companies} activeCompany={activeCompany} switchCompany={switchCompany} activeRole={activeRole} activeProduct={activeProduct} availableProducts={availableProducts} switchProduct={switchProduct} />
+        <ActiveCompanyBar toggleSidebar={() => setSidebarExpanded(e => !e)} companies={companies} activeCompany={activeCompany} switchCompany={switchCompany} activeRole={activeRole} activeProduct={activeProduct} availableProducts={availableProducts} switchProduct={switchProduct} />
 
         {showInstallBanner && (
           <InstallBanner isIOS={isIOS} canInstall={canInstall} onInstall={promptInstall} onDismiss={dismissInstallBanner} />
@@ -219,12 +220,14 @@ function NavItem({ to, label, icon: Icon, end, alwaysShowLabel }) {
   )
 }
 
-function ActiveCompanyBar({ companies, activeCompany, switchCompany, activeRole, activeProduct, availableProducts, switchProduct }) {
+function ActiveCompanyBar({ toggleSidebar, companies, activeCompany, switchCompany, activeRole, activeProduct, availableProducts, switchProduct }) {
   const [open, setOpen] = useState(false)
   if (!activeCompany) return null
 
   return (
     <div className="hidden md:flex items-center justify-between px-6 lg:px-8 h-11 bg-navy-700 text-white text-sm sticky top-0 z-20">
+        <div className="flex items-center gap-4">
+          <button onClick={toggleSidebar} className="text-white hover:text-slate-300"><Menu size={18} /></button>
       <div className="relative">
         <button
           onClick={() => companies.length > 1 && setOpen(o => !o)}

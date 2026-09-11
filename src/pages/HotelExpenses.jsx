@@ -60,7 +60,7 @@ export default function HotelExpenses() {
     }]
     const title = 'Hotel Expenses'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'hotel_expenses' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'hotel_expenses' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'hotel_expenses' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'hotel_expenses' })
   }

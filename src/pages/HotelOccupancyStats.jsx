@@ -90,7 +90,7 @@ export default function HotelOccupancyStats() {
 
     const title = 'Hotel Revenue & Occupancy Statistics'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'hotel_occupancy_stats' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'hotel_occupancy_stats' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'hotel_occupancy_stats' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'hotel_occupancy_stats' })
   }

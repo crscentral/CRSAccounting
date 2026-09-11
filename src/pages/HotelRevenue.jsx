@@ -63,7 +63,7 @@ export default function HotelRevenue() {
     ]
     const title = 'Daily Revenue Collection'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'daily_revenue_collection' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'daily_revenue_collection' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'daily_revenue_collection' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'daily_revenue_collection' })
   }

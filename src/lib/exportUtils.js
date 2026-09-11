@@ -23,7 +23,13 @@ export function exportTableToPDF({ title, subtitle, columns, rows, filename }) {
     headStyles: { fillColor: [27, 58, 107] },
     styles: { fontSize: 9 },
   })
-  doc.save(`${filename}.pdf`)
+  if (preview) {
+    const blob = doc.output('blob')
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+  } else {
+    doc.save(`${filename}.pdf`)
+  }
 }
 
 /** Exports tabular data as an .xlsx Excel file. */
@@ -537,7 +543,7 @@ function renderGroupedBarChartDataUrl({ categories, series, width = 800, height 
  * ({ heading, keyValuePairs: [[label, value], ...] }), or a chart
  * ({ heading, chart: { categories, series } }).
  */
-export function exportMultiSectionPDF({ title, subtitle, sections, filename }) {
+export function exportMultiSectionPDF({ title, subtitle, sections, filename, preview = false }) {
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -595,7 +601,13 @@ export function exportMultiSectionPDF({ title, subtitle, sections, filename }) {
     }
   })
 
-  doc.save(`${filename}.pdf`)
+  if (preview) {
+    const blob = doc.output('blob')
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+  } else {
+    doc.save(`${filename}.pdf`)
+  }
 }
 
 /** Multi-section Excel export -- one section per block, stacked in a single sheet with spacing rows. */

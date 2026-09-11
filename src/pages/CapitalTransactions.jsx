@@ -76,7 +76,7 @@ export default function CapitalTransactions() {
 
     const title = 'Capital & Loans'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'capital_loans_report' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'capital_loans_report' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'capital_loans_report' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'capital_loans_report' })
   }

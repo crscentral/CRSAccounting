@@ -179,7 +179,7 @@ export default function Dashboard() {
 
     const title = 'Financial Dashboard'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'dashboard_report' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'dashboard_report' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'dashboard_report' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'dashboard_report' })
   }

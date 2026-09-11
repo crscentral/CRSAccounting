@@ -48,7 +48,7 @@ export default function HotelGuestInvoices() {
     }]
     const title = 'Guest Invoices'
     const subtitle = `${activeCompany.name} • Year to date`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'guest_invoices' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'guest_invoices' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'guest_invoices' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'guest_invoices' })
   }

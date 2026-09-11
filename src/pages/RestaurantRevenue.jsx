@@ -98,7 +98,7 @@ export default function RestaurantRevenue() {
 
     const title = 'Table Revenue Report'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'restaurant_revenue_report' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'restaurant_revenue_report' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'restaurant_revenue_report' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'restaurant_revenue_report' })
   }

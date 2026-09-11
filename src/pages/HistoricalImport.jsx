@@ -43,7 +43,7 @@ export default function HistoricalImport() {
     }]
     const title = 'Historical Data Imports'
     const subtitle = `${activeCompany.name} • ${imports.length} import(s) on record`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'historical_imports_log' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'historical_imports_log' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'historical_imports_log' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'historical_imports_log' })
   }

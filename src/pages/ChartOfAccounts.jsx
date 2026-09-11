@@ -58,7 +58,7 @@ export default function ChartOfAccounts() {
 
     const title = 'Chart of Accounts'
     const subtitle = `${activeCompany.name} • ${selections.accountType} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'chart_of_accounts' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'chart_of_accounts' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'chart_of_accounts' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'chart_of_accounts' })
   }

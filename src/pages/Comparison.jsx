@@ -84,7 +84,7 @@ export default function Comparison() {
 
     const title = 'Period Comparison'
     const subtitle = `${activeCompany.name} • ${labelA} vs ${labelB} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'period_comparison' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'period_comparison' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'period_comparison' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'period_comparison' })
   }

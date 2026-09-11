@@ -146,7 +146,7 @@ export default function ReportOptionsModal({ title, fields, onGenerate, onClose 
           })}
         </div>
 
-        <div className="p-5 border-t border-slate-100 grid grid-cols-3 gap-2 sticky bottom-0 bg-white">
+        <div className="p-5 border-t border-slate-100 grid grid-cols-4 gap-2 sticky bottom-0 bg-white">
           <button disabled={generating} onClick={() => handleGenerate('pdf')} className="flex flex-col items-center gap-1 border border-slate-200 rounded-lg py-2.5 text-xs font-medium text-slate-600 hover:border-navy-400 disabled:opacity-50">
             <FileText size={18} className="text-red-500" /> PDF
           </button>

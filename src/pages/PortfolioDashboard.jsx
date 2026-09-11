@@ -109,7 +109,7 @@ export default function PortfolioDashboard() {
 
     const title = 'All Companies Overview'
     const subtitle = `Combined portfolio • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'portfolio_overview' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'portfolio_overview' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'portfolio_overview' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'portfolio_overview' })
   }

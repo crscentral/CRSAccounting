@@ -107,7 +107,7 @@ export default function FinancialPerformance() {
 
     const title = 'Financial Performance'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'financial_performance_report' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'financial_performance_report' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'financial_performance_report' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'financial_performance_report' })
   }
@@ -134,7 +134,7 @@ export default function FinancialPerformance() {
     const sections = [{ heading: `Forecast — ${years.join(', ')}`, columns, rows }]
     const title = 'Financial Performance — Forecast'
     const subtitle = `${activeCompany.name} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'forecast_report' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'forecast_report' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'forecast_report' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'forecast_report' })
   }

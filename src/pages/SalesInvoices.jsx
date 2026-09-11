@@ -29,12 +29,12 @@ export default function SalesInvoices() {
   const [editingInvoice, setEditingInvoice] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
-  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct])
+  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadData() {
     const [{ data: inv }, { data: rec }, { data: con }] = await Promise.all([
-      supabase.from('sales_invoices').select('*, contact:contacts(name, email, phone, address)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }),
-      supabase.from('payment_receipts').select('*, invoice:sales_invoices(invoice_number)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('receipt_date', { ascending: false }),
+      supabase.from('sales_invoices').select('*, contact:contacts(name, email, phone, address)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
+      supabase.from('payment_receipts').select('*, invoice:sales_invoices(invoice_number)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to).order('receipt_date', { ascending: false }),
       supabase.from('contacts').select('*').eq('company_id', activeCompany.id),
     ])
     setInvoices(inv || [])
@@ -77,7 +77,7 @@ export default function SalesInvoices() {
 
     const title = 'Sales & Receipts'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'sales_receipts_report' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'sales_receipts_report' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'sales_receipts_report' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'sales_receipts_report' })
   }

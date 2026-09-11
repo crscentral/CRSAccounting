@@ -75,7 +75,7 @@ export default function Contacts() {
 
     const title = 'Customers & Suppliers'
     const subtitle = `${activeCompany.name} • ${selections.contactType} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'contacts_report' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'contacts_report' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'contacts_report' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'contacts_report' })
   }

@@ -67,7 +67,7 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
   const subtotal = lineTotals.reduce((s, l) => s + l.base, 0)
   const taxAmount = lineTotals.reduce((s, l) => s + l.tax, 0)
   const total = subtotal + taxAmount
-  const tdsAmount = total * (Number(tdsPercent || 0) / 100)
+  const tdsAmount = subtotal * (Number(tdsPercent || 0) / 100)
   const netPayable = Math.max(0, total - tdsAmount)
 
   async function handleFileUpload(file) {
@@ -264,7 +264,7 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
             <Field label="Upload Supplier Invoice PDF">
               <label className="flex items-center gap-2 border border-dashed border-slate-300 rounded-lg px-3 py-2 text-sm cursor-pointer text-slate-500 hover:border-navy-400">
                 <Upload size={15} />
-                {uploading ? 'Uploading…' : attachmentUrl ? 'File attached ✓' : 'Choose File'}
+                {uploading ? 'Uploading…' : attachmentUrl ? (<><span className="mr-2">File attached ✓</span><a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-navy-600 hover:underline text-xs font-medium" onClick={e => e.stopPropagation()}>Preview</a></>) : 'Choose File'}
                 <input type="file" accept="application/pdf" className="hidden" onChange={e => e.target.files[0] && handleFileUpload(e.target.files[0])} />
               </label>
             </Field>

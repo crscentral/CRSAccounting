@@ -28,11 +28,11 @@ export default function PurchaseInvoices() {
   const [editingInvoice, setEditingInvoice] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
-  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct])
+  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadData() {
     const [{ data: inv }, { data: con }, { data: acc }] = await Promise.all([
-      supabase.from('purchase_invoices').select('*, contact:contacts(name, email, phone, address, tax_id)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }),
+      supabase.from('purchase_invoices').select('*, contact:contacts(name, email, phone, address, tax_id)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
       supabase.from('contacts').select('*').eq('company_id', activeCompany.id),
       supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
     ])
@@ -65,7 +65,7 @@ export default function PurchaseInvoices() {
 
     const title = 'Purchase Invoices'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'purchase_invoices_report' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'purchase_invoices_report' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'purchase_invoices_report' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'purchase_invoices_report' })
   }
