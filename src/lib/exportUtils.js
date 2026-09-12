@@ -362,16 +362,6 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     doc.text(invoice.thank_you_note, pageWidth / 2, finalY + 6, { align: 'center' })
   }
 
-  const pageCount = doc.internal.getNumberOfPages()
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i)
-    if (loadedLogo?.dataUrl) {
-      const logoH = 12
-      const logoW = logoH * loadedLogo.ratio
-      doc.addImage(loadedLogo.dataUrl, 'PNG', pageWidth - 14 - logoW, 10, logoW, logoH)
-    }
-  }
-
   if (preview) {
     const blob = doc.output('blob')
     const url = URL.createObjectURL(blob)
