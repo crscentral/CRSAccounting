@@ -169,6 +169,7 @@ export default function SalesInvoices() {
               { key: 'invoice_date', label: 'Date', render: r => <span className="whitespace-nowrap">{formatDate(r.invoice_date)}</span> },
               { key: 'due_date', label: 'Due', render: r => <span className="whitespace-nowrap">{formatDate(r.due_date)}</span> },
               { key: 'amount', label: 'Amount', render: r => `${r.amount.toLocaleString()} ${r.currency}` },
+              { key: 'rate', label: 'Rate', render: r => r.currency === 'USD' ? '1.0000' : (r.fx_rate_locked || (r.amount / r.amount_usd).toFixed(4)) },
               { key: 'amount_usd', label: 'Amount (USD)', render: r => cp.fmt(r.amount_usd) },
               { key: 'status', label: 'Status', render: r => <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[r.status]}`}>{r.status}</span> },
               {
@@ -222,6 +223,7 @@ export default function SalesInvoices() {
               { key: 'receipt_date', label: 'Date', render: r => <span className="whitespace-nowrap">{formatDate(r.receipt_date)}</span> },
               { key: 'customer', label: 'Customer', render: r => r.customer_name_freeform || r.contact?.name || '—' },
               { key: 'amount', label: 'Amount', render: r => `${r.amount.toLocaleString()} ${r.currency}` },
+              { key: 'rate', label: 'Rate', render: r => r.currency === 'USD' ? '1.0000' : (r.fx_rate_locked || (r.amount / r.amount_usd).toFixed(4)) },
               { key: 'amount_usd', label: 'Amount (USD)', render: r => cp.fmt(r.amount_usd) },
               { key: 'method', label: 'Method' },
               {

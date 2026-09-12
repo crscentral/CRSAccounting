@@ -52,6 +52,9 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
       if (inv) {
         if (!customerName) setCustomerName(inv.contact?.name || '')
         setCurrency(inv.currency)
+        // Auto-sync the exact conversion rate from the invoice
+        const invRate = inv.fx_rate_locked || (inv.amount && inv.amount_usd && inv.currency !== 'USD' ? (inv.amount / inv.amount_usd).toFixed(4) : '')
+        setFxRate(invRate)
         // Only set amount if empty, to allow partial payments
         if (!amount) setAmount(inv.amount)
       }
