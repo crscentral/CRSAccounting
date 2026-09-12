@@ -28,6 +28,7 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
         setCustomerName(initialData.customer_name_freeform || initialData.contact?.name || '')
         setAmount(initialData.amount || '')
         setCurrency(initialData.currency || 'USD')
+        setFxRate(initialData.fx_rate_locked || '')
         setMethod(initialData.method || 'Bank Transfer')
         setNotes(initialData.notes || '')
       } else {
@@ -61,18 +62,18 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
     e.preventDefault()
     setSaving(true)
     try {
-      let fxRate = 1
+      let finalFxRate = 1
       if (currency !== 'USD') {
-        if (initialData && initialData.currency === currency && initialData.fx_rate_locked) {
-          fxRate = initialData.fx_rate_locked
+        if (fxRate && !isNaN(Number(fxRate))) {
+          finalFxRate = Number(fxRate)
         } else {
           const rate = await getLatestRate(currency)
-          fxRate = rate || 1
+          finalFxRate = rate || 1
         }
       }
 
       const amt = Number(amount) || 0
-      const amountUsd = currency === 'USD' ? amt : amt / fxRate
+      const amountUsd = currency === 'USD' ? amt : amt / finalFxRate
 
       const payload = {
         company_id: companyId,

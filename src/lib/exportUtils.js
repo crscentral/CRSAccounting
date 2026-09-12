@@ -149,7 +149,9 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.setTextColor(20)
   doc.setFont(undefined, 'bold')
   const isProforma = isSales && invoice.invoice_type === 'proforma'
-  const docHeading = isProforma ? 'Proforma Invoice' : 'Invoice'
+  let docHeading = 'Invoice'
+  if (isProforma) docHeading = 'Proforma Invoice'
+  if (!isSales) docHeading = 'Purchase Invoice'
   doc.text(docHeading, 14, 22)
 
   const status = invoice.status || 'Draft'
@@ -175,7 +177,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.setFontSize(9)
   doc.setTextColor(90)
   doc.setFont(undefined, 'bold')
-  doc.text(isProforma ? 'PROFORMA INVOICE' : 'TAX INVOICE', pageWidth / 2, y, { align: 'center' })
+  doc.text(isSales ? (isProforma ? 'PROFORMA INVOICE' : 'TAX INVOICE') : 'PURCHASE INVOICE', pageWidth / 2, y, { align: 'center' })
   y += 5
   doc.setFont(undefined, 'normal')
   doc.setFontSize(8)
@@ -192,39 +194,50 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.setFontSize(8)
   doc.setTextColor(150)
   doc.text('FROM', col1, y)
-  doc.text(isSales ? 'BILL TO' : 'SUPPLIER', col2, y)
+  doc.text('TO', col2, y)
   doc.text('DOCUMENT', col3, y)
   y += 5.5
 
   doc.setFontSize(10)
   doc.setFont(undefined, 'bold')
   doc.setTextColor(20)
-  doc.text(company?.name || '', col1, y)
-  doc.text(contact?.name || invoice.supplier_name_freeform || '', col2, y)
+  
+  const fromName = isSales ? (company?.name || '') : (contact?.name || invoice.supplier_name_freeform || '')
+  const toName = isSales ? (contact?.name || invoice.customer_name_freeform || '') : (company?.name || '')
+  
+  doc.text(fromName, col1, y)
+  doc.text(toName, col2, y)
   doc.text(invoice.invoice_number || '', col3, y)
   y += 4.5
 
   doc.setFont(undefined, 'normal')
   doc.setFontSize(8)
   doc.setTextColor(90)
-  const fromLines = [
+  
+  const companyLines = [
     company?.legal_name,
     company?.address,
     [company?.city, company?.country].filter(Boolean).join(', '),
     company?.email, company?.phone, company?.website,
     company?.tax_id ? `Tax ID: ${company.tax_id}` : null,
   ].filter(Boolean)
-  const billLines = [
+  
+  const contactLines = [
     invoice.customer_address || contact?.address || invoice.supplier_address,
     invoice.customer_email || contact?.email || invoice.supplier_email,
     invoice.customer_phone || contact?.phone || invoice.supplier_phone,
     invoice.supplier_gstin ? `GSTIN: ${invoice.supplier_gstin}` : null,
   ].filter(Boolean)
+  
+  const fromLines = isSales ? companyLines : contactLines
+  const billLines = isSales ? contactLines : companyLines
+  
   const docLines = [
     `Issue: ${invoice.invoice_date}`,
     `Due: ${invoice.due_date || '—'}`,
-    isSales ? `Terms: ${invoice.billing_terms || '—'}` : null,
+    `Terms: ${invoice.billing_terms || invoice.payment_terms || '—'}`,
     `Currency: ${invoice.currency}`,
+    !isSales && invoice.expense_account_name ? `Expense Account: ${invoice.expense_account_name}` : null,
   ].filter(Boolean)
   // Render each column independently with its own running Y position, so a wrapped
   // multi-line address in one column never overlaps the next field in that same

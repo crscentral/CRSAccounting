@@ -22,6 +22,7 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
   const [invoiceDate, setInvoiceDate] = useState(invoice?.invoice_date || new Date().toISOString().slice(0, 10))
   const [dueDate, setDueDate] = useState(invoice?.due_date || '')
   const [currency, setCurrency] = useState(invoice?.currency || 'USD')
+  const [fxRate, setFxRate] = useState(invoice?.fx_rate_locked || '')
   const [accountId, setAccountId] = useState(invoice?.account_id || '')
   const [items, setItems] = useState([emptyItem()])
   const [tdsPercent, setTdsPercent] = useState(invoice?.tds_percent || 0)
@@ -103,8 +104,8 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
 
       let fxRate = 1
       if (currency !== 'USD') {
-        if (invoice && invoice.currency === currency && invoice.fx_rate_locked) {
-          fxRate = invoice.fx_rate_locked
+        if (fxRate && !isNaN(Number(fxRate))) {
+          fxRate = Number(fxRate)
         } else {
           const rate = await getLatestRate(currency)
           fxRate = rate || 1
@@ -193,7 +194,7 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
           <Field label="Invoice Date *"><input type="date" required value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
           <Field label="Due Date"><input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
           <Field label="Currency">
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={currency} onChange={e => { setCurrency(e.target.value); if (e.target.value === 'USD') setFxRate(''); }} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
               {CURRENCY_LIST.slice(0, 25).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
             </select>
           </Field>
@@ -289,6 +290,12 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
             <div className="flex items-center justify-between font-semibold text-emerald-700 border-t border-slate-200 pt-2">
               <span>Net Payable</span><span>{netPayable.toFixed(2)} {currency}</span>
             </div>
+            {currency !== 'USD' && (
+              <div className="mt-4 pt-3 border-t border-slate-200">
+                <label className="block text-xs font-medium text-slate-500 mb-1 text-right">Conversion Rate (to USD) - Optional</label>
+                <input type="number" step="0.0001" placeholder="Auto-fetch live rate" value={fxRate} onChange={e => setFxRate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm text-right" />
+              </div>
+            )}
           </div>
         </div>
 

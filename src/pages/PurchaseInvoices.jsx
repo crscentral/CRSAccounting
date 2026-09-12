@@ -156,7 +156,12 @@ export default function PurchaseInvoices() {
                       type="purchase" company={activeCompany} role={activeRole}
                       getData={async () => {
                         const { data: items } = await supabase.from('purchase_invoice_items').select('*').eq('purchase_invoice_id', r.id).order('sort_order')
-                        return { invoice: r, items: items || [], contact: r.contact }
+                        let accName = ''
+                        if (r.account_id) {
+                          const { data: acc } = await supabase.from('accounts').select('name').eq('id', r.account_id).single()
+                          accName = acc?.name || ''
+                        }
+                        return { invoice: { ...r, expense_account_name: accName }, items: items || [], contact: r.contact }
                       }}
                     />
                 {can(['owner', 'admin', 'accountant']) && (

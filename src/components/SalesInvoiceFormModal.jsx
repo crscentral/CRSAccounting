@@ -22,6 +22,7 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
   const [customerPhone, setCustomerPhone] = useState(invoice?.customer_phone || '')
   const [customerAddress, setCustomerAddress] = useState(invoice?.customer_address || '')
   const [currency, setCurrency] = useState(invoice?.currency || 'USD')
+  const [fxRate, setFxRate] = useState(invoice?.fx_rate_locked || '')
   const [invoiceDate, setInvoiceDate] = useState(invoice?.invoice_date || new Date().toISOString().slice(0, 10))
   const [dueDate, setDueDate] = useState(invoice?.due_date || '')
   const [billingTerms, setBillingTerms] = useState(invoice?.billing_terms || 'Monthly')
@@ -142,8 +143,8 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
 
       let fxRate = 1
       if (currency !== 'USD') {
-        if (invoice && invoice.currency === currency && invoice.fx_rate_locked) {
-          fxRate = invoice.fx_rate_locked
+        if (fxRate && !isNaN(Number(fxRate))) {
+          fxRate = Number(fxRate)
         } else {
           const rate = await getLatestRate(currency)
           fxRate = rate || 1
@@ -214,7 +215,7 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Field label="Invoice #"><input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
           <Field label="Currency">
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={currency} onChange={e => { setCurrency(e.target.value); if (e.target.value === 'USD') setFxRate(''); }} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
               {CURRENCY_LIST.slice(0, 25).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
             </select>
           </Field>
@@ -342,6 +343,12 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
             <div className="flex items-center justify-between font-semibold text-emerald-700 border-t border-slate-200 pt-2">
               <span>Balance Due</span><span>{balanceDue.toFixed(2)} {currency}</span>
             </div>
+            {currency !== 'USD' && (
+              <div className="mt-4 pt-3 border-t border-slate-200">
+                <label className="block text-xs font-medium text-slate-500 mb-1 text-right">Conversion Rate (to USD) - Optional</label>
+                <input type="number" step="0.0001" placeholder="Auto-fetch live rate" value={fxRate} onChange={e => setFxRate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm text-right" />
+              </div>
+            )}
           </div>
         </div>
 
