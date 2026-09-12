@@ -30,8 +30,8 @@ export default function RestaurantRevenueFormModal({ companyId, product, company
     try {
       let fxRate = 1
       if (currency !== 'USD') {
-        if (initialData && initialData.currency === currency && initialData.fx_rate_locked) {
-          fxRate = initialData.fx_rate_locked
+        if (entry && entry.currency === currency && entry.fx_rate_locked) {
+          fxRate = entry.fx_rate_locked
         } else {
           fxRate = (await getLatestRate(currency)) || 1
         }

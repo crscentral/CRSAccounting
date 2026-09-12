@@ -142,8 +142,8 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
 
       let fxRate = 1
       if (currency !== 'USD') {
-        if (initialData && initialData.currency === currency && initialData.fx_rate_locked) {
-          fxRate = initialData.fx_rate_locked
+        if (invoice && invoice.currency === currency && invoice.fx_rate_locked) {
+          fxRate = invoice.fx_rate_locked
         } else {
           const rate = await getLatestRate(currency)
           fxRate = rate || 1
