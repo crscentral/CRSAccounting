@@ -211,7 +211,7 @@ export default function Reports() {
                 <Row label="Total Operating Expenses" value={cp.fmt(operatingExpenses)} percent="100.0%" bold />
               </div>
             </div>
-            <Row label={`GOP/GOL (${gop >= 0 ? 'Gross Operating Profit' : 'Gross Operating Loss'})`} value={cp.fmt(gop)} bold large />
+            <Row label={`GOP/GOL (${gop >= 0 ? 'Gross Operating Profit' : 'Gross Operating Loss'})`} value={cp.fmt(gop)} percent={totalRevenue ? ((gop / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'} bold large color={gop >= 0 ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'} />
             {otherBelowLineAccounts.length > 0 && (
               <div>
                 <div className="bg-amber-600 text-white text-sm font-semibold px-3 py-2 rounded-t-lg">MANAGEMENT FEES, TAXES, RENT & LICENSES</div>
@@ -223,7 +223,7 @@ export default function Reports() {
                 </div>
               </div>
             )}
-            <Row label="EBITDA" value={cp.fmt(ebitda)} bold large />
+            <Row label="EBITDA" value={cp.fmt(ebitda)} percent={totalRevenue ? ((ebitda / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'} bold large color={ebitda >= 0 ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'} />
             {daInterestAccounts.length > 0 && (
               <div>
                 <div className="bg-slate-600 text-white text-sm font-semibold px-3 py-2 rounded-t-lg">DEPRECIATION &amp; INTEREST</div>
@@ -235,7 +235,7 @@ export default function Reports() {
                 </div>
               </div>
             )}
-            <Row label="Net Income" value={cp.fmt(retainedEarnings)} bold large />
+            <Row label="Net Income" value={cp.fmt(retainedEarnings)} percent={totalRevenue ? ((retainedEarnings / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'} bold large color={retainedEarnings >= 0 ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'} />
           </div>
         )}
 
@@ -294,12 +294,15 @@ function AccountBlock({ title, color, accounts, balances, fmt, total }) {
   )
 }
 
-function Row({ label, value, percent, bold, large }) {
+function Row({ label, value, percent, bold, large, color }) {
+  let textColor = bold ? 'font-bold text-slate-800' : 'text-slate-600'
+  if (color) textColor = color
+
   return (
-    <div className={`flex items-center justify-between px-3 py-2 ${bold ? 'font-bold text-slate-800' : 'text-slate-600'} ${large ? 'text-lg py-3' : 'text-sm'}`}>
+    <div className={`flex items-center justify-between px-3 py-2 ${textColor} ${large ? 'text-lg py-3' : 'text-sm'}`}>
       <span>{label}</span>
       <div className="flex items-center justify-end">
-        {percent && <span className="text-slate-400 text-xs w-16 text-right mr-3 font-normal">{percent}</span>}
+        {percent && <span className={`${color ? color : 'text-slate-400'} text-xs w-16 text-right mr-3 font-normal`}>{percent}</span>}
         <span className="text-right min-w-[100px]">{value}</span>
       </div>
     </div>
