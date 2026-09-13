@@ -128,7 +128,7 @@ export default function PurchaseInvoices() {
             <div key={code} className="flex items-center justify-between text-sm flex-wrap gap-1">
               <div>
                 <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium mr-2">{code}</span>
-                <span className="text-slate-500">{v.native.toLocaleString()} • {v.count} invoice(s)</span>
+                <span className="text-slate-500">{v.native.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • {v.count} invoice(s)</span>
               </div>
               <span className="font-semibold text-slate-700">{cp.fmt(v.usd)}</span>
             </div>
