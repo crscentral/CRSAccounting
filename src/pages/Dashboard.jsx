@@ -189,8 +189,8 @@ export default function Dashboard() {
   const totalBilled = sales.reduce((sum, i) => sum + Number(i.amount_usd), 0)
   const totalExpenses = purchases.reduce((sum, i) => sum + Number(i.amount_usd), 0)
   const netProfit = totalBilled - totalExpenses
-  const collected = totalBilled - outstanding
   const outstanding = sales.reduce((sum, i) => sum + (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)), 0)
+  const collected = totalBilled - outstanding
   const draftInvoices = sales.filter(i => i.status !== 'Paid')
   const draftExpenses = purchases.filter(i => i.status === 'Draft')
 
