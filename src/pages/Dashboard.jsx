@@ -382,7 +382,7 @@ export default function Dashboard() {
             { key: 'invoice_number', label: 'Invoice #' },
             { key: 'supplier', label: 'Supplier', render: r => r.contact?.name || r.supplier_name_freeform || '—' },
             { key: 'invoice_date', label: 'Date' },
-            { key: 'amount_usd', label: 'Amount', render: r => cp.fmt((Number(r.balance_due) / (Number(r.amount) || 1)) * Number(r.amount_usd)) },
+            { key: 'amount_usd', label: 'Amount', render: r => cp.fmt(r.amount_usd) },
           ]}
           rows={draftExpenses}
           emptyMessage="No draft expenses."
