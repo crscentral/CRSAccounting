@@ -629,7 +629,10 @@ export async function exportMultiSectionPDF({ title, subtitle, sections, filenam
         columnStyles = { 0: { cellWidth: 142 }, 1: { cellWidth: 40, halign: 'right' } }
       }
       
-      const safeHead = section.columns.map(sanitizeText)
+      const safeHead = section.columns.map((c, i) => {
+        const text = sanitizeText(c)
+        return (i > 0) ? { content: text, styles: { halign: 'right' } } : text
+      })
       const safeBody = section.rows.map(row => row.map(sanitizeText))
 
       autoTable(doc, {
