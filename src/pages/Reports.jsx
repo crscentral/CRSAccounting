@@ -104,21 +104,46 @@ export default function Reports() {
         rows: accounts.map(a => { const b = bal[a.id] || 0; return [a.code, a.name, b > 0 ? fmt(b) : '—', b < 0 ? fmt(-b) : '—'] }),
       }]
     } else if (reportKey === 'income_statement') {
-      sections = [{
-        heading: 'Income Statement',
-        columns: ['Item', 'Amount'],
-        rows: [
-          ...by('Revenue').map(a => [a.name, fmt(-(bal[a.id] || 0))]),
-          ['Total Revenue', fmt(rev)],
-          ...operatingAccs.map(a => [a.name, fmt(bal[a.id] || 0)]),
-          ['Total Operating Expenses', fmt(opExp)],
-          [gopVal >= 0 ? 'GOP (Gross Operating Profit)' : 'GOL (Gross Operating Loss)', fmt(gopVal)],
-          ...(otherBelowLineAccs.length > 0 ? [...otherBelowLineAccs.map(a => [a.name, fmt(bal[a.id] || 0)]), ['Management Fees, Taxes, Rent & Licenses', fmt(otherBL)]] : []),
-          ['EBITDA', fmt(ebitdaVal)],
-          ...(daInterestAccs.length > 0 ? [...daInterestAccs.map(a => [a.name, fmt(bal[a.id] || 0)]), ['Depreciation & Interest', fmt(daInt)]] : []),
-          ['Net Income', fmt(rev - exp)],
-        ],
-      }]
+      sections = [
+        {
+          heading: 'Income Statement',
+          headColor: [5, 150, 105], // emerald-600
+          columns: ['REVENUE', '% of Total', 'Amount'],
+          rows: [
+            ...by('Revenue').map(a => {
+              const v = -(bal[a.id] || 0)
+              const pct = rev ? ((v / rev) * 100).toFixed(1) + '%' : '0.0%'
+              return [a.name, pct, fmt(v)]
+            }),
+            ['Total Revenue', '100.0%', fmt(rev)]
+          ]
+        },
+        {
+          heading: '',
+          headColor: [225, 29, 72], // rose-600
+          columns: ['OPERATING EXPENSES', '% of Total', 'Amount'],
+          rows: [
+            ...operatingAccs.map(a => {
+              const v = bal[a.id] || 0
+              const pct = opExp ? ((v / opExp) * 100).toFixed(1) + '%' : '0.0%'
+              return [a.name, pct, fmt(v)]
+            }),
+            ['Total Operating Expenses', '100.0%', fmt(opExp)]
+          ]
+        },
+        {
+          heading: '',
+          headColor: [27, 58, 107], // navy
+          columns: ['Profitability & Other', '% of Revenue', 'Amount'],
+          rows: [
+            [gopVal >= 0 ? 'GOP (Gross Operating Profit)' : 'GOL (Gross Operating Loss)', rev ? ((gopVal / rev) * 100).toFixed(1) + '%' : '0.0%', fmt(gopVal)],
+            ...(otherBelowLineAccs.length > 0 ? [...otherBelowLineAccs.map(a => [a.name, '', fmt(bal[a.id] || 0)]), ['Management Fees, Taxes, Rent & Licenses', '', fmt(otherBL)]] : []),
+            ['EBITDA', rev ? ((ebitdaVal / rev) * 100).toFixed(1) + '%' : '0.0%', fmt(ebitdaVal)],
+            ...(daInterestAccs.length > 0 ? [...daInterestAccs.map(a => [a.name, '', fmt(bal[a.id] || 0)]), ['Depreciation & Interest', '', fmt(daInt)]] : []),
+            ['Net Income', rev ? (((rev - exp) / rev) * 100).toFixed(1) + '%' : '0.0%', fmt(rev - exp)]
+          ]
+        }
+      ]
     } else {
       sections = [
         { heading: 'Assets', columns: ['Account', 'Amount'], rows: [...by('Assets').map(a => [`${a.code} - ${a.name}`, fmt(Math.abs(bal[a.id] || 0))]), ['Total Assets', fmt(assets)]] },

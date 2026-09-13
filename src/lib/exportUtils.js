@@ -620,7 +620,7 @@ export async function exportMultiSectionPDF({ title, subtitle, sections, filenam
         startY: y + 3,
         head: [section.columns],
         body: section.rows,
-        headStyles: { fillColor: [27, 58, 107], fontSize: 8 },
+        headStyles: { fillColor: section.headColor || [27, 58, 107], fontSize: 8 },
         styles: { fontSize: 8, cellPadding: 2.5 },
         margin: { left: 14, right: 14 },
       })
@@ -687,7 +687,9 @@ export function exportMultiSectionWord({ title, subtitle, sections, filename, lo
         `<p style="margin:2px 0;"><strong>${esc(label)}:</strong> ${esc(val)}</p>`
       ).join('')
     } else if (section.columns && section.rows) {
-      const head = section.columns.map(c => `<th style="background:#1B3A6B;color:#fff;padding:5px 8px;text-align:left;">${esc(c)}</th>`).join('')
+      const rgb = section.headColor || [27, 58, 107]
+      const bgColor = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
+      const head = section.columns.map(c => `<th style="background:${bgColor};color:#fff;padding:5px 8px;text-align:left;">${esc(c)}</th>`).join('')
       const body = section.rows.map(r =>
         `<tr>${r.map(cell => `<td style="padding:5px 8px;border:1px solid #ddd;">${esc(cell)}</td>`).join('')}</tr>`
       ).join('')
