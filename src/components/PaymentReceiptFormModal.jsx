@@ -16,6 +16,7 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
   const [customerName, setCustomerName] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('USD')
+  const [fxRate, setFxRate] = useState('')
   const [method, setMethod] = useState('Bank Transfer')
   const [notes, setNotes] = useState('')
 
@@ -88,7 +89,7 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
         currency,
         amount: amt,
         amount_usd: Math.round(amountUsd * 100) / 100,
-        fx_rate_locked: fxRate,
+        fx_rate_locked: currency === 'USD' ? null : finalFxRate,
         method,
         notes: notes.trim() || null,
       }
@@ -148,11 +149,19 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
             <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-navy-500 focus:ring-1 focus:ring-navy-500 outline-none" />
           </Field>
           <Field label="Currency">
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-navy-500 focus:ring-1 focus:ring-navy-500 outline-none bg-white">
+            <select value={currency} onChange={e => { setCurrency(e.target.value); if(e.target.value === 'USD') setFxRate(''); }} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-navy-500 focus:ring-1 focus:ring-navy-500 outline-none bg-white">
               {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
             </select>
           </Field>
         </div>
+        
+        {currency !== 'USD' && (
+          <div className="mt-2 pt-2">
+            <Field label="Conversion Rate (to USD) - Optional">
+              <input type="number" step="0.0001" placeholder="Auto-fetch live rate" value={fxRate} onChange={e => setFxRate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-navy-500 focus:ring-1 focus:ring-navy-500 outline-none" />
+            </Field>
+          </div>
+        )}
 
         <Field label="Payment Method">
           <select value={method} onChange={e => setMethod(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-navy-500 focus:ring-1 focus:ring-navy-500 outline-none bg-white">
