@@ -154,7 +154,7 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
       const amountUsd = currency === 'USD' ? grandTotal : grandTotal / finalFxRate
 
       const payload = {
-        company_id: companyId, product, contact_id: finalContactId || null, fx_rate_locked: currency === 'USD' ? null : finalFxRate,
+        company_id: companyId, product, contact_id: finalContactId || null, fx_rate_locked: currency === 'USD' ? 1 : finalFxRate,
         amount_usd: Math.round(amountUsd * 100) / 100, ...buildPayload(),
       }
 

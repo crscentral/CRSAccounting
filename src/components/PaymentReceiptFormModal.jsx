@@ -89,7 +89,7 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
         currency,
         amount: amt,
         amount_usd: Math.round(amountUsd * 100) / 100,
-        fx_rate_locked: currency === 'USD' ? null : finalFxRate,
+        fx_rate_locked: currency === 'USD' ? 1 : finalFxRate,
         method,
         notes: notes.trim() || null,
       }
