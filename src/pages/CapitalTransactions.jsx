@@ -117,6 +117,21 @@ export default function CapitalTransactions() {
   })
   const ownerBalances = Object.values(byOwner).sort((a, b) => b.total - a.total)
 
+  const currentList = tab === 'equity' ? ownerContributions :
+                      tab === 'loans_taken' ? loansTaken :
+                      tab === 'dividends' ? dividends :
+                      loanPayments
+
+  const byCurrency = {}
+  let totalUsd = 0
+  currentList.forEach(i => {
+    byCurrency[i.currency] = byCurrency[i.currency] || { native: 0, usd: 0, count: 0 }
+    byCurrency[i.currency].native += Number(i.amount)
+    byCurrency[i.currency].usd += Number(i.amount_usd)
+    byCurrency[i.currency].count++
+    totalUsd += Number(i.amount_usd)
+  })
+
   return (
     <div>
       <PageHeader
@@ -156,6 +171,29 @@ export default function CapitalTransactions() {
         </button>
       </div>
 
+      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mb-6">
+        <h3 className="font-semibold text-slate-700 mb-4">Currency Summary ({cp.displayCurrency} Consolidated)</h3>
+        {Object.keys(byCurrency).length === 0 ? (
+          <p className="text-sm text-slate-400">No transactions to summarize.</p>
+        ) : (
+          <div className="space-y-3">
+            {Object.entries(byCurrency).map(([code, v]) => (
+              <div key={code} className="flex items-center justify-between text-sm flex-wrap gap-1">
+                <div>
+                  <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium mr-2">{code}</span>
+                  <span className="text-slate-500">{v.native.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • {v.count} entry(s)</span>
+                </div>
+                <span className="font-semibold text-slate-700">{cp.fmt(v.usd)}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 font-bold text-emerald-700">
+              <span>Grand Total ({cp.displayCurrency})</span>
+              <span>{cp.fmt(totalUsd)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
 
       {tab === 'equity' && (
         <>
@@ -165,6 +203,7 @@ export default function CapitalTransactions() {
               { key: 'payment_date', label: 'Date' },
               { key: 'owner_name', label: 'Owner' },
               { key: 'amount', label: 'Amount', render: r => `${Number(r.amount).toLocaleString()} ${r.currency}` },
+              { key: 'amount_usd', label: `Amount (${cp.displayCurrency})`, render: r => cp.fmt(r.amount_usd) },
               { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
               ...(can(['owner', 'admin']) ? [{
                 key: 'actions', label: '', render: r => <div className="flex justify-end gap-2 text-slate-400">
@@ -187,6 +226,7 @@ export default function CapitalTransactions() {
               { key: 'payment_date', label: 'Date' },
               { key: 'loan_account', label: 'Loan Account', render: r => r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—' },
               { key: 'amount', label: 'Amount', render: r => `${Number(r.amount).toLocaleString()} ${r.currency}` },
+              { key: 'amount_usd', label: `Amount (${cp.displayCurrency})`, render: r => cp.fmt(r.amount_usd) },
               { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
               ...(can(['owner', 'admin']) ? [{
                 key: 'actions', label: '', render: r => <div className="flex justify-end gap-2 text-slate-400">
@@ -209,6 +249,7 @@ export default function CapitalTransactions() {
               { key: 'payment_date', label: 'Date' },
               { key: 'loan_account', label: 'Loan Account', render: r => r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—' },
               { key: 'amount', label: 'Amount', render: r => `${Number(r.amount).toLocaleString()} ${r.currency}` },
+              { key: 'amount_usd', label: `Amount (${cp.displayCurrency})`, render: r => cp.fmt(r.amount_usd) },
               { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
               ...(can(['owner', 'admin']) ? [{
                 key: 'actions', label: '', render: r => <div className="flex justify-end gap-2 text-slate-400">
@@ -239,6 +280,7 @@ export default function CapitalTransactions() {
               { key: 'payment_date', label: 'Date' },
               { key: 'owner_name', label: 'Owner' },
               { key: 'amount', label: 'Amount', render: r => `${Number(r.amount).toLocaleString()} ${r.currency}` },
+              { key: 'amount_usd', label: `Amount (${cp.displayCurrency})`, render: r => cp.fmt(r.amount_usd) },
               { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
               ...(can(['owner', 'admin']) ? [{
                 key: 'actions', label: '', render: r => <div className="flex justify-end gap-2 text-slate-400">
@@ -344,6 +386,21 @@ function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAcc
     }
   }
 
+  const currentList = tab === 'equity' ? ownerContributions :
+                      tab === 'loans_taken' ? loansTaken :
+                      tab === 'dividends' ? dividends :
+                      loanPayments
+
+  const byCurrency = {}
+  let totalUsd = 0
+  currentList.forEach(i => {
+    byCurrency[i.currency] = byCurrency[i.currency] || { native: 0, usd: 0, count: 0 }
+    byCurrency[i.currency].native += Number(i.amount)
+    byCurrency[i.currency].usd += Number(i.amount_usd)
+    byCurrency[i.currency].count++
+    totalUsd += Number(i.amount_usd)
+  })
+
   return (
     <Modal title={initialData ? "Edit Loan Principal Repayment" : "New Loan Principal Repayment"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -425,6 +482,21 @@ function DividendFormModal({ companyId, product, initialData, onClose, onSaved }
     }
   }
 
+  const currentList = tab === 'equity' ? ownerContributions :
+                      tab === 'loans_taken' ? loansTaken :
+                      tab === 'dividends' ? dividends :
+                      loanPayments
+
+  const byCurrency = {}
+  let totalUsd = 0
+  currentList.forEach(i => {
+    byCurrency[i.currency] = byCurrency[i.currency] || { native: 0, usd: 0, count: 0 }
+    byCurrency[i.currency].native += Number(i.amount)
+    byCurrency[i.currency].usd += Number(i.amount_usd)
+    byCurrency[i.currency].count++
+    totalUsd += Number(i.amount_usd)
+  })
+
   return (
     <Modal title={initialData ? "Edit Owner Dividend" : "New Owner Dividend"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -498,6 +570,21 @@ function OwnerEquityFormModal({ companyId, product, cashAccounts, initialData, o
       setSaving(false)
     }
   }
+
+  const currentList = tab === 'equity' ? ownerContributions :
+                      tab === 'loans_taken' ? loansTaken :
+                      tab === 'dividends' ? dividends :
+                      loanPayments
+
+  const byCurrency = {}
+  let totalUsd = 0
+  currentList.forEach(i => {
+    byCurrency[i.currency] = byCurrency[i.currency] || { native: 0, usd: 0, count: 0 }
+    byCurrency[i.currency].native += Number(i.amount)
+    byCurrency[i.currency].usd += Number(i.amount_usd)
+    byCurrency[i.currency].count++
+    totalUsd += Number(i.amount_usd)
+  })
 
   return (
     <Modal title={initialData ? "Edit Owner's Equity" : "New Owner's Equity (Contribution)"} onClose={onClose}>
@@ -573,6 +660,21 @@ function LoanTakenFormModal({ companyId, product, liabilityAccounts, cashAccount
       setSaving(false)
     }
   }
+
+  const currentList = tab === 'equity' ? ownerContributions :
+                      tab === 'loans_taken' ? loansTaken :
+                      tab === 'dividends' ? dividends :
+                      loanPayments
+
+  const byCurrency = {}
+  let totalUsd = 0
+  currentList.forEach(i => {
+    byCurrency[i.currency] = byCurrency[i.currency] || { native: 0, usd: 0, count: 0 }
+    byCurrency[i.currency].native += Number(i.amount)
+    byCurrency[i.currency].usd += Number(i.amount_usd)
+    byCurrency[i.currency].count++
+    totalUsd += Number(i.amount_usd)
+  })
 
   return (
     <Modal title={initialData ? "Edit Loan Taken" : "New Loan Taken"} onClose={onClose}>
