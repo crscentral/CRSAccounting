@@ -91,7 +91,7 @@ export function resolvePeriodRange(periodType, opts = {}) {
     case 'CUSTOM': return { from: customFrom, to: customTo }
     case 'ALL_TIME':
     default:
-      return { from: '1970-01-01', to: ymd(today) }
+      return { from: '1970-01-01', to: '2100-12-31' }
   }
 }
 
