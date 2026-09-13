@@ -73,8 +73,8 @@ export default function PurchaseInvoices() {
   if (!activeCompany) return null
 
   const totalUsd = invoices.reduce((s, i) => s + Number(i.amount_usd), 0)
-  const paidUsd = invoices.filter(i => i.status === 'Paid').reduce((s, i) => s + Number(i.amount_usd), 0)
-  const pendingUsd = invoices.filter(i => i.status !== 'Paid').reduce((s, i) => s + Number(i.amount_usd), 0)
+  const pendingUsd = invoices.reduce((s, i) => s + (i.status === 'Paid' ? 0 : Number(i.amount_usd)), 0)
+  const paidUsd = totalUsd - pendingUsd
 
   const byCurrency = {}
   invoices.forEach(i => {

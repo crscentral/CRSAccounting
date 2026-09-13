@@ -97,8 +97,8 @@ export default function SalesInvoices() {
   if (!activeCompany) return null
 
   const totalUsd = invoices.reduce((s, i) => s + Number(i.amount_usd), 0)
-  const collectedUsd = invoices.filter(i => i.status === 'Paid').reduce((s, i) => s + Number(i.amount_usd), 0)
-  const pendingUsd = invoices.filter(i => i.status !== 'Paid').reduce((s, i) => s + ((Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)), 0)
+  const pendingUsd = invoices.reduce((s, i) => s + (i.status === 'Paid' ? 0 : ((Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd))), 0)
+  const collectedUsd = totalUsd - pendingUsd
 
   const byCurrency = {}
   invoices.forEach(i => {
