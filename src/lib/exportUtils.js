@@ -2,6 +2,12 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 
+function sanitizeText(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/₹/g, 'INR ').replace(/฿/g, 'THB ').replace(/€/g, 'EUR ').replace(/£/g, 'GBP ').replace(/[^\x00-\x7F]/g, '');
+}
+
+
 /**
  * Exports tabular data (columns + rows of plain values) as a PDF.
  * title: page/report title. subtitle: e.g. company name + period.
@@ -618,15 +624,18 @@ export async function exportMultiSectionPDF({ title, subtitle, sections, filenam
     } else if (section.columns && section.rows) {
       let columnStyles = {}
       if (section.columns.length === 3) {
-        columnStyles = { 1: { cellWidth: 40, halign: 'right' }, 2: { cellWidth: 40, halign: 'right' } }
+        columnStyles = { 0: { cellWidth: 102 }, 1: { cellWidth: 40, halign: 'right' }, 2: { cellWidth: 40, halign: 'right' } }
       } else if (section.columns.length === 2) {
-        columnStyles = { 1: { cellWidth: 50, halign: 'right' } }
+        columnStyles = { 0: { cellWidth: 142 }, 1: { cellWidth: 40, halign: 'right' } }
       }
       
+      const safeHead = section.columns.map(sanitizeText)
+      const safeBody = section.rows.map(row => row.map(sanitizeText))
+
       autoTable(doc, {
         startY: y + 3,
-        head: [section.columns],
-        body: section.rows,
+        head: [safeHead],
+        body: safeBody,
         headStyles: { fillColor: section.headColor || [27, 58, 107], fontSize: 8 },
         styles: { fontSize: 8, cellPadding: 2.5 },
         columnStyles: columnStyles,
