@@ -124,7 +124,7 @@ export default function Dashboard() {
 
     if (selections.sections.includes('Billing & Outstanding Overview (Chart)')) {
       const monthlyMap = {}
-      sSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, out: 0 }; monthlyMap[k].rev += Number(i.amount_usd); monthlyMap[k].out += Number(i.balance_due) })
+      sSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, out: 0 }; monthlyMap[k].rev += Number(i.amount_usd); monthlyMap[k].out += (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)) })
       pSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, out: 0 }; monthlyMap[k].exp += Number(i.amount_usd) })
       const monthly = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
       sections.push({
@@ -190,7 +190,7 @@ export default function Dashboard() {
   const totalExpenses = purchases.reduce((sum, i) => sum + Number(i.amount_usd), 0)
   const netProfit = totalBilled - totalExpenses
   const collected = receipts.reduce((sum, r) => sum + Number(r.amount_usd), 0)
-  const outstanding = sales.reduce((sum, i) => sum + Number(i.balance_due), 0)
+  const outstanding = sales.reduce((sum, i) => sum + (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)), 0)
   const draftInvoices = sales.filter(i => i.status !== 'Paid')
   const draftExpenses = purchases.filter(i => i.status === 'Draft')
 
@@ -210,7 +210,7 @@ export default function Dashboard() {
     const key = i.invoice_date.slice(0, 7)
     monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
     monthlyMap[key].Revenue += Number(i.amount_usd)
-    monthlyMap[key].Outstanding += Number(i.balance_due)
+    monthlyMap[key].Outstanding += (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd))
   })
   purchases.forEach(i => {
     const key = i.invoice_date.slice(0, 7)
@@ -237,7 +237,7 @@ export default function Dashboard() {
     { label: 'Invoice #', key: 'invoice_number' }, { label: 'Customer', key: 'customerName' },
     { label: 'Due Date', key: 'due_date' }, { label: 'Balance Due (USD)', key: 'balanceLabel' }, { label: 'Status', key: 'status' },
   ]
-  const reportRows = draftInvoices.map(i => ({ ...i, customerName: i.contact?.name || '—', balanceLabel: cp.fmt(i.amount_usd) }))
+  const reportRows = draftInvoices.map(i => ({ ...i, customerName: i.contact?.name || '—', balanceLabel: cp.fmt((Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)) }))
 
   return (
     <div>
@@ -365,7 +365,7 @@ export default function Dashboard() {
             { key: 'invoice_number', label: 'Invoice #' },
             { key: 'customer', label: 'Customer', render: r => r.contact?.name || '—' },
             { key: 'due_date', label: 'Due Date' },
-            { key: 'balance_due', label: 'Balance Due', render: r => cp.fmt(r.amount_usd) },
+            { key: 'balance_due', label: 'Balance Due', render: r => cp.fmt((Number(r.balance_due) / (Number(r.amount) || 1)) * Number(r.amount_usd)) },
             { key: 'status', label: 'Status' },
           ]}
           rows={draftInvoices}
@@ -382,7 +382,7 @@ export default function Dashboard() {
             { key: 'invoice_number', label: 'Invoice #' },
             { key: 'supplier', label: 'Supplier', render: r => r.contact?.name || r.supplier_name_freeform || '—' },
             { key: 'invoice_date', label: 'Date' },
-            { key: 'amount_usd', label: 'Amount', render: r => cp.fmt(r.amount_usd) },
+            { key: 'amount_usd', label: 'Amount', render: r => cp.fmt((Number(r.balance_due) / (Number(r.amount) || 1)) * Number(r.amount_usd)) },
           ]}
           rows={draftExpenses}
           emptyMessage="No draft expenses."

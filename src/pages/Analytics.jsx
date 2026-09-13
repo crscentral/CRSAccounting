@@ -45,7 +45,7 @@ export default function Analytics() {
     const sSel = s || [], pSel = p || [], rSel = r || []
     const totalInvoiced = sSel.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
     const collected = rSel.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
-    const outstanding = sSel.reduce((s2, i) => s2 + Number(i.balance_due), 0)
+    const outstanding = sSel.reduce((s2, i) => s2 + (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)), 0)
     const expenses = pSel.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
 
     const monthlyMap = {}
@@ -69,7 +69,7 @@ export default function Analytics() {
 
   const totalInvoiced = sales.reduce((s, i) => s + Number(i.amount_usd), 0)
   const collected = receipts.reduce((s, r) => s + Number(r.amount_usd), 0)
-  const outstanding = sales.reduce((s, i) => s + Number(i.balance_due), 0)
+  const outstanding = sales.reduce((s, i) => s + (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)), 0)
   const expenses = purchases.reduce((s, i) => s + Number(i.amount_usd), 0)
   const overdueCount = sales.filter(i => i.status === 'Overdue').length
 
