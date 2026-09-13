@@ -616,12 +616,20 @@ export async function exportMultiSectionPDF({ title, subtitle, sections, filenam
       })
       y += 6
     } else if (section.columns && section.rows) {
+      let columnStyles = {}
+      if (section.columns.length === 3) {
+        columnStyles = { 1: { cellWidth: 40, halign: 'right' }, 2: { cellWidth: 40, halign: 'right' } }
+      } else if (section.columns.length === 2) {
+        columnStyles = { 1: { cellWidth: 50, halign: 'right' } }
+      }
+      
       autoTable(doc, {
         startY: y + 3,
         head: [section.columns],
         body: section.rows,
         headStyles: { fillColor: section.headColor || [27, 58, 107], fontSize: 8 },
         styles: { fontSize: 8, cellPadding: 2.5 },
+        columnStyles: columnStyles,
         margin: { left: 14, right: 14 },
       })
       y = doc.lastAutoTable.finalY + 10
@@ -689,9 +697,18 @@ export function exportMultiSectionWord({ title, subtitle, sections, filename, lo
     } else if (section.columns && section.rows) {
       const rgb = section.headColor || [27, 58, 107]
       const bgColor = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
-      const head = section.columns.map(c => `<th style="background:${bgColor};color:#fff;padding:5px 8px;text-align:left;">${esc(c)}</th>`).join('')
+      
+      const head = section.columns.map((c, i) => {
+        const align = (i > 0) ? 'right' : 'left'
+        const width = (section.columns.length === 3 && i > 0) ? 'width:15%;' : ((section.columns.length === 2 && i > 0) ? 'width:20%;' : 'width:auto;')
+        return `<th style="background:${bgColor};color:#fff;padding:5px 8px;text-align:${align};${width}">${esc(c)}</th>`
+      }).join('')
+      
       const body = section.rows.map(r =>
-        `<tr>${r.map(cell => `<td style="padding:5px 8px;border:1px solid #ddd;">${esc(cell)}</td>`).join('')}</tr>`
+        `<tr>${r.map((cell, i) => {
+          const align = (i > 0) ? 'right' : 'left'
+          return `<td style="padding:5px 8px;border:1px solid #ddd;text-align:${align};">${esc(cell)}</td>`
+        }).join('')}</tr>`
       ).join('')
       inner = `<table style="border-collapse:collapse;width:100%;margin-bottom:12px;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
     } else if (section.chart) {
