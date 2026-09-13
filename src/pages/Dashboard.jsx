@@ -256,7 +256,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
         <KpiCard label="Total Billed" value={cp.fmt(totalBilled)} sublabel="sales invoices" icon={TrendingUp} tone="green" />
         <KpiCard label="Total Expenses" value={cp.fmt(totalExpenses)} sublabel="purchase invoices" icon={TrendingDown} tone="red" />
-        <KpiCard label="Net Profit" value={cp.fmt(netProfit)} sublabel="billed minus expenses" icon={DollarSign} tone="blue" />
+        <KpiCard label="Net Profit" value={cp.fmt(netProfit)} sublabel="billed minus expenses" icon={DollarSign} tone={netProfit >= 0 ? 'green' : 'red'} />
         <KpiCard label="Collected" value={cp.fmt(collected)} sublabel="payment receipts" icon={Receipt} tone="gold" />
         <KpiCard label="Outstanding" value={cp.fmt(outstanding)} sublabel="pending + overdue" icon={AlertCircle} tone="slate" />
       </div>
@@ -334,10 +334,10 @@ export default function Dashboard() {
 
       <div className="grid lg:grid-cols-3 gap-5 mb-6">
         <OverviewCard title="Company Overview - YTD" subtitle={`${activeCompany.name} • Amounts in ${cp.displayCurrency}`}
-          revenue={cp.fmt(ytdRevenue)} expenses={cp.fmt(ytdExpenses)} profit={cp.fmt(ytdRevenue - ytdExpenses)}
+          revenue={cp.fmt(ytdRevenue)} expenses={cp.fmt(ytdExpenses)} profit={cp.fmt(ytdRevenue - ytdExpenses)} profitValue={ytdRevenue - ytdExpenses}
           revenueLabel="YTD Revenue" expensesLabel="YTD Expenses" profitLabel="YTD Net Profit" />
         <OverviewCard title="Company Overview - All Time" subtitle={`${activeCompany.name} • Amounts in ${cp.displayCurrency}`}
-          revenue={cp.fmt(allTimeRevenue)} expenses={cp.fmt(allTimeExpenses)} profit={cp.fmt(allTimeRevenue - allTimeExpenses)}
+          revenue={cp.fmt(allTimeRevenue)} expenses={cp.fmt(allTimeExpenses)} profit={cp.fmt(allTimeRevenue - allTimeExpenses)} profitValue={allTimeRevenue - allTimeExpenses}
           revenueLabel="All Time Revenue" expensesLabel="All Time Expenses" profitLabel="All Time Net Profit" />
         <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5">
           <h3 className="font-semibold text-slate-700 mb-4 flex items-center gap-2"><Receipt size={16} /> Recent Transactions</h3>
@@ -405,7 +405,11 @@ export default function Dashboard() {
   )
 }
 
-function OverviewCard({ title, subtitle, revenue, expenses, profit, revenueLabel, expensesLabel, profitLabel }) {
+function OverviewCard({ title, subtitle, revenue, expenses, profit, profitValue = 0, revenueLabel, expensesLabel, profitLabel }) {
+  const isPositive = profitValue >= 0
+  const pBg = isPositive ? 'bg-emerald-50' : 'bg-red-50'
+  const pText = isPositive ? 'text-emerald-700' : 'text-red-700'
+  
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5">
       <h3 className="font-semibold text-slate-700 flex items-center gap-2"><Building2 size={16} /> {title}</h3>
@@ -419,8 +423,8 @@ function OverviewCard({ title, subtitle, revenue, expenses, profit, revenueLabel
           <span className="text-sm text-rose-700 flex items-center gap-1"><TrendingDown size={14} /> {expensesLabel}</span>
           <span className="font-bold text-slate-800">{expenses}</span>
         </div>
-        <div className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2">
-          <span className="text-sm text-blue-700 flex items-center gap-1"><DollarSign size={14} /> {profitLabel}</span>
+        <div className={`flex items-center justify-between ${pBg} rounded-lg px-3 py-2`}>
+          <span className={`text-sm ${pText} flex items-center gap-1`}><DollarSign size={14} /> {profitLabel}</span>
           <span className="font-bold text-slate-800">{profit}</span>
         </div>
       </div>
