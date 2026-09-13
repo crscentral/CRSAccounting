@@ -141,19 +141,20 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
         finalContactId = newContact.id
       }
 
-      let fxRate = 1
+      let finalFxRate = 1
       if (currency !== 'USD') {
+        // use state fxRate if provided
         if (fxRate && !isNaN(Number(fxRate))) {
-          fxRate = Number(fxRate)
+          finalFxRate = Number(fxRate)
         } else {
           const rate = await getLatestRate(currency)
-          fxRate = rate || 1
+          finalFxRate = rate || 1
         }
       }
-      const amountUsd = currency === 'USD' ? grandTotal : grandTotal / fxRate
+      const amountUsd = currency === 'USD' ? grandTotal : grandTotal / finalFxRate
 
       const payload = {
-        company_id: companyId, product, contact_id: finalContactId || null, fx_rate_locked: fxRate,
+        company_id: companyId, product, contact_id: finalContactId || null, fx_rate_locked: currency === 'USD' ? null : finalFxRate,
         amount_usd: Math.round(amountUsd * 100) / 100, ...buildPayload(),
       }
 

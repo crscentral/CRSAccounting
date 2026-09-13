@@ -102,16 +102,17 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
         finalContactId = newContact.id
       }
 
-      let fxRate = 1
+      let finalFxRate = 1
       if (currency !== 'USD') {
+        // use state fxRate if provided
         if (fxRate && !isNaN(Number(fxRate))) {
-          fxRate = Number(fxRate)
+          finalFxRate = Number(fxRate)
         } else {
           const rate = await getLatestRate(currency)
-          fxRate = rate || 1
+          finalFxRate = rate || 1
         }
       }
-      const amountUsd = currency === 'USD' ? netPayable : netPayable / fxRate
+      const amountUsd = currency === 'USD' ? netPayable : netPayable / finalFxRate
 
       const payload = {
         company_id: companyId, product,
@@ -121,7 +122,7 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
         supplier_email: supplierEmail || null, supplier_phone: supplierPhone || null,
         supplier_gstin: supplierGstin || null, supplier_address: supplierAddress || null,
         invoice_date: invoiceDate, due_date: dueDate || null,
-        currency, fx_rate_locked: fxRate,
+        currency, fx_rate_locked: currency === 'USD' ? null : finalFxRate,
         amount: netPayable, amount_usd: Math.round(amountUsd * 100) / 100,
         account_id: accountId || null, status,
         subtotal, tax_amount: taxAmount, tds_percent: tdsPercent, net_payable: netPayable,
