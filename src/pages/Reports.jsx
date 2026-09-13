@@ -192,19 +192,23 @@ export default function Reports() {
             <div>
               <div className="bg-emerald-600 text-white text-sm font-semibold px-3 py-2 rounded-t-lg">REVENUE</div>
               <div className="border border-t-0 border-slate-100 rounded-b-lg divide-y divide-slate-50">
-                {byType('Revenue').map(a => (
-                  <Row key={a.id} label={a.name} value={cp.fmt(-(balances[a.id] || 0))} />
-                ))}
-                <Row label="Total Revenue" value={cp.fmt(totalRevenue)} bold />
+                {byType('Revenue').map(a => {
+                  const val = -(balances[a.id] || 0)
+                  const pct = totalRevenue ? ((val / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'
+                  return <Row key={a.id} label={a.name} value={cp.fmt(val)} percent={pct} />
+                })}
+                <Row label="Total Revenue" value={cp.fmt(totalRevenue)} percent="100.0%" bold />
               </div>
             </div>
             <div>
               <div className="bg-rose-600 text-white text-sm font-semibold px-3 py-2 rounded-t-lg">OPERATING EXPENSES</div>
               <div className="border border-t-0 border-slate-100 rounded-b-lg divide-y divide-slate-50">
-                {operatingAccounts.map(a => (
-                  <Row key={a.id} label={a.name} value={cp.fmt(balances[a.id] || 0)} />
-                ))}
-                <Row label="Total Operating Expenses" value={cp.fmt(operatingExpenses)} bold />
+                {operatingAccounts.map(a => {
+                  const val = balances[a.id] || 0
+                  const pct = operatingExpenses ? ((val / operatingExpenses) * 100).toFixed(1) + '%' : '0.0%'
+                  return <Row key={a.id} label={a.name} value={cp.fmt(val)} percent={pct} />
+                })}
+                <Row label="Total Operating Expenses" value={cp.fmt(operatingExpenses)} percent="100.0%" bold />
               </div>
             </div>
             <Row label={`GOP/GOL (${gop >= 0 ? 'Gross Operating Profit' : 'Gross Operating Loss'})`} value={cp.fmt(gop)} bold large />
@@ -290,11 +294,14 @@ function AccountBlock({ title, color, accounts, balances, fmt, total }) {
   )
 }
 
-function Row({ label, value, bold, large }) {
+function Row({ label, value, percent, bold, large }) {
   return (
     <div className={`flex items-center justify-between px-3 py-2 ${bold ? 'font-bold text-slate-800' : 'text-slate-600'} ${large ? 'text-lg py-3' : 'text-sm'}`}>
       <span>{label}</span>
-      <span>{value}</span>
+      <div className="flex items-center justify-end">
+        {percent && <span className="text-slate-400 text-xs w-16 text-right mr-3 font-normal">{percent}</span>}
+        <span className="text-right min-w-[100px]">{value}</span>
+      </div>
     </div>
   )
 }
