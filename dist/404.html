@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CRS Accounting</title>
+  <script>
+    // GitHub Pages has no server-side routing, so a hard refresh or direct link to
+    // e.g. /CRSAccounting/accounts hits GitHub's servers looking for a real file
+    // named "accounts" and 404s. This script rewrites that request into a query
+    // string and redirects to index.html, which then restores the original path
+    // client-side (see the matching script in index.html).
+    var pathSegmentsToKeep = 1; // keep "/CRSAccounting"
+    var l = window.location;
+    l.replace(
+      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+      l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+      l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+      (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+      l.hash
+    );
+  </script>
+</head>
+<body></body>
+</html>

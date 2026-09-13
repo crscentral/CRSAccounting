@@ -14,40 +14,45 @@ import { resolveReportPeriod } from '../lib/fiscalYear'
 export default function CapitalTransactions() {
   const { activeCompany, activeProduct, can } = useAuth()
   const cp = useCurrencyAndPeriod()
-  const [tab, setTab] = useState('loans')
+  const [tab, setTab] = useState('equity')
   const [accounts, setAccounts] = useState([])
   const [loanPayments, setLoanPayments] = useState([])
   const [dividends, setDividends] = useState([])
+  const [ownerContributions, setOwnerContributions] = useState([])
+  const [loansTaken, setLoansTaken] = useState([])
+  
   const [loanModalOpen, setLoanModalOpen] = useState(false)
   const [dividendModalOpen, setDividendModalOpen] = useState(false)
+  const [contributionModalOpen, setContributionModalOpen] = useState(false)
+  const [loanTakenModalOpen, setLoanTakenModalOpen] = useState(false)
+  
+  const [editItem, setEditItem] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadAll() {
-    const [{ data: acc }, { data: loans }, { data: divs }] = await Promise.all([
+    const [{ data: acc }, { data: loans }, { data: divs }, { data: contribs }, { data: taken }] = await Promise.all([
       supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('code'),
       supabase.from('loan_principal_payments').select('*, loan_account:accounts!loan_principal_payments_loan_account_id_fkey(name, code)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', cp.range.from).lte('payment_date', cp.range.to).order('payment_date', { ascending: false }),
       supabase.from('owner_dividends').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', cp.range.from).lte('payment_date', cp.range.to).order('payment_date', { ascending: false }),
+      supabase.from('owner_contributions').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', cp.range.from).lte('payment_date', cp.range.to).order('payment_date', { ascending: false }),
+      supabase.from('loans_taken').select('*, loan_account:accounts!loans_taken_loan_account_id_fkey(name, code)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', cp.range.from).lte('payment_date', cp.range.to).order('payment_date', { ascending: false }),
     ])
     setAccounts(acc || [])
     setLoanPayments(loans || [])
     setDividends(divs || [])
+    setOwnerContributions(contribs || [])
+    setLoansTaken(taken || [])
   }
 
-  async function handleDeleteLoan(row) {
-    if (!confirm('Delete this loan principal repayment? This cannot be undone.')) return
-    const { error } = await supabase.from('loan_principal_payments').delete().eq('id', row.id)
+  async function handleDelete(table, id) {
+    if (!confirm('Delete this entry? This cannot be undone.')) return
+    const { error } = await supabase.from(table).delete().eq('id', id)
     if (error) { alert('Could not delete: ' + error.message); return }
     loadAll()
   }
 
-  async function handleDeleteDividend(row) {
-    if (!confirm('Delete this dividend entry? This cannot be undone.')) return
-    const { error } = await supabase.from('owner_dividends').delete().eq('id', row.id)
-    if (error) { alert('Could not delete: ' + error.message); return }
-    loadAll()
-  }
 
   async function generateCapitalReport(selections, format) {
     const range = resolveReportPeriod(selections.period, 1, selections.customFrom, selections.customTo)
@@ -55,6 +60,24 @@ export default function CapitalTransactions() {
     const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
 
     const sections = []
+    if (selections.sections.includes("Owner's Equity (Contributions)")) {
+      const { data } = await supabase.from('owner_contributions').select('*')
+        .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
+      sections.push({
+        heading: "Owner's Equity (Contributions)",
+        columns: ['Date', 'Owner', 'Amount', `Amount (${selections.currency})`, 'Notes'],
+        rows: (data || []).map(r => [r.payment_date, r.owner_name, `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
+      })
+    }
+    if (selections.sections.includes('Loans Taken')) {
+      const { data } = await supabase.from('loans_taken').select('*, loan_account:accounts!loans_taken_loan_account_id_fkey(name, code)')
+        .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
+      sections.push({
+        heading: 'Loans Taken',
+        columns: ['Date', 'Loan Account', 'Amount', `Amount (${selections.currency})`, 'Notes'],
+        rows: (data || []).map(r => [r.payment_date, r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
+      })
+    }
     if (selections.sections.includes('Loan Principal Repayments')) {
       const { data } = await supabase.from('loan_principal_payments').select('*, loan_account:accounts!loan_principal_payments_loan_account_id_fkey(name, code)')
         .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
@@ -103,22 +126,28 @@ export default function CapitalTransactions() {
         periodProps={cp.periodProps}
         actions={
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400">
+            <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-4 py-2 rounded-lg hover:border-navy-400">
               Download Report
             </button>
             {can(['owner', 'admin']) && (
               <button
-                onClick={() => tab === 'loans' ? setLoanModalOpen(true) : setDividendModalOpen(true)}
+                onClick={() => { setEditItem(null); if (tab === 'equity') setContributionModalOpen(true); else if (tab === 'loans_taken') setLoanTakenModalOpen(true); else if (tab === 'dividends') setDividendModalOpen(true); else setLoanModalOpen(true); }}
                 className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
               >
-                <Plus size={16} /> {tab === 'loans' ? 'New Repayment' : 'New Dividend'}
+                <Plus size={16} /> New Entry
               </button>
             )}
           </div>
         }
       />
 
-      <div className="flex gap-2 mb-5">
+      <div className="flex flex-wrap gap-2 mb-5">
+        <button onClick={() => setTab('equity')} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium ${tab === 'equity' ? 'bg-navy-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>
+          <Users size={15} /> Owner's Equity
+        </button>
+        <button onClick={() => setTab('loans_taken')} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium ${tab === 'loans_taken' ? 'bg-navy-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>
+          <Landmark size={15} /> Loans Taken
+        </button>
         <button onClick={() => setTab('loans')} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium ${tab === 'loans' ? 'bg-navy-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>
           <Landmark size={15} /> Loan Principal Repayments
         </button>
@@ -127,26 +156,79 @@ export default function CapitalTransactions() {
         </button>
       </div>
 
-      {tab === 'loans' ? (
-        <DataTable
-          columns={[
-            { key: 'payment_date', label: 'Date' },
-            { key: 'loan_account', label: 'Loan Account', render: r => r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—' },
-            { key: 'amount', label: 'Amount', render: r => `${Number(r.amount).toLocaleString()} ${r.currency}` },
-            { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
-            ...(can(['owner', 'admin', 'accountant']) ? [{
-              key: 'actions', label: '', render: r => <button onClick={() => handleDeleteLoan(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
-            }] : []),
-          ]}
-          rows={loanPayments}
-          emptyMessage="No loan principal repayments recorded. This tracks only the principal portion — record Loan Interest as a normal expense via Purchase Invoices instead, since interest (not principal) belongs in the P&L."
-        />
-      ) : (
+
+      {tab === 'equity' && (
         <>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <p className="text-sm text-slate-500 mb-4 px-1">Record capital contributions made by owners into the business.</p>
+          <DataTable
+            columns={[
+              { key: 'payment_date', label: 'Date' },
+              { key: 'owner_name', label: 'Owner' },
+              { key: 'amount', label: 'Amount', render: r => `${Number(r.amount).toLocaleString()} ${r.currency}` },
+              { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
+              ...(can(['owner', 'admin']) ? [{
+                key: 'actions', label: '', render: r => <div className="flex justify-end gap-2 text-slate-400">
+                  <button onClick={() => { setEditItem(r); setContributionModalOpen(true) }} className="hover:text-emerald-600">Edit</button>
+                  <button onClick={() => handleDelete('owner_contributions', r.id)} className="hover:text-red-600"><Trash2 size={15} /></button>
+                </div>
+              }] : []),
+            ]}
+            rows={ownerContributions}
+            emptyMessage="No owner contributions recorded."
+          />
+        </>
+      )}
+
+      {tab === 'loans_taken' && (
+        <>
+          <p className="text-sm text-slate-500 mb-4 px-1">Record new loans received by the business.</p>
+          <DataTable
+            columns={[
+              { key: 'payment_date', label: 'Date' },
+              { key: 'loan_account', label: 'Loan Account', render: r => r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—' },
+              { key: 'amount', label: 'Amount', render: r => `${Number(r.amount).toLocaleString()} ${r.currency}` },
+              { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
+              ...(can(['owner', 'admin']) ? [{
+                key: 'actions', label: '', render: r => <div className="flex justify-end gap-2 text-slate-400">
+                  <button onClick={() => { setEditItem(r); setLoanTakenModalOpen(true) }} className="hover:text-emerald-600">Edit</button>
+                  <button onClick={() => handleDelete('loans_taken', r.id)} className="hover:text-red-600"><Trash2 size={15} /></button>
+                </div>
+              }] : []),
+            ]}
+            rows={loansTaken}
+            emptyMessage="No loans taken recorded."
+          />
+        </>
+      )}
+
+      {tab === 'loans' && (
+        <>
+          <p className="text-sm text-slate-500 mb-4 px-1">No loan principal repayments recorded. This tracks only the principal portion — record Loan Interest as a normal expense via Purchase Invoices instead, since interest (not principal) belongs in the P&L.</p>
+          <DataTable
+            columns={[
+              { key: 'payment_date', label: 'Date' },
+              { key: 'loan_account', label: 'Loan Account', render: r => r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—' },
+              { key: 'amount', label: 'Amount', render: r => `${Number(r.amount).toLocaleString()} ${r.currency}` },
+              { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
+              ...(can(['owner', 'admin']) ? [{
+                key: 'actions', label: '', render: r => <div className="flex justify-end gap-2 text-slate-400">
+                  <button onClick={() => { setEditItem(r); setLoanModalOpen(true) }} className="hover:text-emerald-600">Edit</button>
+                  <button onClick={() => handleDelete('loan_principal_payments', r.id)} className="hover:text-red-600"><Trash2 size={15} /></button>
+                </div>
+              }] : []),
+            ]}
+            rows={loanPayments}
+            emptyMessage="No loan principal repayments recorded."
+          />
+        </>
+      )}
+
+      {tab === 'dividends' && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             {ownerBalances.map(o => (
-              <div key={o.name} className="bg-white rounded-xl border border-slate-200 p-4">
-                <div className="text-sm font-medium text-slate-700">{o.name}</div>
+              <div key={o.name} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                <div className="text-sm font-semibold text-slate-600">{o.name}</div>
                 <div className="text-xl font-bold text-slate-800 mt-1">{cp.fmt(o.total)}</div>
                 <div className="text-xs text-slate-400 mt-1">Total dividends paid</div>
               </div>
@@ -159,7 +241,10 @@ export default function CapitalTransactions() {
               { key: 'amount', label: 'Amount', render: r => `${Number(r.amount).toLocaleString()} ${r.currency}` },
               { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
               ...(can(['owner', 'admin']) ? [{
-                key: 'actions', label: '', render: r => <button onClick={() => handleDeleteDividend(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+                key: 'actions', label: '', render: r => <div className="flex justify-end gap-2 text-slate-400">
+                  <button onClick={() => { setEditItem(r); setDividendModalOpen(true) }} className="hover:text-emerald-600">Edit</button>
+                  <button onClick={() => handleDelete('owner_dividends', r.id)} className="hover:text-red-600"><Trash2 size={15} /></button>
+                </div>
               }] : []),
             ]}
             rows={dividends}
@@ -168,16 +253,33 @@ export default function CapitalTransactions() {
         </>
       )}
 
+
+
+      {contributionModalOpen && (
+        <OwnerEquityFormModal companyId={activeCompany.id} product={activeProduct} initialData={editItem} cashAccounts={cashAccounts} onClose={() => setContributionModalOpen(false)} onSaved={loadAll} />
+      )}
+      {loanTakenModalOpen && (
+        <LoanTakenFormModal companyId={activeCompany.id} product={activeProduct} initialData={editItem} liabilityAccounts={liabilityAccounts} cashAccounts={cashAccounts} onClose={() => setLoanTakenModalOpen(false)} onSaved={loadAll} />
+      )}
       {loanModalOpen && (
-        <LoanRepaymentFormModal
-          companyId={activeCompany.id}
-          product={activeProduct}
-          liabilityAccounts={liabilityAccounts}
-          cashAccounts={cashAccounts}
-          onClose={() => setLoanModalOpen(false)}
-          onSaved={loadAll}
+        <LoanRepaymentFormModal companyId={activeCompany.id} product={activeProduct} initialData={editItem} liabilityAccounts={liabilityAccounts} cashAccounts={cashAccounts} onClose={() => setLoanModalOpen(false)} onSaved={loadAll} />
+      )}
+      {dividendModalOpen && (
+        <DividendFormModal companyId={activeCompany.id} product={activeProduct} initialData={editItem} cashAccounts={cashAccounts} onClose={() => setDividendModalOpen(false)} onSaved={loadAll} />
+      )}
+      {reportModalOpen && (
+        <ReportOptionsModal
+          title="Capital & Loans"
+          fields={[
+            { type: 'checkboxGroup', key: 'sections', label: 'Include Sections', options: ["Owner's Equity (Contributions)", 'Loans Taken', 'Loan Principal Repayments', 'Owner Dividends'], default: ["Owner's Equity (Contributions)", 'Loans Taken', 'Loan Principal Repayments', 'Owner Dividends'] },
+            { type: 'currency', key: 'currency', default: cp.displayCurrency },
+            { type: 'period', key: 'period', default: 'ALL_TIME' },
+          ]}
+          onGenerate={generateCapitalReport}
+          onClose={() => setReportModalOpen(false)}
         />
       )}
+
 
       {dividendModalOpen && (
         <DividendFormModal
@@ -204,13 +306,13 @@ export default function CapitalTransactions() {
   )
 }
 
-function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAccounts, onClose, onSaved }) {
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10))
-  const [loanAccountId, setLoanAccountId] = useState(liabilityAccounts[0]?.id || '')
-  const [cashAccountId, setCashAccountId] = useState(cashAccounts[0]?.id || '')
-  const [currency, setCurrency] = useState('USD')
-  const [amount, setAmount] = useState('')
-  const [notes, setNotes] = useState('')
+function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAccounts, initialData, onClose, onSaved }) {
+  const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || new Date().toISOString().slice(0, 10))
+  const [loanAccountId, setLoanAccountId] = useState(initialData?.loan_account_id || liabilityAccounts[0]?.id || '')
+  const [cashAccountId, setCashAccountId] = useState(initialData?.cash_account_id || cashAccounts[0]?.id || '')
+  const [currency, setCurrency] = useState(initialData?.currency || 'USD')
+  const [amount, setAmount] = useState(initialData?.amount || '')
+  const [notes, setNotes] = useState(initialData?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -221,12 +323,18 @@ function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAcc
     setSaving(true)
     try {
       const fxRate = currency === 'USD' ? 1 : (await getLatestRate(currency)) || 1
-      const { error: err } = await supabase.from('loan_principal_payments').insert({
+      const payload = {
         company_id: companyId, product, payment_date: paymentDate,
         loan_account_id: loanAccountId, cash_account_id: cashAccountId,
         currency, fx_rate_locked: fxRate, amount: Number(amount), amount_usd: Math.round(Number(amount) / fxRate * 100) / 100,
         notes: notes || null,
-      })
+      }
+      let err;
+      if (initialData) {
+        ({ error: err } = await supabase.from('loan_principal_payments').update(payload).eq('id', initialData.id))
+      } else {
+        ({ error: err } = await supabase.from('loan_principal_payments').insert(payload))
+      }
       if (err) throw err
       onSaved(); onClose()
     } catch (err) {
@@ -237,7 +345,7 @@ function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAcc
   }
 
   return (
-    <Modal title="New Loan Principal Repayment" onClose={onClose}>
+    <Modal title={initialData ? "Edit Loan Principal Repayment" : "New Loan Principal Repayment"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg p-3">
           This records only the principal portion of an EMI/loan payment — it reduces the loan balance and your cash, but is NOT an expense. If your payment also includes interest, record that separately as a normal expense (e.g. via a Purchase Invoice against a "Loan Interest" account).
@@ -273,19 +381,20 @@ function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAcc
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex gap-2 pt-2">
           <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600">Cancel</button>
-          <button type="submit" disabled={saving} className="flex-1 bg-navy-600 hover:bg-navy-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60">{saving ? 'Saving…' : 'Add Repayment'}</button>
+          <button type="submit" disabled={saving} className="flex-1 bg-navy-600 hover:bg-navy-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60">{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </form>
     </Modal>
   )
 }
 
-function DividendFormModal({ companyId, product, onClose, onSaved }) {
-  const [ownerName, setOwnerName] = useState('')
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10))
-  const [currency, setCurrency] = useState('USD')
-  const [amount, setAmount] = useState('')
-  const [notes, setNotes] = useState('')
+
+function DividendFormModal({ companyId, product, initialData, onClose, onSaved }) {
+  const [ownerName, setOwnerName] = useState(initialData?.owner_name || '')
+  const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || new Date().toISOString().slice(0, 10))
+  const [currency, setCurrency] = useState(initialData?.currency || 'USD')
+  const [amount, setAmount] = useState(initialData?.amount || '')
+  const [notes, setNotes] = useState(initialData?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -296,11 +405,17 @@ function DividendFormModal({ companyId, product, onClose, onSaved }) {
     setSaving(true)
     try {
       const fxRate = currency === 'USD' ? 1 : (await getLatestRate(currency)) || 1
-      const { error: err } = await supabase.from('owner_dividends').insert({
+      const payload = {
         company_id: companyId, product, owner_name: ownerName.trim(), payment_date: paymentDate,
         currency, fx_rate_locked: fxRate, amount: Number(amount), amount_usd: Math.round(Number(amount) / fxRate * 100) / 100,
         notes: notes || null,
-      })
+      }
+      let err;
+      if (initialData) {
+        ({ error: err } = await supabase.from('owner_dividends').update(payload).eq('id', initialData.id))
+      } else {
+        ({ error: err } = await supabase.from('owner_dividends').insert(payload))
+      }
       if (err) throw err
       onSaved(); onClose()
     } catch (err) {
@@ -311,13 +426,16 @@ function DividendFormModal({ companyId, product, onClose, onSaved }) {
   }
 
   return (
-    <Modal title="New Owner Dividend" onClose={onClose}>
+    <Modal title={initialData ? "Edit Owner Dividend" : "New Owner Dividend"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Owner Name *">
-          <input required value={ownerName} onChange={e => setOwnerName(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. Sumant Singh" />
-        </Field>
+        <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg p-3">
+          This records a dividend/withdrawal paid to an owner. It reduces Retained Earnings (Equity) and reduces Cash (Asset). It is NOT an expense.
+        </p>
         <Field label="Date *">
           <input type="date" required value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </Field>
+        <Field label="Owner Name *">
+          <input type="text" required value={ownerName} onChange={e => setOwnerName(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Currency">
@@ -335,7 +453,165 @@ function DividendFormModal({ companyId, product, onClose, onSaved }) {
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex gap-2 pt-2">
           <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600">Cancel</button>
-          <button type="submit" disabled={saving} className="flex-1 bg-navy-600 hover:bg-navy-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60">{saving ? 'Saving…' : 'Add Dividend'}</button>
+          <button type="submit" disabled={saving} className="flex-1 bg-navy-600 hover:bg-navy-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60">{saving ? 'Saving…' : 'Save'}</button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+
+function OwnerEquityFormModal({ companyId, product, cashAccounts, initialData, onClose, onSaved }) {
+  const [ownerName, setOwnerName] = useState(initialData?.owner_name || '')
+  const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || new Date().toISOString().slice(0, 10))
+  const [currency, setCurrency] = useState(initialData?.currency || 'USD')
+  const [amount, setAmount] = useState(initialData?.amount || '')
+  const [notes, setNotes] = useState(initialData?.notes || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+    if (!ownerName.trim() || !amount || Number(amount) <= 0) { setError('Owner name and positive amount are required.'); return }
+    setSaving(true)
+    try {
+      const fxRate = currency === 'USD' ? 1 : (await getLatestRate(currency)) || 1
+      const payload = {
+        company_id: companyId, product, owner_name: ownerName.trim(), payment_date: paymentDate,
+        currency, fx_rate_locked: fxRate, amount: Number(amount), amount_usd: Math.round(Number(amount) / fxRate * 100) / 100,
+        notes: notes || null,
+      }
+      
+      let err;
+      if (initialData) {
+        ({ error: err } = await supabase.from('owner_contributions').update(payload).eq('id', initialData.id))
+      } else {
+        ({ error: err } = await supabase.from('owner_contributions').insert(payload))
+      }
+      if (err) throw err
+      
+      onSaved(); onClose()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title={initialData ? "Edit Owner's Equity" : "New Owner's Equity (Contribution)"} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg p-3">
+          Record capital contributions from owners. This increases Cash (Asset) and increases Owner's Contribution (Equity).
+        </p>
+        <Field label="Date *">
+          <input type="date" required value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </Field>
+        <Field label="Owner Name *">
+          <input type="text" required value={ownerName} onChange={e => setOwnerName(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Currency">
+            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+              {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+            </select>
+          </Field>
+          <Field label="Amount *">
+            <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </Field>
+        </div>
+        <Field label="Notes">
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </Field>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+        <div className="flex gap-2 pt-2">
+          <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600">Cancel</button>
+          <button type="submit" disabled={saving} className="flex-1 bg-navy-600 hover:bg-navy-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60">{saving ? 'Saving…' : 'Save'}</button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function LoanTakenFormModal({ companyId, product, liabilityAccounts, cashAccounts, initialData, onClose, onSaved }) {
+  const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || new Date().toISOString().slice(0, 10))
+  const [loanAccountId, setLoanAccountId] = useState(initialData?.loan_account_id || liabilityAccounts[0]?.id || '')
+  const [cashAccountId, setCashAccountId] = useState(initialData?.cash_account_id || cashAccounts[0]?.id || '')
+  const [currency, setCurrency] = useState(initialData?.currency || 'USD')
+  const [amount, setAmount] = useState(initialData?.amount || '')
+  const [notes, setNotes] = useState(initialData?.notes || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+    if (!loanAccountId || !cashAccountId || !amount || Number(amount) <= 0) { setError('Loan account, cash account, and a positive amount are required.'); return }
+    setSaving(true)
+    try {
+      const fxRate = currency === 'USD' ? 1 : (await getLatestRate(currency)) || 1
+      const payload = {
+        company_id: companyId, product, payment_date: paymentDate,
+        loan_account_id: loanAccountId, cash_account_id: cashAccountId,
+        currency, fx_rate_locked: fxRate, amount: Number(amount), amount_usd: Math.round(Number(amount) / fxRate * 100) / 100,
+        notes: notes || null,
+      }
+      
+      let err;
+      if (initialData) {
+        ({ error: err } = await supabase.from('loans_taken').update(payload).eq('id', initialData.id))
+      } else {
+        ({ error: err } = await supabase.from('loans_taken').insert(payload))
+      }
+      if (err) throw err
+      
+      onSaved(); onClose()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title={initialData ? "Edit Loan Taken" : "New Loan Taken"} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg p-3">
+          Record bank loans received. This increases Cash (Asset) and increases Loan Balance (Liability).
+        </p>
+        <Field label="Date *">
+          <input type="date" required value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </Field>
+        <Field label="Loan Account (Liability) *">
+          <select required value={loanAccountId} onChange={e => setLoanAccountId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">Select loan account…</option>
+            {liabilityAccounts.map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Received Into (Cash/Bank Account) *">
+          <select required value={cashAccountId} onChange={e => setCashAccountId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">Select cash account…</option>
+            {cashAccounts.map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
+          </select>
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Currency">
+            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+              {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+            </select>
+          </Field>
+          <Field label="Amount *">
+            <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </Field>
+        </div>
+        <Field label="Notes">
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </Field>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+        <div className="flex gap-2 pt-2">
+          <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600">Cancel</button>
+          <button type="submit" disabled={saving} className="flex-1 bg-navy-600 hover:bg-navy-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60">{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </form>
     </Modal>
