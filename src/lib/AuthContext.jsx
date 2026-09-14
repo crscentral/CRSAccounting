@@ -52,7 +52,7 @@ export function AuthProvider({ children }) {
   const activeMembership = companies.find(c => c.company.id === activeCompanyId) || companies[0]
   const activeCompany = activeMembership?.company || null
   const activeRole = activeMembership?.role || null
-  const memberProducts = activeCompanyMember?.products || ['basic', 'hotel', 'restaurant']
+  const memberProducts = activeMembership?.products || ['basic', 'hotel', 'restaurant']
   const availableProducts = (activeCompany?.company_products || []).map(p => p.product).filter(p => memberProducts.includes(p))
 
   // If the currently-selected product isn't actually enabled for the active company
