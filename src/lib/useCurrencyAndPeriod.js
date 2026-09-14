@@ -8,7 +8,7 @@ export function useCurrencyAndPeriod() {
   const { activeCompany } = useAuth()
   const [displayCurrency, setDisplayCurrency] = useState('USD')
   const [ratesMap, setRatesMap] = useState({ USD: 1 })
-  const [periodType, setPeriodType] = useState('MTD')
+  const [periodType, setPeriodType] = useState('YTD')
   const [n, setN] = useState(1)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)

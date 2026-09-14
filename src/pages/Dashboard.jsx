@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { TrendingUp, TrendingDown, DollarSign, Receipt, AlertCircle, Building2 } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
@@ -191,6 +191,8 @@ export default function Dashboard() {
   const netProfit = totalBilled - totalExpenses
   const outstanding = sales.reduce((sum, i) => sum + (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)), 0)
   const collected = totalBilled - outstanding
+  const expensesMade = purchases.reduce((sum, i) => sum + (i.status === 'Paid' ? Number(i.amount_usd) : 0), 0)
+  const actualProfit = collected - expensesMade
   const draftInvoices = sales.filter(i => i.status !== 'Paid')
   const draftExpenses = purchases.filter(i => i.status === 'Draft')
 
@@ -253,13 +255,79 @@ export default function Dashboard() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
-        <KpiCard label="Total Billed" value={cp.fmt(totalBilled)} sublabel="sales invoices" icon={TrendingUp} tone="green" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <KpiCard label="Total Revenue" value={cp.fmt(totalBilled)} sublabel="sales invoices" icon={TrendingUp} tone="green" />
         <KpiCard label="Total Expenses" value={cp.fmt(totalExpenses)} sublabel="purchase invoices" icon={TrendingDown} tone="red" />
-        <KpiCard label="Net Profit" value={cp.fmt(netProfit)} sublabel="billed minus expenses" icon={DollarSign} tone={netProfit >= 0 ? 'green' : 'red'} />
-        <KpiCard label="Collected" value={cp.fmt(collected)} sublabel="payment receipts" icon={Receipt} tone="gold" />
+        <KpiCard label="Expected Net Profit" value={cp.fmt(netProfit)} sublabel="billed minus expenses" icon={DollarSign} tone={netProfit >= 0 ? 'green' : 'red'} />
         <KpiCard label="Outstanding" value={cp.fmt(outstanding)} sublabel="pending + overdue" icon={AlertCircle} tone="slate" />
       </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
+        <KpiCard label="Total Revenue Collected" value={cp.fmt(collected)} sublabel="actual paid revenue" icon={Receipt} tone="gold" />
+        <KpiCard label="Total Expenses Made" value={cp.fmt(expensesMade)} sublabel="actual paid expenses" icon={TrendingDown} tone="orange" />
+        <KpiCard label="Actual Profit" value={cp.fmt(actualProfit)} sublabel="collected minus made" icon={DollarSign} tone={actualProfit >= 0 ? 'green' : 'red'} />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
+          <h2 className="font-semibold text-slate-700 flex items-center gap-2 mb-2">
+            <DollarSign size={18} /> Expected Profit Breakdown
+          </h2>
+          <div className="text-xs text-slate-500 mb-4 text-center">Total Revenue = Total Expenses + Expected Net Profit</div>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={netProfit >= 0 ? [
+                    { name: 'Total Expenses', value: cp.convert(totalExpenses), color: '#ef4444' },
+                    { name: 'Expected Net Profit', value: cp.convert(netProfit), color: '#10b981' }
+                  ] : [
+                    { name: 'Total Revenue', value: cp.convert(totalBilled), color: '#10b981' },
+                    { name: 'Expected Net Loss', value: cp.convert(Math.abs(netProfit)), color: '#ef4444' }
+                  ]}
+                  cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} dataKey="value"
+                >
+                  {(netProfit >= 0 ? [1,2] : [1,2]).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={(netProfit >= 0 ? ['#ef4444', '#10b981'] : ['#10b981', '#ef4444'])[index]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v) => cp.fmt(v)} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
+          <h2 className="font-semibold text-slate-700 flex items-center gap-2 mb-2">
+            <Receipt size={18} /> Actual Profit Breakdown
+          </h2>
+          <div className="text-xs text-slate-500 mb-4 text-center">Total Collected = Total Expenses Made + Actual Profit</div>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={actualProfit >= 0 ? [
+                    { name: 'Total Expenses Made', value: cp.convert(expensesMade), color: '#f97316' },
+                    { name: 'Actual Profit', value: cp.convert(actualProfit), color: '#10b981' }
+                  ] : [
+                    { name: 'Total Collected', value: cp.convert(collected), color: '#eab308' },
+                    { name: 'Actual Loss', value: cp.convert(Math.abs(actualProfit)), color: '#ef4444' }
+                  ]}
+                  cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} dataKey="value"
+                >
+                  {(actualProfit >= 0 ? [1,2] : [1,2]).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={(actualProfit >= 0 ? ['#f97316', '#10b981'] : ['#eab308', '#ef4444'])[index]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v) => cp.fmt(v)} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
 
       {activeProduct === 'hotel' && hotelStats && (
         <div className="mb-6">
