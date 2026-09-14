@@ -1,54 +1,47 @@
 import re
+with open('src/pages/Dashboard.jsx', 'r') as f:
+    code = f.read()
 
-def patch_file(filepath, table_type):
-    with open(filepath, 'r') as f:
-        content = f.read()
+# 1. Update Outstanding Invoices
+outstanding = """        <DataTable
+          columns={[
+            { key: 'invoice_number', label: 'Invoice #' },
+            { key: 'customer', label: 'Customer', render: r => r.contact?.name || '—' },
+            { key: 'due_date', label: 'Due Date' },
+            { key: 'balance_due', label: 'Balance Due', render: r => `${Number(r.balance_due).toLocaleString()} ${r.currency}` },
+            { key: 'balance_usd', label: `Balance (${cp.displayCurrency})`, render: r => cp.fmt((Number(r.balance_due) / (Number(r.amount) || 1)) * Number(r.amount_usd)) },
+            { key: 'status', label: 'Status' },
+          ]}
+          rows={draftInvoices}
+          emptyMessage="No outstanding invoices — nice work."
+        />"""
 
-    if table_type == 'sales':
-        # Invoices Tab
-        old_cols1 = "columns={['Invoice #', 'Customer', 'Date', 'Due', 'Amount', `Amount (${selections.currency})`, 'Status', '']}"
-        new_cols1 = "columns={['Invoice #', 'Customer', 'Date', 'Due', 'Amount', 'Rate', `Amount (${selections.currency})`, 'Status', '']}"
-        content = content.replace(old_cols1, new_cols1)
-        
-        old_row1 = """              <div className="font-medium text-slate-800">{r.amount} {r.currency}</div>
-            ),
-            cp.fmt(r.amount_usd),"""
-        new_row1 = """              <div className="font-medium text-slate-800">{r.amount} {r.currency}</div>
-            ),
-            r.currency === 'USD' ? '1.0000' : (r.fx_rate_locked || (r.amount / r.amount_usd).toFixed(4)),
-            cp.fmt(r.amount_usd),"""
-        content = content.replace(old_row1, new_row1)
-        
-        # Receipts Tab
-        old_cols2 = "columns={['Receipt #', 'Invoice #', 'Date', 'Customer', 'Amount', `Amount (${selections.currency})`, 'Method', '']}"
-        new_cols2 = "columns={['Receipt #', 'Invoice #', 'Date', 'Customer', 'Amount', 'Rate', `Amount (${selections.currency})`, 'Method', '']}"
-        content = content.replace(old_cols2, new_cols2)
+code = re.sub(
+    r"        <DataTable\n          columns=\{\[\n            \{ key: 'invoice_number', label: 'Invoice #' \},\n            \{ key: 'customer', label: 'Customer', render: r => r\.contact\?\.name \|\| '—' \},\n            \{ key: 'due_date', label: 'Due Date' \},\n            \{ key: 'balance_due', label: 'Balance Due', render: r => cp\.fmt\(\(Number\(r\.balance_due\) / \(Number\(r\.amount\) \|\| 1\)\) \* Number\(r\.amount_usd\)\) \},\n            \{ key: 'status', label: 'Status' \},\n          \]\}\n          rows=\{draftInvoices\}\n          emptyMessage=\"No outstanding invoices — nice work\.\"\n        />",
+    outstanding,
+    code,
+    flags=re.DOTALL
+)
 
-        old_row2 = """              <div className="font-medium text-slate-800">{r.amount} {r.currency}</div>
-            ),
-            cp.fmt(r.amount_usd),"""
-        new_row2 = """              <div className="font-medium text-slate-800">{r.amount} {r.currency}</div>
-            ),
-            r.currency === 'USD' ? '1.0000' : (r.fx_rate_locked || (r.amount / r.amount_usd).toFixed(4)),
-            cp.fmt(r.amount_usd),"""
-        content = content.replace(old_row2, new_row2)
+# 2. Update Draft Expenses
+draft = """        <DataTable
+          columns={[
+            { key: 'invoice_number', label: 'Invoice #' },
+            { key: 'supplier', label: 'Supplier', render: r => r.contact?.name || r.supplier_name_freeform || '—' },
+            { key: 'invoice_date', label: 'Date' },
+            { key: 'amount', label: 'Amount', render: r => `${Number(r.amount).toLocaleString()} ${r.currency}` },
+            { key: 'amount_usd', label: `Amount (${cp.displayCurrency})`, render: r => cp.fmt(r.amount_usd) },
+          ]}
+          rows={draftExpenses}
+          emptyMessage="No draft expenses."
+        />"""
 
-    elif table_type == 'purchase':
-        old_cols = "columns={['Invoice #', 'Date', 'Supplier', 'Currency', 'Amount', `Amount (${selections.currency})`, 'Status', '']}"
-        new_cols = "columns={['Invoice #', 'Date', 'Supplier', 'Currency', 'Amount', 'Rate', `Amount (${selections.currency})`, 'Status', '']}"
-        content = content.replace(old_cols, new_cols)
-        
-        old_row = """              <div className="font-medium text-slate-800">{r.amount} {r.currency}</div>
-            ),
-            cp.fmt(r.amount_usd),"""
-        new_row = """              <div className="font-medium text-slate-800">{r.amount} {r.currency}</div>
-            ),
-            r.currency === 'USD' ? '1.0000' : (r.fx_rate_locked || (r.amount / r.amount_usd).toFixed(4)),
-            cp.fmt(r.amount_usd),"""
-        content = content.replace(old_row, new_row)
-        
-    with open(filepath, 'w') as f:
-        f.write(content)
+code = re.sub(
+    r"        <DataTable\n          columns=\{\[\n            \{ key: 'invoice_number', label: 'Invoice #' \},\n            \{ key: 'supplier', label: 'Supplier', render: r => r\.contact\?\.name \|\| r\.supplier_name_freeform \|\| '—' \},\n            \{ key: 'invoice_date', label: 'Date' \},\n            \{ key: 'amount_usd', label: 'Amount', render: r => cp\.fmt\(r\.amount_usd\) \},\n          \]\}\n          rows=\{draftExpenses\}\n          emptyMessage=\"No draft expenses\.\"\n        />",
+    draft,
+    code,
+    flags=re.DOTALL
+)
 
-patch_file('src/pages/SalesInvoices.jsx', 'sales')
-patch_file('src/pages/PurchaseInvoices.jsx', 'purchase')
+with open('src/pages/Dashboard.jsx', 'w') as f:
+    f.write(code)
