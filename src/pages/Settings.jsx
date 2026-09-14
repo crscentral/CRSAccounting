@@ -323,7 +323,9 @@ export default function Settings() {
                       <div className="text-slate-700">{m.profile?.email || m.invited_email}</div>
                       <div className="text-xs text-slate-400 capitalize">{m.role}{!m.profile && ' • invited, pending sign-up'}</div>
                     </div>
-                    <button onClick={() => removeMember(m.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={15} /></button>
+                    {(m.profile?.email !== 'crscentral.rm@gmail.com' && m.profile?.email !== user.email && m.invited_email !== 'crscentral.rm@gmail.com') && (
+                      <button onClick={() => removeMember(m.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={15} /></button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -481,14 +483,16 @@ export default function Settings() {
                           )
                         })}
                       </div>
-                      <button
-                        onClick={() => handleCompanyDelete(c.id, c.name)}
-                        disabled={actionInProgress === c.id}
-                        className="flex-shrink-0 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition-colors"
-                        title="Delete Company"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {c.name !== 'CRS Central' && c.id !== activeCompany.id && (
+                        <button
+                          onClick={() => handleCompanyDelete(c.id, c.name)}
+                          disabled={actionInProgress === c.id}
+                          className="flex-shrink-0 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition-colors"
+                          title="Delete Company"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 )
