@@ -25,6 +25,8 @@ export default function Settings() {
   const [loadingPending, setLoadingPending] = useState(false)
   const [actionInProgress, setActionInProgress] = useState(null)
   const [allCompanies, setAllCompanies] = useState([])
+  const [allUsers, setAllUsers] = useState([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
   const [loadingAllCompanies, setLoadingAllCompanies] = useState(false)
   const [productSaving, setProductSaving] = useState(null)
   const isPlatformAdmin = user?.email === 'crscentral.rm@gmail.com'
@@ -59,11 +61,22 @@ export default function Settings() {
     if (tab === 'admin' && isPlatformAdmin) { loadPendingCompanies(); loadAllCompaniesProducts() }
   }, [tab])
 
+  
+  async function loadAllUsers() {
+    setLoadingUsers(true)
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (!error && data) setAllUsers(data)
+    setLoadingUsers(false)
+  }
+
   async function loadAllCompaniesProducts() {
     setLoadingAllCompanies(true)
     const { data, error } = await supabase
       .from('companies')
-      .select('id, name, approval_status, company_products(product)')
+      .select('id, name, email, approval_status, company_products(product), members:company_members(role, invited_email, profile:user_profiles(email, full_name))')
       .order('name')
     if (!error && data) setAllCompanies(data)
     setLoadingAllCompanies(false)
@@ -499,6 +512,31 @@ export default function Settings() {
               })}
             </div>
           )}
+
+          <div className="mt-8">
+            <h3 className="font-semibold text-slate-800 text-base mb-1">Global Users List</h3>
+            <p className="text-xs text-slate-500 mb-4">
+              All registered user accounts across the entire application. Use this to distinguish people from companies.
+            </p>
+            {loadingUsers ? (
+              <p className="text-sm text-slate-400 py-4">Loading users…</p>
+            ) : (
+              <div className="space-y-2">
+                {allUsers.map(u => (
+                  <div key={u.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-slate-100 rounded-lg px-3 py-2.5">
+                    <div>
+                      <div className="text-sm font-medium text-slate-700">{u.full_name || 'No Name'}</div>
+                      <div className="text-xs text-slate-500">{u.email}</div>
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      Joined {new Date(u.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))}
+                {allUsers.length === 0 && <p className="text-sm text-slate-500 py-2">No users found.</p>}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
