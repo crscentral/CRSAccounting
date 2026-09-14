@@ -3,61 +3,97 @@ import re
 with open('src/pages/Settings.jsx', 'r') as f:
     code = f.read()
 
-# 1. Add handleCompanyDelete
-func = """  async function handleCompanyDelete(companyId, companyName) {
-    if (!window.prompt(`This will completely delete the company "${companyName}" and ALL of its data (invoices, accounts, ledgers). Type "DELETE" to confirm:`) === 'DELETE') return
-    
-    setActionInProgress(companyId)
-    try {
-      const { error } = await supabase.from('companies').delete().eq('id', companyId)
-      if (error) throw error
-      setAllCompanies(allCompanies.filter(c => c.id !== companyId))
-      alert('Company deleted successfully.')
-    } catch (err) {
-      alert('Failed to delete company: ' + err.message)
-    } finally {
-      setActionInProgress(null)
-    }
-  }
+# I need to add state for pending products selection.
+# Or just a local state for each company?
+# Since pendingCompanies is a mapped array, it's easier to add checkboxes right into the card.
 
-  async function toggleCompanyProduct(c, product) {"""
+new_card_jsx = """              {pendingCompanies.map(c => {
+                const ownerMember = c.members?.find(m => m.role === 'owner')
+                const ownerEmail = ownerMember?.profile?.email || c.email || 'N/A'
+                const ownerName = ownerMember?.profile?.full_name || ''
+                const isWorking = actionInProgress === c.id
 
-code = code.replace("  async function toggleCompanyProduct(c, product) {", func)
-
-# 2. Add Delete button in the UI
-button_ui = """                      </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row items-end sm:items-center justify-between gap-3 w-full sm:w-auto">
-                      <div className="flex flex-wrap gap-2">
-                        {ALL_PRODUCTS.map(product => {
-                          const isOn = enabled.includes(product)
-                          const isSaving = productSaving === c.id + product
-                          return (
-                            <button
-                              key={product}
-                              disabled={isSaving}
-                              onClick={() => toggleCompanyProduct(c, product)}
-                              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${isOn ? 'bg-navy-600 text-white border-navy-600' : 'bg-white text-slate-500 border-slate-200'}`}
-                            >
-                              {PRODUCT_LABELS[product]}
-                            </button>
-                          )
-                        })}
+                return (
+                  <div key={c.id} className="flex flex-col sm:flex-row justify-between gap-4 border border-slate-200 rounded-xl p-4 bg-slate-50/50 hover:bg-white transition-colors">
+                    <div className="flex-1">
+                      <div className="font-semibold text-slate-800 text-sm">{c.name}</div>
+                      <div className="text-xs text-slate-600 mt-1">
+                        <strong>Applicant:</strong> {ownerName ? `${ownerName} (${ownerEmail})` : ownerEmail}
                       </div>
+                      <div className="text-xs text-slate-400 mt-0.5 mb-3">
+                        Base Currency: <span className="font-medium text-slate-600">{c.base_currency}</span> • Created {new Date(c.created_at).toLocaleString()}
+                      </div>
+                      
+                      <div className="text-xs font-semibold text-slate-700 mb-2">Select Products to Grant:</div>
+                      <div className="flex flex-col gap-2">
+                        <label className="flex items-center gap-2 text-sm text-slate-700">
+                          <input type="checkbox" id={`prod-basic-${c.id}`} defaultChecked className="rounded border-slate-300 text-blue-600" />
+                          CRS Basic Accounting
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-slate-700">
+                          <input type="checkbox" id={`prod-hotel-${c.id}`} className="rounded border-slate-300 text-blue-600" />
+                          CRS Hotel Accounting
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-slate-700">
+                          <input type="checkbox" id={`prod-rest-${c.id}`} className="rounded border-slate-300 text-blue-600" />
+                          CRS Restaurant Accounting
+                        </label>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col items-end gap-2 justify-center">
                       <button
-                        onClick={() => handleCompanyDelete(c.id, c.name)}
-                        disabled={actionInProgress === c.id}
-                        className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition-colors ml-2"
-                        title="Delete Company"
+                        onClick={async () => {
+                          const basic = document.getElementById(`prod-basic-${c.id}`).checked
+                          const hotel = document.getElementById(`prod-hotel-${c.id}`).checked
+                          const rest = document.getElementById(`prod-rest-${c.id}`).checked
+                          
+                          if (!basic && !hotel && !rest) {
+                            alert('Please select at least one product before approving.')
+                            return
+                          }
+                          
+                          const products = []
+                          if (basic) products.push('basic')
+                          if (hotel) products.push('hotel')
+                          if (rest) products.push('restaurant')
+                          
+                          // First set the products
+                          const { error: err } = await supabase.rpc('set_company_products', {
+                            p_company_id: c.id,
+                            p_products: products
+                          })
+                          if (err) {
+                            alert('Error setting products: ' + err.message)
+                            return
+                          }
+                          
+                          // Then approve
+                          decideCompany(c, true)
+                        }}
+                        disabled={isWorking}
+                        className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition-colors disabled:opacity-50"
                       >
-                        <Trash2 size={16} />
+                        <Check size={16} />
+                        {isWorking ? 'Processing…' : 'Approve Company'}
+                      </button>
+                      <button
+                        onClick={() => decideCompany(c, false)}
+                        disabled={isWorking}
+                        className="w-full sm:w-auto flex items-center justify-center gap-1.5 border border-red-200 bg-white hover:bg-red-50 text-red-600 text-sm font-semibold px-6 py-2.5 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <X size={16} />
+                        Reject Request
                       </button>
                     </div>
-                  </div>"""
+                  </div>
+                )
+              })}"""
 
+# Replace the old pending companies map
 code = re.sub(
-    r"                    </div>\n                    <div className=\"flex flex-wrap gap-2\">\n                      \{ALL_PRODUCTS\.map\(product => \{.*?\n                        \}\)\}\n                      </div>\n                  </div>",
-    button_ui,
+    r'              \{pendingCompanies\.map\(c => \{.*?                  </div>\n                \)\n              \}\)\}',
+    new_card_jsx,
     code,
     flags=re.DOTALL
 )
