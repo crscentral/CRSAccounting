@@ -70,7 +70,7 @@ export default function Settings() {
   }
 
   async function toggleCompanyProduct(company, product) {
-    const current = company.company_products.map(p => p.product)
+    const current = (company.company_products || []).map(p => p.product)
     const next = current.includes(product) ? current.filter(p => p !== product) : [...current, product]
     setProductSaving(company.id + product)
     const { error } = await supabase.rpc('set_company_products', { p_company_id: company.id, p_products: next })
@@ -90,6 +90,13 @@ export default function Settings() {
       setPendingCompanies(data)
     }
     setLoadingPending(false)
+  }
+
+    async function removeMember(memberId) {
+    if (!confirm('Are you sure you want to remove this user from the company?')) return
+    const { error } = await supabase.from('company_members').delete().eq('id', memberId)
+    if (error) { alert(error.message); return }
+    loadMembers()
   }
 
   async function handleCompanyDelete(companyId, companyName) {
@@ -316,7 +323,7 @@ export default function Settings() {
                       <div className="text-slate-700">{m.profile?.email || m.invited_email}</div>
                       <div className="text-xs text-slate-400 capitalize">{m.role}{!m.profile && ' • invited, pending sign-up'}</div>
                     </div>
-                    <button className="text-slate-300 hover:text-red-500"><Trash2 size={15} /></button>
+                    <button onClick={() => removeMember(m.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={15} /></button>
                   </div>
                 ))}
               </div>
@@ -450,7 +457,7 @@ export default function Settings() {
           ) : (
             <div className="space-y-2">
               {allCompanies.map(c => {
-                const enabled = c.company_products.map(p => p.product)
+                const enabled = (c.company_products || []).map(p => p.product)
                 return (
                   <div key={c.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-slate-100 rounded-lg px-3 py-2.5">
                     <div>
