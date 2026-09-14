@@ -69,3 +69,12 @@ create policy "owners/admins manage membership" on public.company_members for al
 ) with check (
   public.has_company_role(company_id, array['owner','admin']::public.member_role[])
 );
+CREATE POLICY "platform admin sees all members" ON public.company_members FOR SELECT USING (
+  public.is_platform_admin()
+);
+
+CREATE POLICY "platform admin sees all profiles" ON public.user_profiles FOR SELECT USING (
+  public.is_platform_admin()
+);
+
+ALTER TABLE public.company_members ADD CONSTRAINT company_members_user_profile_fkey FOREIGN KEY (user_id) REFERENCES public.user_profiles(id) ON DELETE CASCADE;
