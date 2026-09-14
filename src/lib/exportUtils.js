@@ -42,7 +42,7 @@ function renderRichText(doc, text, startX, startY, maxWidth) {
       remainder = trimmed.replace(/^(\d+\.)\s/, '');
     }
     
-    const segments = remainder.split(/(\**.*?\**)/g);
+    const segments = remainder.split(/(\*\*.*?\*\*)/g);
     
     segments.forEach(seg => {
       if (!seg) return;
