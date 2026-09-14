@@ -2,6 +2,78 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 
+
+function cleanPhone(p) {
+  if (!p) return null;
+  let s = p.replace(/[\s.]+/g, '').trim();
+  if (s.startsWith('+')) {
+    s = s.replace(/^(\+\d{2,3})(\d+)/, '$1 $2');
+  }
+  return s;
+}
+
+
+function renderRichText(doc, text, startX, startY, maxWidth) {
+  if (!text) return startY;
+  const lines = text.split('\n');
+  let y = startY;
+  const lineHeight = 4.5;
+  
+  lines.forEach(line => {
+    let x = startX;
+    const trimmed = line.trim();
+    let indent = 0;
+    
+    let isBullet = trimmed.match(/^[-*]\s/);
+    let isNum = trimmed.match(/^(\d+\.)\s/);
+    
+    let remainder = line;
+    if (isBullet) {
+      doc.setFont(undefined, 'normal');
+      doc.text('•', x, y);
+      indent = 4;
+      x += indent;
+      remainder = trimmed.replace(/^[-*]\s/, '');
+    } else if (isNum) {
+      doc.setFont(undefined, 'normal');
+      doc.text(isNum[1], x, y);
+      indent = 7;
+      x += indent;
+      remainder = trimmed.replace(/^(\d+\.)\s/, '');
+    }
+    
+    const segments = remainder.split(/(\**.*?\**)/g);
+    
+    segments.forEach(seg => {
+      if (!seg) return;
+      let isBold = false;
+      let txt = seg;
+      if (seg.startsWith('**') && seg.endsWith('**') && seg.length > 4) {
+        isBold = true;
+        txt = seg.slice(2, -2);
+      }
+      
+      doc.setFont(undefined, isBold ? 'bold' : 'normal');
+      
+      const words = txt.split(' ');
+      words.forEach((word, i) => {
+        const isLastWord = i === words.length - 1;
+        const wordToPrint = isLastWord ? word : word + ' ';
+        const wordWidth = doc.getTextWidth(wordToPrint);
+        
+        if (x + wordWidth > startX + maxWidth && x > startX + indent) {
+          y += lineHeight;
+          x = startX + indent;
+        }
+        doc.text(wordToPrint, x, y);
+        x += wordWidth;
+      });
+    });
+    y += lineHeight;
+  });
+  return y;
+}
+
 function sanitizeText(str) {
   if (typeof str !== 'string') return str;
   return str.replace(/₹/g, 'INR ').replace(/฿/g, 'THB ').replace(/€/g, 'EUR ').replace(/£/g, 'GBP ').replace(/[^\x00-\x7F]/g, '');
@@ -224,14 +296,14 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     company?.legal_name,
     company?.address,
     [company?.city, company?.country].filter(Boolean).join(', '),
-    company?.email, company?.phone, company?.website,
+    company?.email, cleanPhone(company?.phone), company?.website,
     company?.tax_id ? `Tax ID: ${company.tax_id}` : null,
   ].filter(Boolean)
   
   const contactLines = [
     invoice.customer_address || contact?.address || invoice.supplier_address,
     invoice.customer_email || contact?.email || invoice.supplier_email,
-    invoice.customer_phone || contact?.phone || invoice.supplier_phone,
+    cleanPhone(invoice.customer_phone || contact?.phone || invoice.supplier_phone),
     invoice.supplier_gstin ? `GSTIN: ${invoice.supplier_gstin}` : null,
   ].filter(Boolean)
   
@@ -295,7 +367,12 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const paid = Number(invoice.paid_amount || 0)
   const summaryRows = [
     ['Subtotal', (invoice.subtotal ?? invoice.amount)?.toFixed(2)],
-    ...(isSales && invoice.discount_value ? [[`Invoice discount (${invoice.discount_type === 'percent' ? '%' : 'fixed'})`, `-${Number(invoice.discount_value).toFixed(2)}`]] : []),
+    ...(isSales && invoice.discount_value ? [
+      [
+        `Discount ${invoice.discount_type === 'percent' ? `(${invoice.discount_value}%)` : '(fixed)'}`,
+        `-${(invoice.discount_type === 'percent' ? ((invoice.subtotal ?? invoice.amount) * (invoice.discount_value / 100)) : invoice.discount_value).toFixed(2)}`
+      ]
+    ] : []),
     ['Tax', Number(invoice.tax_amount ?? 0).toFixed(2)],
     ...(isSales && invoice.bank_charges ? [['Bank Charges', Number(invoice.bank_charges).toFixed(2)]] : []),
     ...(!isSales && invoice.tds_percent ? [[`TDS (${invoice.tds_percent}%)`, `-${(((invoice.subtotal || 0) + (invoice.tax_amount || 0)) * invoice.tds_percent / 100).toFixed(2)}`]] : []),
@@ -344,9 +421,8 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   }
 
   if (invoice.payment_terms || invoice.notes) {
-    const wrapped = doc.splitTextToSize([invoice.payment_terms, invoice.notes].filter(Boolean).join('  '), pageWidth - 28)
-    doc.text(wrapped, 14, finalY)
-    finalY += wrapped.length * 4
+    const combined = [invoice.payment_terms, invoice.notes].filter(Boolean).join("\n\n")
+    finalY = renderRichText(doc, combined, 14, finalY, pageWidth - 28)
   }
 
   if (isSales && company?.bank_account_number) {
