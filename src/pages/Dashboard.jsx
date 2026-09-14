@@ -269,12 +269,11 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-          <h2 className="font-semibold text-slate-700 flex items-center gap-2 mb-2">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col items-center">
+          <h2 className="font-semibold text-slate-700 flex items-center gap-2 mb-4 self-start">
             <DollarSign size={18} /> Expected Profit Breakdown
           </h2>
-          <div className="text-xs text-slate-500 mb-4 text-center">Total Revenue = Total Expenses + Expected Net Profit</div>
-          <div className="h-64">
+          <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -285,25 +284,28 @@ export default function Dashboard() {
                     { name: 'Total Revenue', value: cp.convert(totalBilled), color: '#10b981' },
                     { name: 'Expected Net Loss', value: cp.convert(Math.abs(netProfit)), color: '#ef4444' }
                   ]}
-                  cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} dataKey="value"
+                  cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} dataKey="value"
                 >
                   {(netProfit >= 0 ? [1,2] : [1,2]).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={(netProfit >= 0 ? ['#ef4444', '#10b981'] : ['#10b981', '#ef4444'])[index]} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(v) => cp.fmt(v)} />
-                <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center text-sm mt-2 text-slate-600 w-full">
+             <div className="flex items-center gap-2 font-medium text-slate-800"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Revenue: {cp.fmt(totalBilled)}</div>
+             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-500"></span> Expenses: {cp.fmt(totalExpenses)}</div>
+             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Profit: {cp.fmt(netProfit)}</div>
+          </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-          <h2 className="font-semibold text-slate-700 flex items-center gap-2 mb-2">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col items-center">
+          <h2 className="font-semibold text-slate-700 flex items-center gap-2 mb-4 self-start">
             <Receipt size={18} /> Actual Profit Breakdown
           </h2>
-          <div className="text-xs text-slate-500 mb-4 text-center">Total Collected = Total Expenses Made + Actual Profit</div>
-          <div className="h-64">
+          <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -314,20 +316,23 @@ export default function Dashboard() {
                     { name: 'Total Collected', value: cp.convert(collected), color: '#eab308' },
                     { name: 'Actual Loss', value: cp.convert(Math.abs(actualProfit)), color: '#ef4444' }
                   ]}
-                  cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} dataKey="value"
+                  cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} dataKey="value"
                 >
                   {(actualProfit >= 0 ? [1,2] : [1,2]).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={(actualProfit >= 0 ? ['#f97316', '#10b981'] : ['#eab308', '#ef4444'])[index]} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(v) => cp.fmt(v)} />
-                <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center text-sm mt-2 text-slate-600 w-full">
+             <div className="flex items-center gap-2 font-medium text-slate-800"><span className="w-3 h-3 rounded-full bg-yellow-500"></span> Collected: {cp.fmt(collected)}</div>
+             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-orange-500"></span> Made: {cp.fmt(expensesMade)}</div>
+             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Profit: {cp.fmt(actualProfit)}</div>
+          </div>
         </div>
       </div>
-
 
       {activeProduct === 'hotel' && hotelStats && (
         <div className="mb-6">
