@@ -347,7 +347,7 @@ export default function Settings() {
         </div>
       )}
       {tab === 'admin' && isPlatformAdmin && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 max-w-3xl">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 w-full">
           <div className="flex items-center justify-between mb-1">
             <h3 className="font-semibold text-slate-800 text-base">Pending Company Approvals</h3>
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
@@ -456,7 +456,7 @@ export default function Settings() {
       )}
 
       {tab === 'admin' && isPlatformAdmin && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 max-w-3xl mt-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 w-full mt-6">
           <div className="flex items-center gap-2 mb-1">
             <Layers size={18} className="text-navy-600" />
             <h3 className="font-semibold text-slate-800 text-base">Company Products</h3>
@@ -477,7 +477,12 @@ export default function Settings() {
                   <div key={c.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-slate-100 rounded-lg px-3 py-2.5">
                     <div>
                       <div className="text-sm font-medium text-slate-700">{c.name}</div>
-                      <div className="text-[11px] text-slate-400 capitalize">{c.approval_status}</div>
+                      <div className="text-[11px] text-slate-400 capitalize">
+                        {c.approval_status} • Created by: {(() => {
+                          const owner = c.members?.find(m => m.role === 'owner')
+                          return owner?.profile?.email || owner?.invited_email || c.email || 'Unknown'
+                        })()}
+                      </div>
                     </div>
                     <div className="flex flex-col sm:flex-row items-end sm:items-center justify-between gap-3 sm:gap-4 w-full sm:w-auto mt-3 sm:mt-0">
                       <div className="flex flex-wrap justify-end gap-2">
