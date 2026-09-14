@@ -328,12 +328,12 @@ export default function Dashboard() {
               <PieChart>
                 <Pie
                   data={actualProfit >= 0 ? [
-                    { name: 'Collected', value: cp.convert(collected), color: '#10b981' },
-                    { name: 'Made', value: cp.convert(expensesMade), color: '#f97316' },
+                    { name: 'Revenue', value: cp.convert(collected), color: '#10b981' },
+                    { name: 'Expense', value: cp.convert(expensesMade), color: '#f97316' },
                     { name: 'Profit', value: cp.convert(actualProfit), color: '#3b82f6' }
                   ] : [
-                    { name: 'Collected', value: cp.convert(collected), color: '#10b981' },
-                    { name: 'Made', value: cp.convert(expensesMade), color: '#f97316' },
+                    { name: 'Revenue', value: cp.convert(collected), color: '#10b981' },
+                    { name: 'Expense', value: cp.convert(expensesMade), color: '#f97316' },
                     { name: 'Loss', value: cp.convert(Math.abs(actualProfit)), color: '#f59e0b' }
                   ]}
                   cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} dataKey="value"
@@ -362,8 +362,8 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center text-sm mt-2 text-slate-600 w-full">
-             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Collected: {cp.fmt(collected)}</div>
-             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-orange-500"></span> Made: {cp.fmt(expensesMade)}</div>
+             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Revenue: {cp.fmt(collected)}</div>
+             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-orange-500"></span> Expense: {cp.fmt(expensesMade)}</div>
              <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{backgroundColor: actualProfit >= 0 ? '#3b82f6' : '#f59e0b'}}></span> {actualProfit >= 0 ? 'Profit' : 'Loss'}: {cp.fmt(Math.abs(actualProfit))}</div>
           </div>
         </div>
