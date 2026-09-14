@@ -278,26 +278,44 @@ export default function Dashboard() {
               <PieChart>
                 <Pie
                   data={netProfit >= 0 ? [
-                    { name: 'Total Expenses', value: cp.convert(totalExpenses), color: '#ef4444' },
-                    { name: 'Expected Net Profit', value: cp.convert(netProfit), color: '#10b981' }
+                    { name: 'Revenue', value: cp.convert(totalBilled), color: '#10b981' },
+                    { name: 'Expenses', value: cp.convert(totalExpenses), color: '#ef4444' },
+                    { name: 'Profit', value: cp.convert(netProfit), color: '#3b82f6' }
                   ] : [
-                    { name: 'Total Revenue', value: cp.convert(totalBilled), color: '#10b981' },
-                    { name: 'Expected Net Loss', value: cp.convert(Math.abs(netProfit)), color: '#ef4444' }
+                    { name: 'Revenue', value: cp.convert(totalBilled), color: '#10b981' },
+                    { name: 'Expenses', value: cp.convert(totalExpenses), color: '#ef4444' },
+                    { name: 'Loss', value: cp.convert(Math.abs(netProfit)), color: '#f59e0b' }
                   ]}
                   cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} dataKey="value"
                 >
-                  {(netProfit >= 0 ? [1,2] : [1,2]).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={(netProfit >= 0 ? ['#ef4444', '#10b981'] : ['#10b981', '#ef4444'])[index]} />
+                  {(netProfit >= 0 ? [1,2,3] : [1,2,3]).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={(netProfit >= 0 ? ['#10b981', '#ef4444', '#3b82f6'] : ['#10b981', '#ef4444', '#f59e0b'])[index]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v) => cp.fmt(v)} />
+                <Tooltip 
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      // Base percentage on Total Revenue to show true margins
+                      const totalRev = cp.convert(totalBilled) || 1;
+                      const pct = ((data.value / totalRev) * 100).toFixed(1);
+                      return (
+                        <div className="bg-white border border-slate-200 p-2 shadow-lg rounded text-sm">
+                          <p className="font-semibold" style={{ color: data.color }}>{data.name}</p>
+                          <p>{cp.fmt(data.value)} ({pct}%)</p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center text-sm mt-2 text-slate-600 w-full">
-             <div className="flex items-center gap-2 font-medium text-slate-800"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Revenue: {cp.fmt(totalBilled)}</div>
+             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Revenue: {cp.fmt(totalBilled)}</div>
              <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-500"></span> Expenses: {cp.fmt(totalExpenses)}</div>
-             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Profit: {cp.fmt(netProfit)}</div>
+             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{backgroundColor: netProfit >= 0 ? '#3b82f6' : '#f59e0b'}}></span> {netProfit >= 0 ? 'Profit' : 'Loss'}: {cp.fmt(Math.abs(netProfit))}</div>
           </div>
         </div>
 
@@ -310,30 +328,46 @@ export default function Dashboard() {
               <PieChart>
                 <Pie
                   data={actualProfit >= 0 ? [
-                    { name: 'Total Expenses Made', value: cp.convert(expensesMade), color: '#f97316' },
-                    { name: 'Actual Profit', value: cp.convert(actualProfit), color: '#10b981' }
+                    { name: 'Collected', value: cp.convert(collected), color: '#10b981' },
+                    { name: 'Made', value: cp.convert(expensesMade), color: '#f97316' },
+                    { name: 'Profit', value: cp.convert(actualProfit), color: '#3b82f6' }
                   ] : [
-                    { name: 'Total Collected', value: cp.convert(collected), color: '#eab308' },
-                    { name: 'Actual Loss', value: cp.convert(Math.abs(actualProfit)), color: '#ef4444' }
+                    { name: 'Collected', value: cp.convert(collected), color: '#10b981' },
+                    { name: 'Made', value: cp.convert(expensesMade), color: '#f97316' },
+                    { name: 'Loss', value: cp.convert(Math.abs(actualProfit)), color: '#f59e0b' }
                   ]}
                   cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} dataKey="value"
                 >
-                  {(actualProfit >= 0 ? [1,2] : [1,2]).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={(actualProfit >= 0 ? ['#f97316', '#10b981'] : ['#eab308', '#ef4444'])[index]} />
+                  {(actualProfit >= 0 ? [1,2,3] : [1,2,3]).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={(actualProfit >= 0 ? ['#10b981', '#f97316', '#3b82f6'] : ['#10b981', '#f97316', '#f59e0b'])[index]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v) => cp.fmt(v)} />
+                <Tooltip 
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      const totalCol = cp.convert(collected) || 1;
+                      const pct = ((data.value / totalCol) * 100).toFixed(1);
+                      return (
+                        <div className="bg-white border border-slate-200 p-2 shadow-lg rounded text-sm">
+                          <p className="font-semibold" style={{ color: data.color }}>{data.name}</p>
+                          <p>{cp.fmt(data.value)} ({pct}%)</p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center text-sm mt-2 text-slate-600 w-full">
-             <div className="flex items-center gap-2 font-medium text-slate-800"><span className="w-3 h-3 rounded-full bg-yellow-500"></span> Collected: {cp.fmt(collected)}</div>
+             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Collected: {cp.fmt(collected)}</div>
              <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-orange-500"></span> Made: {cp.fmt(expensesMade)}</div>
-             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Profit: {cp.fmt(actualProfit)}</div>
+             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{backgroundColor: actualProfit >= 0 ? '#3b82f6' : '#f59e0b'}}></span> {actualProfit >= 0 ? 'Profit' : 'Loss'}: {cp.fmt(Math.abs(actualProfit))}</div>
           </div>
         </div>
       </div>
-
       {activeProduct === 'hotel' && hotelStats && (
         <div className="mb-6">
           <h2 className="text-sm font-semibold text-slate-500 uppercase mb-3">Hotel Performance</h2>
