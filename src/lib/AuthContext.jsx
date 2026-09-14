@@ -29,7 +29,7 @@ export function AuthProvider({ children }) {
   async function loadCompanies() {
     const { data, error } = await supabase
       .from('company_members')
-      .select('role, company:companies(*, company_products(product))')
+      .select('role, products, company:companies(*, company_products(product))')
       .eq('user_id', session.user.id)
     if (error) { console.error(error); return }
     setCompanies(data || [])
@@ -52,7 +52,8 @@ export function AuthProvider({ children }) {
   const activeMembership = companies.find(c => c.company.id === activeCompanyId) || companies[0]
   const activeCompany = activeMembership?.company || null
   const activeRole = activeMembership?.role || null
-  const availableProducts = (activeCompany?.company_products || []).map(p => p.product)
+  const memberProducts = activeCompanyMember?.products || ['basic', 'hotel', 'restaurant']
+  const availableProducts = (activeCompany?.company_products || []).map(p => p.product).filter(p => memberProducts.includes(p))
 
   // If the currently-selected product isn't actually enabled for the active company
   // (e.g. just switched companies, or an admin revoked a product), fall back to
