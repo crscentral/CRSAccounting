@@ -138,6 +138,7 @@ export default function HotelExpenses() {
   
   const pieData = Object.entries(byHead).filter(x => x[1] > 0).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
   const COLORS = ['#1e293b', '#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f43f5e', '#64748b']
+  const topHeads = Object.entries(byHead).sort((a, b) => b[1] - a[1]).slice(0, 3)
 
   return (
     <div>
@@ -170,12 +171,50 @@ export default function HotelExpenses() {
         {topHeads.map(([name, usd]) => <KpiCard key={name} label={name} value={cp.fmt(usd)} tone="slate" />)}
       </div>
 
-      <h3 className="font-semibold text-slate-700 mb-3 flex items-center justify-between">
-        <span>Expense Entries</span>
-        {can(['owner', 'admin', 'accountant']) && (
-          <button onClick={() => setNewHeadModalOpen(true)} className="text-xs text-navy-600 hover:text-navy-800 font-medium">+ Add Expense Head</button>
-        )}
-      </h3>
+      <div className="grid lg:grid-cols-2 gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (CPOR: {totalOccupied > 0 ? cp.fmt(totalExpenses/totalOccupied) : '—'})</h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2}>
+                  {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <RechartsTooltip formatter={(value) => cp.fmt(value)} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '11px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (PAR: {availableRoomNights > 0 ? cp.fmt(totalExpenses/availableRoomNights) : '—'})</h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}>
+                  {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <RechartsTooltip formatter={(value) => cp.fmt(value)} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '11px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-end mb-3 mt-8">
+        <div>
+          <h3 className="font-semibold text-slate-700 flex items-center gap-3">
+            <span>Expense Entries</span>
+            {can(['owner', 'admin', 'accountant']) && (
+              <button onClick={() => setNewHeadModalOpen(true)} className="text-xs text-navy-600 hover:text-navy-800 font-medium">+ Add Expense Head</button>
+            )}
+          </h3>
+        </div>
+        <div className="text-sm text-slate-500 font-medium">
+          Total Heads: {new Set(entries.map(e => e.account_id)).size} &bull; Total Amount: {cp.fmt(entriesTotalUsd)}
+        </div>
+      </div>
       <DataTable
         columns={[
           { key: 'expense_date', label: 'Date' },
