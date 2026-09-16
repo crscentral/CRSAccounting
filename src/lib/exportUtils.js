@@ -283,10 +283,15 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const fromName = isSales ? (company?.name || '') : (contact?.name || invoice.supplier_name_freeform || '')
   const toName = isSales ? (contact?.name || invoice.customer_name_freeform || '') : (company?.name || '')
   
-  doc.text(fromName, col1, y)
-  doc.text(toName, col2, y)
-  doc.text(invoice.invoice_number || '', col3, y)
-  y += 4.5
+  const fromNameWrapped = doc.splitTextToSize(fromName, 60)
+  const toNameWrapped = doc.splitTextToSize(toName, 62)
+  const docNameWrapped = doc.splitTextToSize(invoice.invoice_number || '', 46)
+
+  doc.text(fromNameWrapped, col1, y)
+  doc.text(toNameWrapped, col2, y)
+  doc.text(docNameWrapped, col3, y)
+  
+  y += Math.max(fromNameWrapped.length, toNameWrapped.length, docNameWrapped.length) * 4.5
 
   doc.setFont(undefined, 'normal')
   doc.setFontSize(8)
@@ -332,7 +337,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const colStartY = y
   const endY1 = renderColumn(fromLines, col1, 60, colStartY)
   const endY2 = renderColumn(billLines, col2, 62, colStartY)
-  const endY3 = renderColumn(docLines, col3, 55, colStartY)
+  const endY3 = renderColumn(docLines, col3, 46, colStartY)
   y = Math.max(endY1, endY2, endY3) + 6
 
   // Line items -- two-line description like the original (bold name + gray subtitle)
