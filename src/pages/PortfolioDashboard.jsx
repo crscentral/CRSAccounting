@@ -32,13 +32,15 @@ export default function PortfolioDashboard() {
   useEffect(() => { if (companies.length > 0) loadPortfolio(cp.range) }, [companies.length, cp.range.from, cp.range.to])
 
   async function computeCompanyProductMetrics(companyId, product, range) {
-    const [{ data: hotelSettings }, { data: hotelStats }, { data: accounts }, { data: entries }, { data: salesInv }, { data: receipts }] = await Promise.all([
+    const [{ data: hotelSettings }, { data: hotelStats }, { data: accounts }, { data: entries }, { data: salesInv }, { data: receipts }, { data: guestInv }, { data: roomStatsExt }] = await Promise.all([
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', companyId).eq('product', product).maybeSingle(),
       product === 'hotel' ? supabase.from('hotel_room_stats').select('rooms_occupied, room_revenue_usd').eq('company_id', companyId).eq('product', product).gte('stat_date', range.from).lte('stat_date', range.to) : Promise.resolve({ data: null }),
       supabase.from('accounts').select('id, type, subtype, name').eq('company_id', companyId).eq('product', product),
       supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd').eq('company_id', companyId).eq('product', product).gte('entry_date', range.from).lte('entry_date', range.to),
       supabase.from('sales_invoices').select('id, amount_usd').eq('company_id', companyId).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to),
       supabase.from('payment_receipts').select('amount_usd').eq('company_id', companyId).eq('product', product).gte('receipt_date', range.from).lte('receipt_date', range.to),
+      product === 'hotel' ? supabase.from('hotel_guest_invoices').select('invoice_amount_usd, collected_amount_usd').eq('company_id', companyId).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to) : Promise.resolve({ data: null }),
+      product === 'hotel' ? supabase.from('hotel_room_stats').select('room_revenue_collected_usd').eq('company_id', companyId).eq('product', product).gte('stat_date', range.from).lte('stat_date', range.to) : Promise.resolve({ data: null }),
     ])
 
     const balances = {}
