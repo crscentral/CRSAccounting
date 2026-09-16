@@ -3,7 +3,7 @@
  * rows: array of objects
  * Below `md` breakpoint, renders each row as a labeled card instead of a horizontally-scrolling table.
  */
-export default function DataTable({ columns, rows, keyField = 'id', emptyMessage = 'No records found.' }) {
+export default function DataTable({ columns, rows, keyField = 'id', emptyMessage = 'No records found.', footer }) {
   if (!rows || rows.length === 0) {
     return <div className="text-center text-slate-400 text-sm py-10 bg-white rounded-xl border border-slate-200">{emptyMessage}</div>
   }
@@ -33,6 +33,15 @@ export default function DataTable({ columns, rows, keyField = 'id', emptyMessage
               </tr>
             ))}
           </tbody>
+          {footer && (
+            <tfoot>
+              <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-700">
+                <td colSpan={columns.length} className="px-4 py-3 text-right">
+                  {footer}
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
@@ -48,6 +57,11 @@ export default function DataTable({ columns, rows, keyField = 'id', emptyMessage
             ))}
           </div>
         ))}
+        {footer && (
+          <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 text-right font-semibold text-slate-700 text-sm">
+            {footer}
+          </div>
+        )}
       </div>
     </>
   )

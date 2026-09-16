@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, Repeat } from 'lucide-react'
+import { Plus, Trash2, Repeat, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
@@ -18,6 +18,7 @@ export default function HotelExpenses() {
   const { activeCompany, activeProduct, can } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
+  const [editingRow, setEditingRow] = useState(null)
   const [amcModalOpen, setAmcModalOpen] = useState(false)
   const [newHeadModalOpen, setNewHeadModalOpen] = useState(false)
   const [reportModalOpen, setReportModalOpen] = useState(false)
@@ -154,10 +155,10 @@ export default function HotelExpenses() {
             </button>
             {can(['owner', 'admin', 'accountant']) && (
               <>
-                <button onClick={() => setAmcModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg">
+                <button onClick={() => { setEditingRow(null); setAmcModalOpen(true); }} className="flex items-center gap-1.5 border border-slate-300 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg">
                   <Repeat size={15} /> New AMC Contract
                 </button>
-                <button onClick={() => setExpenseModalOpen(true)} className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
+                <button onClick={() => { setEditingRow(null); setExpenseModalOpen(true); }} className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
                   <Plus size={15} /> New Expense
                 </button>
               </>
@@ -221,10 +222,14 @@ export default function HotelExpenses() {
           { key: 'account', label: 'Expense Head', render: r => r.account ? `${r.account.code} - ${r.account.name}` : '—' },
           { key: 'amount_usd', label: 'Amount', render: r => cp.fmt(r.amount_usd) },
           { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
-          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <button onClick={() => handleDeleteEntry(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button> }] : []),
+          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex gap-2">
+      <button onClick={() => { setEditingRow(r); setExpenseModalOpen(true); }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
+      <button onClick={() => handleDeleteEntry(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+    </div> }] : []),
         ]}
         rows={entries}
         emptyMessage="No expense entries in this range."
+        footer={<span>Total Heads: {new Set(entries.map(e => e.account_id)).size} &nbsp;&bull;&nbsp; Total Amount: {cp.fmt(entriesTotalUsd)}</span>}
       />
 
       <h3 className="font-semibold text-slate-700 mb-3 mt-6">AMC Contracts (auto-split across 12 months)</h3>
@@ -234,17 +239,20 @@ export default function HotelExpenses() {
           { key: 'annual_amount_usd', label: 'Annual Amount', render: r => cp.fmt(r.annual_amount_usd) },
           { key: 'monthly', label: 'Monthly', render: r => cp.fmt(r.annual_amount_usd / 12) },
           { key: 'start', label: 'Starts', render: r => `${MONTH_NAMES[r.start_month - 1]} ${r.start_year}` },
-          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <button onClick={() => handleDeleteAmc(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button> }] : []),
+          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex gap-2">
+      <button onClick={() => { setEditingRow(r); setAmcModalOpen(true); }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
+      <button onClick={() => handleDeleteAmc(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+    </div> }] : []),
         ]}
         rows={amcContracts}
         emptyMessage="No AMC contracts yet."
       />
 
       {expenseModalOpen && (
-        <ExpenseEntryFormModal companyId={activeCompany.id} product={activeProduct} accounts={expenseAccounts} onClose={() => setExpenseModalOpen(false)} onSaved={loadAll} />
+        <ExpenseEntryFormModal companyId={activeCompany.id} product={activeProduct} accounts={expenseAccounts} editingRow={editingRow} onClose={() => { setExpenseModalOpen(false); setEditingRow(null); }} onSaved={loadAll} />
       )}
       {amcModalOpen && (
-        <AmcContractFormModal companyId={activeCompany.id} product={activeProduct} onClose={() => setAmcModalOpen(false)} onSaved={loadAll} />
+        <AmcContractFormModal companyId={activeCompany.id} product={activeProduct} editingRow={editingRow} onClose={() => { setAmcModalOpen(false); setEditingRow(null); }} onSaved={loadAll} />
       )}
       {newHeadModalOpen && (
         <AccountFormModal companyId={activeCompany.id} product={activeProduct} account={{ type: 'Expenses', subtype: 'Hotel Operating Expenses' }} onClose={() => setNewHeadModalOpen(false)} onSaved={loadAll} />
@@ -252,7 +260,11 @@ export default function HotelExpenses() {
       {reportModalOpen && (
         <ReportOptionsModal
           title="Expenses"
-          fields={[{ type: 'currency', key: 'currency', default: cp.displayCurrency }, { type: 'period', key: 'period', default: 'ALL_TIME' }]}
+          fields={[
+            { type: 'currency', key: 'currency', default: cp.displayCurrency },
+            { type: 'period', key: 'period', default: 'ALL_TIME' },
+            { type: 'checkboxGroup', key: 'sections', label: 'Select Specific Expense Heads (Optional, leave blank for all)', options: [...new Set(entries.map(e => e.account ? `${e.account.code} - ${e.account.name}` : 'Unknown'))] }
+          ]}
           onGenerate={generateExpensesReport}
           onClose={() => setReportModalOpen(false)}
         />
@@ -261,12 +273,12 @@ export default function HotelExpenses() {
   )
 }
 
-function ExpenseEntryFormModal({ companyId, product, accounts, onClose, onSaved }) {
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10))
-  const [accountId, setAccountId] = useState('')
-  const [currency, setCurrency] = useState('USD')
-  const [amount, setAmount] = useState('')
-  const [notes, setNotes] = useState('')
+function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClose, onSaved }) {
+  const [expenseDate, setExpenseDate] = useState(editingRow?.expense_date || new Date().toISOString().slice(0, 10))
+  const [accountId, setAccountId] = useState(editingRow?.account_id || '')
+  const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
+  const [amount, setAmount] = useState(editingRow?.amount ?? '')
+  const [notes, setNotes] = useState(editingRow?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -277,11 +289,19 @@ function ExpenseEntryFormModal({ companyId, product, accounts, onClose, onSaved 
     setSaving(true)
     try {
       const fxRate = currency === 'USD' ? 1 : (await getLatestRate(currency)) || 1
-      const { error: err } = await supabase.from('hotel_expense_entries').insert({
+      const payload = {
         company_id: companyId, product, expense_date: expenseDate, account_id: accountId,
         amount: Number(amount), currency, fx_rate_locked: fxRate, amount_usd: Math.round(Number(amount) / fxRate * 100) / 100,
         notes: notes || null,
-      })
+      }
+      let err = null
+      if (editingRow) {
+        const { error } = await supabase.from('hotel_expense_entries').update(payload).eq('id', editingRow.id)
+        err = error
+      } else {
+        const { error } = await supabase.from('hotel_expense_entries').insert(payload)
+        err = error
+      }
       if (err) throw err
       onSaved(); onClose()
     } catch (err) {
