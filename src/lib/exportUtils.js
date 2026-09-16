@@ -291,7 +291,9 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.text(toNameWrapped, col2, y)
   doc.text(docNameWrapped, col3, y)
   
-  y += Math.max(fromNameWrapped.length, toNameWrapped.length, docNameWrapped.length) * 4.5
+  const y1 = y + fromNameWrapped.length * 4.5
+  const y2 = y + toNameWrapped.length * 4.5
+  const y3 = y + docNameWrapped.length * 4.5
 
   doc.setFont(undefined, 'normal')
   doc.setFontSize(8)
@@ -334,10 +336,9 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     })
     return cy
   }
-  const colStartY = y
-  const endY1 = renderColumn(fromLines, col1, 60, colStartY)
-  const endY2 = renderColumn(billLines, col2, 62, colStartY)
-  const endY3 = renderColumn(docLines, col3, 46, colStartY)
+  const endY1 = renderColumn(fromLines, col1, 60, y1)
+  const endY2 = renderColumn(billLines, col2, 62, y2)
+  const endY3 = renderColumn(docLines, col3, 46, y3)
   y = Math.max(endY1, endY2, endY3) + 6
 
   // Line items -- two-line description like the original (bold name + gray subtitle)
