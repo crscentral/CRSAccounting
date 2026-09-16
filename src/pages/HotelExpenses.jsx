@@ -11,6 +11,7 @@ import KpiCard from '../components/KpiCard'
 import DataTable from '../components/DataTable'
 import Modal, { Field } from '../components/Modal'
 import AccountFormModal from '../components/AccountFormModal'
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 
 export default function HotelExpenses() {
@@ -23,18 +24,24 @@ export default function HotelExpenses() {
   const [entries, setEntries] = useState([])
   const [amcContracts, setAmcContracts] = useState([])
   const [expenseAccounts, setExpenseAccounts] = useState([])
+  const [totalRooms, setTotalRooms] = useState(0)
+  const [totalOccupied, setTotalOccupied] = useState(0)
 
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadAll() {
-    const [{ data: exp }, { data: amc }, { data: accs }] = await Promise.all([
+    const [{ data: exp }, { data: amc }, { data: accs }, { data: settings }, { data: roomStats }] = await Promise.all([
       supabase.from('hotel_expense_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to).order('expense_date', { ascending: false }),
       supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('created_at', { ascending: false }),
       supabase.from('accounts').select('id, code, name, subtype').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Expenses').order('code'),
+      supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
+      supabase.from('hotel_room_stats').select('rooms_occupied').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to)
     ])
     setEntries(exp || [])
     setAmcContracts(amc || [])
     setExpenseAccounts(accs || [])
+    setTotalRooms(settings?.total_rooms || 0)
+    setTotalOccupied((roomStats || []).reduce((s, r) => s + (r.rooms_occupied || 0), 0))
   }
 
   async function handleDeleteEntry(row) {
@@ -52,28 +59,85 @@ export default function HotelExpenses() {
     const range = resolveReportPeriod(selections.period, 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    
+    // We already have the current entries and amcContracts in state. 
+    // The report generator might fetch a different date range, so let's use the fetched data.
     const { data: exp } = await supabase.from('hotel_expense_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', range.from).lte('expense_date', range.to).order('expense_date', { ascending: false })
-    const sections = [{
-      heading: 'Expenses',
-      columns: ['Date', 'Expense Head', 'Amount', 'Notes'],
-      rows: (exp || []).map(r => [r.expense_date, r.account ? `${r.account.code} - ${r.account.name}` : '—', f(r.amount_usd), r.notes || '—']),
-    }]
-    const title = 'Hotel Expenses'
+    
+    // Determine selected heads
+    const selectedHeads = selections.heads || []
+    const includeAll = selectedHeads.length === 0
+    const includeAmc = includeAll || selectedHeads.includes('AMC Contracts (Amortized)')
+    
+    // Calculate AMC amortized amount for this range
+    const start = new Date(range.from)
+    const end = new Date(range.to)
+    const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
+    const amcMonthlyTotalUsd = amcContracts.reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0)
+    const amcTotalForView = amcMonthlyTotalUsd * monthsInView
+    
+    let totalView = 0
+    let expenseRows = []
+    
+    (exp || []).forEach(r => {
+      const head = r.account ? `${r.account.code} - ${r.account.name}` : 'Unknown'
+      if (includeAll || selectedHeads.includes(head)) {
+        expenseRows.push([r.expense_date, head, f(r.amount_usd), r.notes || '—'])
+        totalView += Number(r.amount_usd)
+      }
+    })
+    
+    if (includeAmc && amcTotalForView > 0) {
+      expenseRows.unshift([range.to, 'AMC Contracts (Amortized)', f(amcTotalForView), 'Auto-Amortized Monthly Portion'])
+      totalView += amcTotalForView
+    }
+
+    const sections = [
+      {
+        heading: 'Summary',
+        keyValuePairs: [
+          ['Total Expenses in Period', f(totalView)],
+          ['Number of Expense Heads', String(new Set(expenseRows.map(r => r[1])).size)]
+        ]
+      },
+      {
+        heading: 'Expense Detail',
+        columns: ['Date', 'Expense Head', 'Amount', 'Notes'],
+        rows: expenseRows
+      }
+    ]
+    
+    const title = 'Hotel Expenses Report'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'hotel_expenses' })
+    const logoUrl = activeCompany.logo_url
+    
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'hotel_expenses', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'hotel_expenses' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'hotel_expenses' })
   }
 
   if (!activeCompany) return null
 
-  const totalExpenses = entries.reduce((s, r) => s + Number(r.amount_usd), 0)
-  const byHead = {}
+  const start = new Date(cp.range.from)
+  const end = new Date(cp.range.to)
+  const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
+  const daysInView = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1)
+  const availableRoomNights = totalRooms * daysInView
+
+  const amcMonthlyTotalUsd = amcContracts.reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0)
+  const amcTotalForView = amcMonthlyTotalUsd * monthsInView
+
+  const entriesTotalUsd = entries.reduce((s, r) => s + Number(r.amount_usd), 0)
+  const totalExpenses = entriesTotalUsd + amcTotalForView
+
+  const byHead = { 'AMC Contracts (Amortized)': amcTotalForView }
   entries.forEach(r => {
-    const key = r.account?.name || 'Unknown'
+    const key = r.account ? `${r.account.code} - ${r.account.name}` : 'Unknown'
     byHead[key] = (byHead[key] || 0) + Number(r.amount_usd)
   })
-  const topHeads = Object.entries(byHead).sort((a, b) => b[1] - a[1]).slice(0, 3)
+  
+  const pieData = Object.entries(byHead).filter(x => x[1] > 0).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+  const COLORS = ['#1e293b', '#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f43f5e', '#64748b']
 
   return (
     <div>

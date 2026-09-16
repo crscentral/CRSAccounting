@@ -209,7 +209,23 @@ export default function HotelBudget() {
                     <td className="py-1.5 px-3"><input type="number" step="0.1" value={row.occ || ''} onChange={e => updateRow(year, month, 'occ', e.target.value)} className="w-20 border border-slate-200 rounded px-2 py-1 text-xs" placeholder="%" /></td>
                     <td className="py-1.5 px-3"><input type="number" step="0.01" value={row.adr || ''} onChange={e => updateRow(year, month, 'adr', e.target.value)} className="w-24 border border-slate-200 rounded px-2 py-1 text-xs" placeholder="ADR" /></td>
                     <td className="py-1.5 px-3 text-slate-500">{roomsOcc}</td>
-                    <td className="py-1.5 px-3"><input type="number" step="0.01" value={row.revenue || ''} onChange={e => updateRow(year, month, 'revenue', e.target.value)} className="w-28 border border-slate-200 rounded px-2 py-1 text-xs" placeholder="Revenue" /></td>
+                    <td className="py-1.5 px-3">
+  <div className="flex gap-1">
+    <select value={row.currency || displayCurrency} onChange={e => updateRow(year, month, 'currency', e.target.value)} className="w-16 border border-slate-200 rounded px-1 py-1 text-xs bg-slate-50 text-slate-500 font-medium cursor-pointer focus:outline-none focus:border-navy-400">
+      <option value="USD">USD</option>
+      <option value="EUR">EUR</option>
+      <option value="GBP">GBP</option>
+      <option value="INR">INR</option>
+      <option value="AUD">AUD</option>
+      <option value="CAD">CAD</option>
+      <option value="SGD">SGD</option>
+      <option value="AED">AED</option>
+      <option value="THB">THB</option>
+      <option value="MYR">MYR</option>
+    </select>
+    <input type="number" step="0.01" value={row.revenue || ''} onChange={e => updateRow(year, month, 'revenue', e.target.value)} className="w-28 border border-slate-200 rounded px-2 py-1 text-xs" placeholder="Revenue" />
+  </div>
+</td>
                     <td className="py-1.5 px-3 text-slate-500">{fmt(dailyBudget)}</td>
                     <td className="py-1.5 px-3 text-slate-500">{fmt(actualUsd)}</td>
                     <td className="py-1.5 px-3">

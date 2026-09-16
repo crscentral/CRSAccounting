@@ -100,7 +100,10 @@ export default function HotelOccupancyStats() {
   const totalOccupied = stats.reduce((s, r) => s + r.rooms_occupied, 0)
   const totalRevenue = stats.reduce((s, r) => s + Number(r.room_revenue_usd), 0)
   const totalCollected = stats.reduce((s, r) => s + Number(r.room_revenue_collected_usd), 0)
-  const availableRoomNights = totalRooms * stats.length
+  
+  const currentRange = rangeFor(view)
+  const daysInView = Math.max(1, Math.round((new Date(currentRange.to) - new Date(currentRange.from)) / (1000 * 60 * 60 * 24)) + 1)
+  const availableRoomNights = totalRooms * daysInView
   const occupancyPct = availableRoomNights > 0 ? (totalOccupied / availableRoomNights) * 100 : 0
   const adr = totalOccupied > 0 ? totalRevenue / totalOccupied : 0
   const revpar = availableRoomNights > 0 ? totalRevenue / availableRoomNights : 0

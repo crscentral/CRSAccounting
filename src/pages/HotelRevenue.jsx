@@ -17,24 +17,45 @@ export default function HotelRevenue() {
   const { activeCompany, activeProduct, can } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [roomModalOpen, setRoomModalOpen] = useState(false)
+  const [editingRow, setEditingRow] = useState(null)
   const [ancillaryModalOpen, setAncillaryModalOpen] = useState(false)
   const [newHeadModalOpen, setNewHeadModalOpen] = useState(false)
   const [reportModalOpen, setReportModalOpen] = useState(false)
   const [roomStats, setRoomStats] = useState([])
   const [ancillary, setAncillary] = useState([])
   const [revenueAccounts, setRevenueAccounts] = useState([])
+  const [totalRooms, setTotalRooms] = useState(0)
 
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadAll() {
-    const [{ data: room }, { data: anc }, { data: accs }] = await Promise.all([
+    const [{ data: room }, { data: anc }, { data: accs }, { data: settings }] = await Promise.all([
       supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to).order('stat_date', { ascending: false }),
       supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to).order('entry_date', { ascending: false }),
       supabase.from('accounts').select('id, code, name').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').neq('code', '4010').order('code'),
+      supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
     ])
     setRoomStats(room || [])
     setAncillary(anc || [])
     setRevenueAccounts(accs || [])
+    setTotalRooms(settings?.total_rooms || 0)
+  }
+
+  function openEditRoom(row) {
+    setMode('room')
+    setEditingId(row.id)
+    setStatDate(row.stat_date)
+    setRoomsOccupied(row.rooms_occupied)
+    setCurrency(row.currency || 'USD')
+    setRoomRevenue(row.room_revenue)
+    setCollected(row.room_revenue_collected)
+    setNotes(row.notes || '')
+    setModalOpen(true)
+  }
+
+  function openEditRoom(row) {
+    setEditingRow(row)
+    setRoomModalOpen(true)
   }
 
   async function handleDeleteRoom(row) {
@@ -42,6 +63,11 @@ export default function HotelRevenue() {
     await supabase.from('hotel_room_stats').delete().eq('id', row.id)
     loadAll()
   }
+  function openEditAncillary(row) {
+    setEditingRow(row)
+    setAncillaryModalOpen(true)
+  }
+
   async function handleDeleteAncillary(row) {
     if (!confirm('Delete this entry?')) return
     await supabase.from('hotel_revenue_entries').delete().eq('id', row.id)
@@ -138,10 +164,10 @@ export default function HotelRevenue() {
       />
 
       {roomModalOpen && (
-        <RoomRevenueFormModal companyId={activeCompany.id} product={activeProduct} onClose={() => setRoomModalOpen(false)} onSaved={loadAll} />
+        <RoomRevenueFormModal companyId={activeCompany.id} product={activeProduct} totalRooms={totalRooms} editingRow={editingRow} onClose={() => { setRoomModalOpen(false); setEditingRow(null); }} onSaved={loadAll} />
       )}
       {ancillaryModalOpen && (
-        <AncillaryRevenueFormModal companyId={activeCompany.id} product={activeProduct} accounts={revenueAccounts} onClose={() => setAncillaryModalOpen(false)} onSaved={loadAll} />
+        <AncillaryRevenueFormModal companyId={activeCompany.id} product={activeProduct} accounts={revenueAccounts} totalRooms={totalRooms} editingRow={editingRow} roomStats={roomStats} onClose={() => { setAncillaryModalOpen(false); setEditingRow(null); }} onSaved={loadAll} />
       )}
       {newHeadModalOpen && (
         <AccountFormModal companyId={activeCompany.id} product={activeProduct} account={{ type: 'Revenue', subtype: 'Front Office' }} onClose={() => setNewHeadModalOpen(false)} onSaved={loadAll} />
@@ -158,13 +184,13 @@ export default function HotelRevenue() {
   )
 }
 
-function RoomRevenueFormModal({ companyId, product, onClose, onSaved }) {
-  const [statDate, setStatDate] = useState(new Date().toISOString().slice(0, 10))
-  const [roomsOccupied, setRoomsOccupied] = useState('')
-  const [currency, setCurrency] = useState('USD')
-  const [roomRevenue, setRoomRevenue] = useState('')
-  const [collected, setCollected] = useState('')
-  const [notes, setNotes] = useState('')
+function RoomRevenueFormModal({ companyId, product, totalRooms, editingRow, onClose, onSaved }) {
+  const [statDate, setStatDate] = useState(editingRow?.stat_date || new Date().toISOString().slice(0, 10))
+  const [roomsOccupied, setRoomsOccupied] = useState(editingRow?.rooms_occupied ?? '')
+  const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
+  const [roomRevenue, setRoomRevenue] = useState(editingRow?.room_revenue ?? '')
+  const [collected, setCollected] = useState(editingRow?.room_revenue_collected ?? '')
+  const [notes, setNotes] = useState(editingRow?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -175,14 +201,22 @@ function RoomRevenueFormModal({ companyId, product, onClose, onSaved }) {
     setSaving(true)
     try {
       const fxRate = currency === 'USD' ? 1 : (await getLatestRate(currency)) || 1
-      const { error: err } = await supabase.from('hotel_room_stats').upsert({
+      const payload = {
         company_id: companyId, product, stat_date: statDate, rooms_occupied: Number(roomsOccupied) || 0,
         currency, fx_rate_locked: fxRate,
         room_revenue: Number(roomRevenue), room_revenue_collected: Number(collected) || 0,
         room_revenue_usd: Math.round(Number(roomRevenue) / fxRate * 100) / 100,
         room_revenue_collected_usd: Math.round((Number(collected) || 0) / fxRate * 100) / 100,
         notes: notes || null,
-      }, { onConflict: 'company_id,product,stat_date' })
+      }
+      let err = null
+      if (editingRow) {
+        const { error } = await supabase.from('hotel_room_stats').update(payload).eq('id', editingRow.id)
+        err = error
+      } else {
+        const { error } = await supabase.from('hotel_room_stats').upsert(payload, { onConflict: 'company_id,product,stat_date' })
+        err = error
+      }
       if (err) throw err
       onSaved(); onClose()
     } catch (err) {
@@ -216,6 +250,11 @@ function RoomRevenueFormModal({ companyId, product, onClose, onSaved }) {
             <input type="number" step="0.01" min="0" value={collected} onChange={e => setCollected(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="If different from Room Revenue" />
           </Field>
         </div>
+        
+        <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-sm flex items-center justify-around text-slate-600">
+          <div>ADR: <strong>{roomsOccupied > 0 && roomRevenue > 0 ? (roomRevenue / roomsOccupied).toFixed(2) : '0.00'}</strong></div>
+          <div>RevPAR: <strong>{totalRooms > 0 && roomRevenue > 0 ? (roomRevenue / totalRooms).toFixed(2) : '0.00'}</strong></div>
+        </div>
         <p className="text-[11px] text-slate-400">If Collected is less than Room Revenue, the shortfall is tracked as receivable (a guest still owes it), not as unrecorded revenue.</p>
         <Field label="Notes">
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
@@ -230,12 +269,12 @@ function RoomRevenueFormModal({ companyId, product, onClose, onSaved }) {
   )
 }
 
-function AncillaryRevenueFormModal({ companyId, product, accounts, onClose, onSaved }) {
+function AncillaryRevenueFormModal({ companyId, product, accounts, totalRooms, editingRow, roomStats, onClose, onSaved }) {
   const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10))
   const [accountId, setAccountId] = useState(accounts[0]?.id || '')
-  const [currency, setCurrency] = useState('USD')
+  const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
   const [amount, setAmount] = useState('')
-  const [notes, setNotes] = useState('')
+  const [notes, setNotes] = useState(editingRow?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
