@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, BedDouble } from 'lucide-react'
+import { Plus, Trash2, Pencil, BedDouble } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
