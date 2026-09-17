@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { MONTH_NAMES } from '../lib/fiscalYear'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
-import { CURRENCY_LIST } from '../lib/currencies'
+import { CURRENCY_LIST, CURRENCIES } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
@@ -137,7 +137,7 @@ export default function HotelBudget() {
               Download Report
             </button>
             <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-              {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+              {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
             </select>
           </div>
         }
@@ -212,16 +212,7 @@ export default function HotelBudget() {
                     <td className="py-1.5 px-3">
   <div className="flex gap-1">
     <select value={row.currency || displayCurrency} onChange={e => updateRow(year, month, 'currency', e.target.value)} className="w-16 border border-slate-200 rounded px-1 py-1 text-xs bg-slate-50 text-slate-500 font-medium cursor-pointer focus:outline-none focus:border-navy-400">
-      <option value="USD">USD</option>
-      <option value="EUR">EUR</option>
-      <option value="GBP">GBP</option>
-      <option value="INR">INR</option>
-      <option value="AUD">AUD</option>
-      <option value="CAD">CAD</option>
-      <option value="SGD">SGD</option>
-      <option value="AED">AED</option>
-      <option value="THB">THB</option>
-      <option value="MYR">MYR</option>
+      {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
     </select>
     <input type="number" step="0.01" value={row.revenue || ''} onChange={e => updateRow(year, month, 'revenue', e.target.value)} className="w-28 border border-slate-200 rounded px-2 py-1 text-xs" placeholder="Revenue" />
   </div>
