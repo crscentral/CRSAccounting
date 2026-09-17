@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { getMTDRange, getYTDRange, getYearRange } from '../lib/fiscalYear'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
-import { CURRENCY_LIST } from '../lib/currencies'
+import { CURRENCY_LIST, CURRENCIES } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
 import DataTable from '../components/DataTable'
@@ -47,7 +47,7 @@ export default function HotelOccupancyStats() {
 
   async function loadAll() {
     setLoading(true)
-    const range = rangeFor(view)
+    
     const [{ data: settings }, { data: statRows }, { data: budgetRows }, { data: accounts }, { data: entries }] = await Promise.all([
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
       supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to).order('stat_date'),
@@ -71,7 +71,7 @@ export default function HotelOccupancyStats() {
   }
 
   async function generateStatsReport(selections, format) {
-    const range = rangeFor(view)
+    
     const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
 
@@ -89,7 +89,7 @@ export default function HotelOccupancyStats() {
     }]
 
     const title = 'Hotel Revenue & Occupancy Statistics'
-    const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
+    const subtitle = `${activeCompany.name} • ${reportRange.from} to ${reportRange.to} • ${selections.currency}`
     if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'hotel_occupancy_stats' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'hotel_occupancy_stats' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'hotel_occupancy_stats' })
@@ -133,7 +133,7 @@ export default function HotelOccupancyStats() {
               Download Report
             </button>
             <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-              {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+              {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
             </select>
           </div>
         }
@@ -207,7 +207,22 @@ export default function HotelOccupancyStats() {
       {reportModalOpen && (
         <ReportOptionsModal
           title="Revenue & Occupancy Statistics"
-          fields={[{ type: 'currency', key: 'currency', default: displayCurrency }]}
+          fields={[
+            { type: 'currency', key: 'currency', default: displayCurrency },
+            { 
+              type: 'select', 
+              key: 'view', 
+              label: 'Time Period', 
+              default: view,
+              options: [
+                { value: 'last_night', label: 'Last Night' },
+                { value: 'last_30', label: 'Last 30 Days' },
+                { value: 'last_year_daily', label: 'Each Day, Last Year' },
+                { value: 'mtd', label: 'MTD' },
+                { value: 'ytd', label: 'YTD' },
+              ]
+            }
+          ]}
           onGenerate={generateStatsReport}
           onClose={() => setReportModalOpen(false)}
         />

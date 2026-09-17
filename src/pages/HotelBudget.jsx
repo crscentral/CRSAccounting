@@ -36,7 +36,7 @@ export default function HotelBudget() {
     ])
     setTotalRooms(settings?.total_rooms || 0)
     const rowMap = {}
-    ;(budgetRows || []).forEach(b => { rowMap[`${b.budget_year}-${b.budget_month}`] = { occ: b.budgeted_occupancy_pct, adr: b.budgeted_adr, revenue: b.budgeted_room_revenue, currency: b.currency } })
+    ;(budgetRows || []).forEach(b => { rowMap[`${b.budget_year}-${b.budget_month}`] = { occ: b.budgeted_occupancy_pct, adr: b.budgeted_adr, revenue: b.budgeted_room_revenue, currency: b.currency, revenue_usd: b.budgeted_room_revenue_usd } })
     setRows(rowMap)
     const actualMap = {}
     ;(statRows || []).forEach(s => {
@@ -86,18 +86,21 @@ export default function HotelBudget() {
     setSaving(s => ({ ...s, [key]: true }))
     const currency = row.currency || displayCurrency
     const fxRate = currency === 'USD' ? 1 : (await getLatestRate(currency)) || 1
+    const revenueUsd = Math.round((Number(row.revenue) || 0) / fxRate * 100) / 100
     await supabase.from('hotel_room_revenue_budget').upsert({
       company_id: activeCompany.id, product: activeProduct, budget_year: year, budget_month: month,
       budgeted_occupancy_pct: Number(row.occ) || 0, budgeted_adr: Number(row.adr) || 0, budgeted_room_revenue: Number(row.revenue) || 0,
-      currency, fx_rate_locked: fxRate, budgeted_room_revenue_usd: Math.round((Number(row.revenue) || 0) / fxRate * 100) / 100,
+      currency, fx_rate_locked: fxRate, budgeted_room_revenue_usd: revenueUsd,
     }, { onConflict: 'company_id,product,budget_year,budget_month' })
+    setRows(r => ({ ...r, [key]: { ...r[key], revenue_usd: revenueUsd } }))
     setSaving(s => ({ ...s, [key]: false }))
   }
 
   async function generateBudgetReport(selections, format) {
     const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
-    const years = [startYear, startYear + 1, startYear + 2, startYear + 3, startYear + 4]
+    const sy = Number(selections.startYear || startYear)
+    const years = [sy, sy + 1, sy + 2, sy + 3, sy + 4]
     const tableRows = []
     years.forEach(y => MONTH_NAMES.forEach((m, i) => {
       const key = `${y}-${i + 1}`
@@ -235,7 +238,16 @@ export default function HotelBudget() {
       {reportModalOpen && (
         <ReportOptionsModal
           title="Room Revenue Budget"
-          fields={[{ type: 'currency', key: 'currency', default: displayCurrency }]}
+          fields={[
+            { type: 'currency', key: 'currency', default: displayCurrency },
+            { 
+              type: 'select', 
+              key: 'startYear', 
+              label: 'Starting Year (Includes Next 4 Years)', 
+              default: startYear,
+              options: Array.from({ length: 8 }, (_, i) => { const y = new Date().getFullYear() - 2 + i; return { value: y, label: String(y) } }) 
+            }
+          ]}
           onGenerate={generateBudgetReport}
           onClose={() => setReportModalOpen(false)}
         />
