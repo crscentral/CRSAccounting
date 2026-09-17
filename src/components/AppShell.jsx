@@ -49,7 +49,28 @@ export default function AppShell() {
   const { companies, activeCompany, switchCompany, signOut, activeRole, activeProduct, availableProducts, switchProduct } = useAuth()
   const { canInstall, isStandalone, promptInstall } = useInstallPrompt()
   const navigate = useNavigate()
+  const HOTEL_NAV_ORDER = [
+    '/overview',
+    '/',
+    '/companies',
+    '/hotel-guest-invoices',
+    '/hotel-revenue',
+    '/hotel-expenses',
+    '/hotel-stats',
+    '/hotel-budget',
+    '/contacts',
+    '/accounts',
+  ]
   const visibleNavItems = NAV_ITEMS.filter(item => !item.products || item.products.includes(activeProduct))
+  if (activeProduct === 'hotel') {
+    visibleNavItems.sort((a, b) => {
+      let idxA = HOTEL_NAV_ORDER.indexOf(a.to)
+      let idxB = HOTEL_NAV_ORDER.indexOf(b.to)
+      if (idxA === -1) idxA = 999 + NAV_ITEMS.indexOf(a)
+      if (idxB === -1) idxB = 999 + NAV_ITEMS.indexOf(b)
+      return idxA - idxB
+    })
+  }
 
   const isIOS = /iphone|ipad|ipod/i.test(window.navigator.userAgent)
   const showInstallBanner = !installBannerDismissed && !isStandalone && (canInstall || isIOS)
