@@ -3,47 +3,19 @@ import re
 with open('src/pages/HotelRevenue.jsx', 'r') as f:
     code = f.read()
 
-# Add totalRooms state
-code = code.replace(
-    "const [revenueAccounts, setRevenueAccounts] = useState([])",
-    "const [revenueAccounts, setRevenueAccounts] = useState([])\n  const [totalRooms, setTotalRooms] = useState(0)"
-)
+old_room_rev_ui = """        <div className="grid grid-cols-2 gap-4">
+          <Field label="Currency" type="select" value={currency} onChange={setCurrency} options={CURRENCY_LIST.map(c => ({ value: c.code, label: `${c.code} - ${c.name}` }))} />
+          <Field label="Total Room Revenue" type="number" min="0" step="0.01" value={roomRevenue} onChange={setRoomRevenue} />
+        </div>"""
 
-# Fetch settings
-code = code.replace(
-    "const [{ data: room }, { data: anc }, { data: accs }] = await Promise.all([",
-    "const [{ data: room }, { data: anc }, { data: accs }, { data: settings }] = await Promise.all(["
-)
-code = code.replace(
-    "eq('type', 'Revenue').neq('code', '4010').order('code'),\n    ])",
-    "eq('type', 'Revenue').neq('code', '4010').order('code'),\n      supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),\n    ])"
-)
-code = code.replace(
-    "setRevenueAccounts(accs || [])\n  }",
-    "setRevenueAccounts(accs || [])\n    setTotalRooms(settings?.total_rooms || 0)\n  }"
-)
-
-# Open Edit Room
-code = code.replace(
-    "async function handleDeleteRoom(row) {",
-    """function openEditRoom(row) {
-    setMode('room')
-    setEditingId(row.id)
-    setStatDate(row.stat_date)
-    setRoomsOccupied(row.rooms_occupied)
-    setCurrency(row.currency || 'USD')
-    setRoomRevenue(row.room_revenue)
-    setCollected(row.room_revenue_collected)
-    setNotes(row.notes || '')
-    setModalOpen(true)
-  }
-
-  async function handleDeleteRoom(row) {"""
-)
-code = code.replace(
-    "const [editingId, setEditingId] = useState(null)",
-    "// const [editingId, setEditingId] = useState(null)" # Wait, is editingId already defined? Let's check
-)
+new_room_rev_ui = """        <div className="grid grid-cols-2 gap-4">
+          <Field label="Currency" type="select" value={currency} onChange={setCurrency} options={CURRENCY_LIST.map(c => ({ value: c.code, label: `${c.code} - ${c.name}` }))} />
+          <Field label="Total Room Revenue (including invoices)" type="number" min="0" step="0.01" value={roomRevenue} onChange={setRoomRevenue} />
+        </div>
+        <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded border border-slate-200 mt-2">
+          <strong>Note:</strong> Guest Invoices automatically add to this total. Editing this value overrides the grand total for the day.
+        </div>"""
+code = code.replace(old_room_rev_ui, new_room_rev_ui)
 
 with open('src/pages/HotelRevenue.jsx', 'w') as f:
     f.write(code)
