@@ -63,16 +63,15 @@ export default function HotelBudget() {
       // present, revenue = rooms*occ%*adr*days. If adr+revenue present, occ derives.
       // If occ+revenue present, adr derives.
       const days = daysInMonth(year, month)
-      const roomNights = totalRooms * days
       if (field === 'occ' || field === 'adr') {
-        if (roomNights > 0 && Number(next.occ) > 0 && Number(next.adr) > 0) {
-          next.revenue = Math.round(roomNights * (Number(next.occ) / 100) * Number(next.adr) * 100) / 100
+        if (totalRooms > 0 && Number(next.occ) > 0 && Number(next.adr) > 0) {
+          next.revenue = Math.round(totalRooms * (Number(next.occ) / 100) * Number(next.adr) * 100) / 100
         }
       } else if (field === 'revenue') {
-        if (roomNights > 0 && Number(next.occ) > 0) {
-          next.adr = Math.round((Number(next.revenue) / (roomNights * (Number(next.occ) / 100))) * 100) / 100
-        } else if (roomNights > 0 && Number(next.adr) > 0) {
-          next.occ = Math.round((Number(next.revenue) / Number(next.adr) / roomNights) * 100 * 100) / 100
+        if (totalRooms > 0 && Number(next.occ) > 0) {
+          next.adr = Math.round((Number(next.revenue) / (totalRooms * (Number(next.occ) / 100))) * 100) / 100
+        } else if (totalRooms > 0 && Number(next.adr) > 0) {
+          next.occ = Math.round((Number(next.revenue) / Number(next.adr) / totalRooms) * 100 * 100) / 100
         }
       }
       return { ...r, [key]: next }
@@ -203,7 +202,7 @@ export default function HotelBudget() {
                 const key = `${year}-${month}`
                 const row = rows[key] || { occ: 0, adr: 0, revenue: 0 }
                 const days = daysInMonth(year, month)
-                const dailyBudget = (Number(row.revenue) || 0) / days
+                const monthlyBudget = (Number(row.revenue) || 0) * days
                 const roomsOcc = totalRooms > 0 ? Math.round((Number(row.occ) / 100) * totalRooms) : 0
                 const actualUsd = actuals[key] || 0
                 return (
