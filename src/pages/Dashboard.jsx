@@ -11,6 +11,22 @@ import KpiCard from '../components/KpiCard'
 import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 
+const renderCustomLegend = (props, formatter) => {
+  const { payload } = props;
+  return (
+    <ul className="flex flex-wrap justify-center gap-4 mt-2 text-xs">
+      {payload.map((entry, index) => (
+        <li key={`item-${index}`} className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+          <span className="text-slate-600 font-medium">
+            {entry.value}: {formatter(entry.payload.realValue)}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function Dashboard() {
   const { activeCompany, activeProduct } = useAuth()
   const cp = useCurrencyAndPeriod()
@@ -28,6 +44,7 @@ export default function Dashboard() {
   const [hotelGuestInvoices, setHotelGuestInvoices] = useState([])
   const [hotelExpenseEntries, setHotelExpenseEntries] = useState([])
   const [hotelAmc, setHotelAmc] = useState([])
+  const [hotelRevenueEntries, setHotelRevenueEntries] = useState([])
 
   useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
   useEffect(() => { if (activeCompany && activeProduct === 'hotel') loadHotelStats() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
@@ -107,6 +124,7 @@ export default function Dashboard() {
     setHotelGuestInvoices(hgi || [])
     setHotelExpenseEntries(hee || [])
     setHotelAmc(hamc || [])
+    setHotelRevenueEntries(hre || [])
     setSales(s || [])
     setPurchases(p || [])
     setReceipts(r || [])
@@ -265,8 +283,8 @@ export default function Dashboard() {
 
   const netProfit = totalBilled - totalExpenses
   const actualProfit = collected - expensesMade
-  const draftInvoices = sales.filter(i => i.status !== 'Paid')
-  const draftExpenses = purchases.filter(i => i.status === 'Draft')
+  const draftInvoices = activeProduct === 'hotel' ? hotelGuestInvoices.filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)) : sales.filter(i => i.status !== 'Paid')
+  const draftExpenses = activeProduct === 'hotel' ? [] : purchases.filter(i => i.status === 'Draft')
 
   // YTD (respects company fiscal year start month) — independent of the page's period selector
   const ytdRange = getYTDRange(activeCompany.fiscal_year_start_month || 1)
@@ -285,26 +303,68 @@ export default function Dashboard() {
   }
 
   // All-Time
-  const allTimeRevenue = allSales.reduce((s, i) => s + Number(i.amount_usd), 0)
-  const allTimeExpenses = allPurchases.reduce((s, i) => s + Number(i.amount_usd), 0)
-
+  let allTimeRevenue = 0
+  let allTimeExpenses = 0
   const monthlyMap = {}
-  sales.forEach(i => {
-    const key = i.invoice_date.slice(0, 7)
-    monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
-    monthlyMap[key].Revenue += Number(i.amount_usd)
-    monthlyMap[key].Outstanding += (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd))
-  })
-  purchases.forEach(i => {
-    const key = i.invoice_date.slice(0, 7)
-    monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
-    monthlyMap[key].Expenses += Number(i.amount_usd)
-  })
-  receipts.forEach(r => {
-    const key = r.receipt_date.slice(0, 7)
-    monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
-    monthlyMap[key].Collected += Number(r.amount_usd)
-  })
+  
+  if (activeProduct === 'hotel') {
+    allTimeRevenue = ledgerEntries.filter(e => accounts.find(a => a.id === e.account_id)?.type === 'Revenue').reduce((s, e) => s + (Number(e.credit_usd) - Number(e.debit_usd)), 0)
+    allTimeExpenses = ledgerEntries.filter(e => accounts.find(a => a.id === e.account_id)?.type === 'Expenses').reduce((s, e) => s + (Number(e.debit_usd) - Number(e.credit_usd)), 0)
+    
+    hotelGuestInvoices.forEach(i => {
+      const key = i.invoice_date.slice(0, 7)
+      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+      monthlyMap[key].Outstanding += (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd))
+      monthlyMap[key].Collected += Number(i.collected_amount_usd)
+    })
+    hotelRoomStats.forEach(r => {
+      const key = r.stat_date.slice(0, 7)
+      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+      monthlyMap[key].Revenue += Number(r.room_revenue_usd)
+      monthlyMap[key].Collected += Number(r.manual_room_revenue_collected_usd || 0)
+    })
+    hotelRevenueEntries.forEach(r => {
+      const key = r.entry_date.slice(0, 7)
+      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+      monthlyMap[key].Revenue += Number(r.amount_usd)
+      monthlyMap[key].Collected += Number(r.amount_usd)
+    })
+    hotelExpenseEntries.forEach(r => {
+      const key = r.expense_date.slice(0, 7)
+      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+      monthlyMap[key].Expenses += Number(r.amount_usd)
+    })
+    const start = new Date(cp.range.from)
+    const end = new Date(cp.range.to)
+    const amcMonthly = hotelAmc.reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0)
+    let cur = new Date(start.getFullYear(), start.getMonth(), 1)
+    while (cur <= end) {
+      const key = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}`
+      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+      monthlyMap[key].Expenses += amcMonthly
+      cur.setMonth(cur.getMonth() + 1)
+    }
+  } else {
+    allTimeRevenue = allSales.reduce((s, i) => s + Number(i.amount_usd), 0)
+    allTimeExpenses = allPurchases.reduce((s, i) => s + Number(i.amount_usd), 0)
+    
+    sales.forEach(i => {
+      const key = i.invoice_date.slice(0, 7)
+      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+      monthlyMap[key].Revenue += Number(i.amount_usd)
+      monthlyMap[key].Outstanding += (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd))
+    })
+    purchases.forEach(i => {
+      const key = i.invoice_date.slice(0, 7)
+      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+      monthlyMap[key].Expenses += Number(i.amount_usd)
+    })
+    receipts.forEach(r => {
+      const key = r.receipt_date.slice(0, 7)
+      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+      monthlyMap[key].Collected += Number(r.amount_usd)
+    })
+  }
   const chartData = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
     .map(m => ({ ...m, Profit: m.Revenue - m.Expenses }))
 
@@ -461,42 +521,41 @@ export default function Dashboard() {
           {hotelStats.dailyTrend.length > 1 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
               <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-                <h3 className="font-semibold text-slate-700 mb-4">Actual vs Budget ({cp.displayCurrency})</h3>
-                <div className="h-64 sm:h-72 flex justify-center">
-                  <ResponsiveContainer width="100%" height="100%">
+                <h3 className="font-semibold text-slate-700 mb-4">Actual vs Budget ({activeCompany?.currency || 'USD'})</h3>
+                <div className="h-64 sm:h-72 flex flex-col justify-center">
+                  <ResponsiveContainer width="100%" height="80%">
                     <PieChart>
                       <Pie data={[
                         { name: 'Actual', value: Math.abs(hotelStats.totalRevenue), realValue: hotelStats.totalRevenue, fill: '#1B3A6B' },
                         { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetUsd), realValue: hotelStats.totalBudgetUsd, fill: '#C9A84C' },
                         { name: 'Variance', value: Math.abs(hotelStats.totalVarianceUsd), realValue: hotelStats.totalVarianceUsd, fill: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444' }
-                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={100} label={({ cx, cy, midAngle, innerRadius, outerRadius, realValue, name }) => { const RADIAN = Math.PI / 180; const radius = outerRadius + 30; const x = cx + radius * Math.cos(-midAngle * RADIAN); const y = cy + radius * Math.sin(-midAngle * RADIAN); return <text x={x} y={y} fill="#475569" textAnchor={x > cx ? "start" : "end"} dominantBaseline="central" fontSize={11}>{name}: {cp.fmt(realValue)}</text>; }}>
+                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} label={false}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
-                      <Tooltip formatter={(val, name, props) => cp.fmt(props.payload.realValue)} />
-                      <Legend />
+                      <Tooltip formatter={(val, name, props) => new Intl.NumberFormat('en-US', { style: 'currency', currency: activeCompany?.currency || 'USD' }).format(props.payload.realValue)} />
+                      <Legend content={(props) => renderCustomLegend(props, (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: activeCompany?.currency || 'USD' }).format(v))} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-                <h3 className="font-semibold text-slate-700 mb-4">Actual vs Budget (USD)</h3>
-                <div className="h-64 sm:h-72 flex justify-center">
-                  <ResponsiveContainer width="100%" height="100%">
+                <h3 className="font-semibold text-slate-700 mb-4">Actual vs Budget ({cp.displayCurrency})</h3>
+                <div className="h-64 sm:h-72 flex flex-col justify-center">
+                  <ResponsiveContainer width="100%" height="80%">
                     <PieChart>
                       <Pie data={[
                         { name: 'Actual', value: Math.abs(hotelStats.totalRevenue), realValue: hotelStats.totalRevenue, fill: '#1B3A6B' },
                         { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetUsd), realValue: hotelStats.totalBudgetUsd, fill: '#C9A84C' },
                         { name: 'Variance', value: Math.abs(hotelStats.totalVarianceUsd), realValue: hotelStats.totalVarianceUsd, fill: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444' }
-                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={100} label={({ cx, cy, midAngle, innerRadius, outerRadius, realValue, name }) => { const RADIAN = Math.PI / 180; const radius = outerRadius + 30; const x = cx + radius * Math.cos(-midAngle * RADIAN); const y = cy + radius * Math.sin(-midAngle * RADIAN); return <text x={x} y={y} fill="#475569" textAnchor={x > cx ? "start" : "end"} dominantBaseline="central" fontSize={11}>{name}: {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(realValue)}</text>; }}>
+                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} label={false}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
-                      <Tooltip formatter={(val, name, props) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(props.payload.realValue)} />
-                      <Legend />
+                      <Tooltip formatter={(val, name, props) => cp.fmt(props.payload.realValue)} />
+                      <Legend content={(props) => renderCustomLegend(props, cp.fmt)} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
               </div>
-              
               <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 lg:col-span-2">
                 <h3 className="font-semibold text-slate-700 mb-4">Room Revenue: Actual vs Daily Budget</h3>
                 <div className="h-64 sm:h-72">

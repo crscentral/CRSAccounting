@@ -39,6 +39,8 @@ export default function HotelBudget() {
   useEffect(() => { if (displayCurrency === 'USD') { setRate(1); return } getLatestRate(displayCurrency).then(r => setRate(r || 1)) }, [displayCurrency])
 
   function fmt(usd) { return formatMoney(convertFromUsd(usd, displayCurrency, { [displayCurrency]: rate }), displayCurrency) }
+  function fmtRoundedAbs(usd) { return formatMoney(Math.abs(Math.round(convertFromUsd(usd, displayCurrency, { [displayCurrency]: rate }))), displayCurrency).replace('.00', '') }
+  function fmtRounded(usd) { return formatMoney(Math.round(convertFromUsd(usd, displayCurrency, { [displayCurrency]: rate })), displayCurrency).replace('.00', '') }
 
   async function loadAll() {
     const [{ data: settings }, { data: budgetRows }, { data: statRows }] = await Promise.all([
@@ -198,7 +200,7 @@ export default function HotelBudget() {
           <KpiCard label="MTD Actual" value={fmt(mtdActual)} icon={TrendingUp} tone="green" />
           <KpiCard
             label={`Pace Variance (Day ${daysElapsed}/${daysInCurrentMonth})`}
-            value={fmt(mtdPaceVariance)}
+            value={fmtRoundedAbs(mtdPaceVariance)}
             icon={mtdPaceVariance >= 0 ? TrendingUp : AlertTriangle}
             tone={mtdPaceVariance >= 0 ? 'green' : 'red'}
             sublabel="Actual vs. where you should be by today"
@@ -276,12 +278,12 @@ export default function HotelBudget() {
                       </div>
                     </td>
                     <td className="py-1.5 px-3 text-slate-500 text-xs">{(row.currency || displayCurrency) === 'USD' ? formatMoney(row.revenue || 0, 'USD') : (row.revenue_usd ? formatMoney(row.revenue_usd, 'USD') : <span className="text-slate-300 italic text-[10px]">On save</span>)}</td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs font-medium">{formatMoney(monthlyBudget, row.currency || displayCurrency)}</td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs">{fmt(monthlyUsd)}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-xs font-medium">{formatMoney(Math.round(monthlyBudget), row.currency || displayCurrency).replace('.00', '')}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-xs">{formatMoney(Math.round(monthlyUsd), 'USD').replace('.00', '')}</td>
                     <td className="py-1.5 px-3 text-slate-500 text-xs font-medium">{formatMoney(actualLocal, row.currency || displayCurrency)}</td>
                     <td className="py-1.5 px-3 text-slate-500 text-xs">{fmt(actualUsd)}</td>
-                    <td className={`py-1.5 px-3 text-xs font-medium ${varLocal < 0 ? 'text-red-500' : varLocal > 0 ? 'text-green-600' : 'text-slate-400'}`}>{varLocal > 0 ? '+' : ''}{formatMoney(varLocal, row.currency || displayCurrency)}</td>
-                    <td className={`py-1.5 px-3 text-xs ${varUsd < 0 ? 'text-red-500' : varUsd > 0 ? 'text-green-600' : 'text-slate-400'}`}>{varUsd > 0 ? '+' : ''}{fmt(varUsd)}</td>
+                    <td className={`py-1.5 px-3 text-xs font-medium ${varLocal < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varLocal)), row.currency || displayCurrency).replace('.00', '')}</td>
+                    <td className={`py-1.5 px-3 text-xs ${varUsd < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varUsd)), 'USD').replace('.00', '')}</td>
                     <td className="py-1.5 px-3">
                       {can(['owner', 'admin', 'accountant']) && (
                         <div className="flex gap-2 justify-end items-center">

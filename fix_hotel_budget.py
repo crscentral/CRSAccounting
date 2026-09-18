@@ -3,65 +3,26 @@ import re
 with open('src/pages/HotelBudget.jsx', 'r') as f:
     code = f.read()
 
-# I need to add currency to the rows parsing logic when loading.
-load_logic_old = """    const parsed = {}
-    budgetRows.forEach(r => {
-      parsed[`${r.budget_year}-${r.budget_month}`] = {
-        occ: r.budgeted_occupancy_pct,
-        adr: r.budgeted_adr,
-        revenue: r.budgeted_room_revenue,
-      }
-    })"""
-load_logic_new = """    const parsed = {}
-    budgetRows.forEach(r => {
-      parsed[`${r.budget_year}-${r.budget_month}`] = {
-        occ: r.budgeted_occupancy_pct,
-        adr: r.budgeted_adr,
-        revenue: r.budgeted_room_revenue,
-        currency: r.currency || 'USD',
-      }
-    })"""
-code = code.replace(load_logic_old, load_logic_new)
+# Remove negative sign from variance and round numbers
+# Current:
+# <td className={`py-1.5 px-3 text-xs font-medium ${varLocal < 0 ? 'text-red-500' : varLocal > 0 ? 'text-green-600' : 'text-slate-400'}`}>{varLocal > 0 ? '+' : ''}{formatMoney(varLocal, row.currency || displayCurrency)}</td>
+# <td className={`py-1.5 px-3 text-xs ${varUsd < 0 ? 'text-red-500' : varUsd > 0 ? 'text-green-600' : 'text-slate-400'}`}>{varUsd > 0 ? '+' : ''}{fmt(varUsd)}</td>
 
-# Modify updateRow to not trigger the math calculation if the field is 'currency'
-update_old = """  function updateRow(year, month, field, val) {
-    setRows(prev => {
-      const key = `${year}-${month}`
-      const curr = { ...(prev[key] || { occ: '', adr: '', revenue: '' }) }
-      curr[field] = val
-      
-      const v = Number(val) || 0"""
-update_new = """  function updateRow(year, month, field, val) {
-    setRows(prev => {
-      const key = `${year}-${month}`
-      const curr = { ...(prev[key] || { occ: '', adr: '', revenue: '', currency: displayCurrency }) }
-      curr[field] = val
-      
-      if (field === 'currency') return { ...prev, [key]: curr }
-      
-      const v = Number(val) || 0"""
-code = code.replace(update_old, update_new)
+old_var_local = r"<td className=\{`py-1.5 px-3 text-xs font-medium \$\{varLocal < 0 \? 'text-red-500' : varLocal > 0 \? 'text-green-600' : 'text-slate-400'\}`\}>\{varLocal > 0 \? '\+' : ''\}\{formatMoney\(varLocal, row.currency \|\| displayCurrency\)\}</td>"
+new_var_local = r"<td className={`py-1.5 px-3 text-xs font-medium ${varLocal < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varLocal)), row.currency || displayCurrency).replace('.00', '')}</td>"
+code = re.sub(old_var_local, new_var_local, code)
 
-# Add the currency dropdown next to the budgeted revenue input
-input_old = """<td className="py-1.5 px-3"><input type="number" step="0.01" value={row.revenue || ''} onChange={e => updateRow(year, month, 'revenue', e.target.value)} className="w-28 border border-slate-200 rounded px-2 py-1 text-xs" placeholder="Revenue" /></td>"""
-input_new = """<td className="py-1.5 px-3">
-  <div className="flex gap-1">
-    <select value={row.currency || displayCurrency} onChange={e => updateRow(year, month, 'currency', e.target.value)} className="w-16 border border-slate-200 rounded px-1 py-1 text-xs bg-slate-50 text-slate-500 font-medium cursor-pointer focus:outline-none focus:border-navy-400">
-      <option value="USD">USD</option>
-      <option value="EUR">EUR</option>
-      <option value="GBP">GBP</option>
-      <option value="INR">INR</option>
-      <option value="AUD">AUD</option>
-      <option value="CAD">CAD</option>
-      <option value="SGD">SGD</option>
-      <option value="AED">AED</option>
-      <option value="THB">THB</option>
-      <option value="MYR">MYR</option>
-    </select>
-    <input type="number" step="0.01" value={row.revenue || ''} onChange={e => updateRow(year, month, 'revenue', e.target.value)} className="w-28 border border-slate-200 rounded px-2 py-1 text-xs" placeholder="Revenue" />
-  </div>
-</td>"""
-code = code.replace(input_old, input_new)
+old_var_usd = r"<td className=\{`py-1.5 px-3 text-xs \$\{varUsd < 0 \? 'text-red-500' : varUsd > 0 \? 'text-green-600' : 'text-slate-400'\}`\}>\{varUsd > 0 \? '\+' : ''\}\{fmt\(varUsd\)\}</td>"
+new_var_usd = r"<td className={`py-1.5 px-3 text-xs ${varUsd < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varUsd)), 'USD').replace('.00', '')}</td>"
+code = re.sub(old_var_usd, new_var_usd, code)
+
+old_monthly_local = r"<td className=\"py-1.5 px-3 text-slate-500 text-xs font-medium\">\{formatMoney\(monthlyBudget, row.currency \|\| displayCurrency\)\}</td>"
+new_monthly_local = r"<td className=\"py-1.5 px-3 text-slate-500 text-xs font-medium\">{formatMoney(Math.round(monthlyBudget), row.currency || displayCurrency).replace('.00', '')}</td>"
+code = re.sub(old_monthly_local, new_monthly_local, code)
+
+old_monthly_usd = r"<td className=\"py-1.5 px-3 text-slate-500 text-xs\">\{fmt\(monthlyUsd\)\}</td>"
+new_monthly_usd = r"<td className=\"py-1.5 px-3 text-slate-500 text-xs\">{formatMoney(Math.round(monthlyUsd), 'USD').replace('.00', '')}</td>"
+code = re.sub(old_monthly_usd, new_monthly_usd, code)
 
 with open('src/pages/HotelBudget.jsx', 'w') as f:
     f.write(code)

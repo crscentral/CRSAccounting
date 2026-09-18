@@ -1,27 +1,19 @@
 import re
 
-with open('src/pages/Companies.jsx', 'r') as f:
+# Fix Dashboard.jsx
+with open('src/pages/Dashboard.jsx', 'r') as f:
     code = f.read()
 
-bad_func = """  function openEdit(company) {
-    setEditingCompany(company)
-    setForm({ ...company, fiscal_year_start_month: company.fiscal_year_start_month || 1, products: company.company_products?.map(p => p.product) || [] }).map(k => [k, company[k] ?? emptyForm[k]])) })
-    setTab('General')
-    setModalOpen(true)
-  }"""
+code = code.replace("export default const renderCustomLegend", "const renderCustomLegend")
+with open('src/pages/Dashboard.jsx', 'w') as f:
+    f.write(code)
 
-good_func = """  function openEdit(company) {
-    setEditingCompany(company)
-    setForm(Object.fromEntries(Object.keys(emptyForm).map(k => {
-      if (k === 'products') return [k, company.company_products?.map(p => p.product) || []]
-      if (k === 'fiscal_year_start_month') return [k, company[k] || 1]
-      return [k, company[k] ?? emptyForm[k]]
-    })))
-    setTab('General')
-    setModalOpen(true)
-  }"""
+# Fix HotelBudget.jsx
+with open('src/pages/HotelBudget.jsx', 'r') as f:
+    code = f.read()
 
-code = code.replace(bad_func, good_func)
+code = code.replace(r'className=\"py-1.5 px-3 text-slate-500 text-xs font-medium\"', 'className="py-1.5 px-3 text-slate-500 text-xs font-medium"')
+code = code.replace(r'className=\"py-1.5 px-3 text-slate-500 text-xs\"', 'className="py-1.5 px-3 text-slate-500 text-xs"')
 
-with open('src/pages/Companies.jsx', 'w') as f:
+with open('src/pages/HotelBudget.jsx', 'w') as f:
     f.write(code)
