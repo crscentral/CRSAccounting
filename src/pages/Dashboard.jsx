@@ -143,7 +143,21 @@ export default function Dashboard() {
       ...(recentP || []).map(r => ({ date: r.invoice_date, label: r.contact?.name || r.supplier_name_freeform || r.invoice_number, amount: r.amount, currency: r.currency })),
       ...(recentR || []).map(r => ({ date: r.receipt_date, label: 'Payment Received', amount: r.amount, currency: r.currency })),
     ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5)
-    setRecentTx(combined)
+    if (activeProduct === 'hotel') {
+      const [{ data: hgi }, { data: hre }, { data: hee }] = await Promise.all([
+        supabase.from('hotel_guest_invoices').select('invoice_number, invoice_date, invoice_amount_usd, currency, guest_name').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }).limit(10),
+        supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, currency, account:accounts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('entry_date', { ascending: false }).limit(10),
+        supabase.from('hotel_expense_entries').select('expense_date, amount_usd, currency, account:accounts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('expense_date', { ascending: false }).limit(10),
+      ])
+      const hCombined = [
+        ...(hgi || []).map(r => ({ date: r.invoice_date, label: r.guest_name || r.invoice_number, amount: r.invoice_amount_usd, currency: 'USD' })),
+        ...(hre || []).map(r => ({ date: r.entry_date, label: r.account?.name || 'Revenue', amount: r.amount_usd, currency: 'USD' })),
+        ...(hee || []).map(r => ({ date: r.expense_date, label: r.account?.name || 'Expense', amount: r.amount_usd, currency: 'USD' })),
+      ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10)
+      setRecentTx(hCombined)
+    } else {
+      setRecentTx(combined)
+    }
   }
 
 
@@ -439,7 +453,7 @@ export default function Dashboard() {
                     { name: 'Expenses', value: cp.convert(totalExpenses), color: '#ef4444' },
                     { name: 'Loss', value: cp.convert(Math.abs(netProfit)), color: '#f59e0b' }
                   ]}
-                  cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} dataKey="value"
+                  cx="50%" cy="50%" innerRadius="60%" outerRadius="80%" paddingAngle={2} dataKey="value"
                 >
                   {(netProfit >= 0 ? [1,2,3] : [1,2,3]).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={(netProfit >= 0 ? ['#10b981', '#ef4444', '#3b82f6'] : ['#10b981', '#ef4444', '#f59e0b'])[index]} />
@@ -489,7 +503,7 @@ export default function Dashboard() {
                     { name: 'Expense', value: cp.convert(expensesMade), color: '#f97316' },
                     { name: 'Loss', value: cp.convert(Math.abs(actualProfit)), color: '#f59e0b' }
                   ]}
-                  cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} dataKey="value"
+                  cx="50%" cy="50%" innerRadius="60%" outerRadius="80%" paddingAngle={2} dataKey="value"
                 >
                   {(actualProfit >= 0 ? [1,2,3] : [1,2,3]).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={(actualProfit >= 0 ? ['#10b981', '#f97316', '#3b82f6'] : ['#10b981', '#f97316', '#f59e0b'])[index]} />
@@ -535,13 +549,13 @@ export default function Dashboard() {
               <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
                 <h3 className="font-semibold text-slate-700 mb-4">Actual vs Budget ({hotelStats.budgetCurrency})</h3>
                 <div className="h-64 sm:h-72 flex flex-col justify-center">
-                  <ResponsiveContainer width="100%" height="80%">
+                  <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={[
                         { name: 'Actual', value: Math.abs(hotelStats.totalRevenue), realValue: hotelStats.totalRevenue, fill: '#1B3A6B' },
                         { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetUsd), realValue: hotelStats.totalBudgetUsd, fill: '#C9A84C' },
                         { name: 'Variance', value: Math.abs(hotelStats.totalVarianceUsd), realValue: hotelStats.totalVarianceUsd, fill: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444' }
-                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} label={false}>
+                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="60%" outerRadius="80%" paddingAngle={2} label={false}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
                       <Tooltip formatter={(val, name, props) => new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(props.payload.realValue)} />
@@ -553,13 +567,13 @@ export default function Dashboard() {
               <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
                 <h3 className="font-semibold text-slate-700 mb-4">Actual vs Budget ({cp.displayCurrency})</h3>
                 <div className="h-64 sm:h-72 flex flex-col justify-center">
-                  <ResponsiveContainer width="100%" height="80%">
+                  <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={[
                         { name: 'Actual', value: Math.abs(hotelStats.totalRevenue), realValue: hotelStats.totalRevenue, fill: '#1B3A6B' },
                         { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetUsd), realValue: hotelStats.totalBudgetUsd, fill: '#C9A84C' },
                         { name: 'Variance', value: Math.abs(hotelStats.totalVarianceUsd), realValue: hotelStats.totalVarianceUsd, fill: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444' }
-                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} label={false}>
+                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="60%" outerRadius="80%" paddingAngle={2} label={false}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
                       <Tooltip formatter={(val, name, props) => cp.fmt(props.payload.realValue)} />
@@ -672,6 +686,7 @@ export default function Dashboard() {
         />
       </div>
 
+      {activeProduct !== 'hotel' && (
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mt-6">
         <h2 className="font-semibold text-slate-700 mb-4 flex items-center gap-2">
           <AlertCircle size={18} className="text-slate-400" /> Draft Expenses ({draftExpenses.length})
@@ -688,6 +703,7 @@ export default function Dashboard() {
           emptyMessage="No draft expenses."
         />
       </div>
+      )}
 
       {reportModalOpen && (
         <ReportOptionsModal
