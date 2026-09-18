@@ -247,7 +247,10 @@ export default function HotelBudget() {
                     <td className="py-1.5 px-3 text-slate-500">{fmt(actualUsd)}</td>
                     <td className="py-1.5 px-3">
                       {can(['owner', 'admin', 'accountant']) && (
-                        <button onClick={() => saveRow(year, month)} disabled={saving[key]} className="text-navy-600 hover:text-navy-800 text-xs font-medium disabled:opacity-50">{saving[key] ? 'Saving…' : 'Save'}</button>
+                        <div className="flex gap-2 justify-end items-center">
+                          <button onClick={() => saveRow(year, month)} disabled={saving[key]} className="text-navy-600 hover:text-navy-800 text-xs font-medium disabled:opacity-50">{saving[key] ? 'Saving…' : 'Save'}</button>
+                          <button onClick={() => clearRow(year, month)} disabled={saving[key]} className="text-red-500 hover:text-red-700 text-xs font-medium disabled:opacity-50">Clear</button>
+                        </div>
                       )}
                     </td>
                   </tr>
