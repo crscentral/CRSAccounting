@@ -78,6 +78,15 @@ export default function HotelBudget() {
     })
   }
 
+  async function clearRow(year, month) {
+    if (!confirm('Clear budget entry for this month?')) return
+    const key = `${year}-${month}`
+    setSaving(s => ({ ...s, [key]: true }))
+    await supabase.from('hotel_room_revenue_budget').delete().eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', year).eq('budget_month', month)
+    setRows(r => { const next = { ...r }; delete next[key]; return next })
+    setSaving(s => ({ ...s, [key]: false }))
+  }
+
   async function saveRow(year, month) {
     const key = `${year}-${month}`
     const row = rows[key]
@@ -105,9 +114,22 @@ export default function HotelBudget() {
       const key = `${y}-${i + 1}`
       const row = rows[key]
       const actualUsd = actuals[key] || 0
-      if (row) tableRows.push([`${m} ${y}`, `${row.occ}%`, f(convertFromUsd(row.adr, 'USD', { USD: 1 })), f(Number(row.revenue) || 0), f(actualUsd), f((Number(row.revenue) || 0) - actualUsd)])
+      if (row) {
+        const days = daysInMonth(y, i + 1)
+        const monthlyRevUsd = (row.revenue_usd || 0) * days
+        const roomsOcc = Math.round(totalRooms * (Number(row.occ) || 0) / 100)
+        const adrUsd = roomsOcc > 0 ? (row.revenue_usd / roomsOcc) : 0
+        tableRows.push([
+          `${m} ${y}`, 
+          `${row.occ}%`, 
+          f(adrUsd), 
+          f(monthlyRevUsd), 
+          f(actualUsd), 
+          f(monthlyRevUsd - actualUsd)
+        ])
+      }
     }))
-    const sections = [{ heading: 'Room Revenue Budget', columns: ['Month', 'Budgeted Occ %', 'Budgeted ADR', 'Budgeted Revenue', 'Actual Revenue', 'Variance'], rows: tableRows }]
+    const sections = [{ heading: 'Room Revenue Budget', columns: ['Month', 'Budgeted Occ %', 'Budgeted ADR', 'Budgeted Monthly Revenue', 'Actual Revenue', 'Variance'], rows: tableRows }]
     const title = 'Room Revenue Budget'
     const subtitle = `${activeCompany.name} • ${startYear}–${startYear + 4} • ${selections.currency}`
     if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'room_revenue_budget' })

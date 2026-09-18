@@ -3,34 +3,59 @@ import re
 with open('src/pages/HotelBudget.jsx', 'r') as f:
     code = f.read()
 
-old_report = """          fields={[{ type: 'currency', key: 'currency', default: displayCurrency }]}
-          onGenerate={generateBudgetReport}"""
-
-new_report = """          fields={[
-            { type: 'currency', key: 'currency', default: displayCurrency },
-            { 
-              type: 'select', 
-              key: 'startYear', 
-              label: 'Starting Year (Includes Next 4 Years)', 
-              default: startYear,
-              options: Array.from({ length: 8 }, (_, i) => { const y = new Date().getFullYear() - 2 + i; return { value: y, label: String(y) } }) 
-            }
-          ]}
-          onGenerate={generateBudgetReport}"""
-code = code.replace(old_report, new_report)
-
-# And make sure generateBudgetReport uses selections.startYear instead of the local state startYear
-old_generate = """  async function generateBudgetReport(selections, format) {
-    const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
-    const years = [startYear, startYear + 1, startYear + 2, startYear + 3, startYear + 4]"""
-
-new_generate = """  async function generateBudgetReport(selections, format) {
+old_report = """  async function generateBudgetReport(selections, format) {
     const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
     const sy = Number(selections.startYear || startYear)
-    const years = [sy, sy + 1, sy + 2, sy + 3, sy + 4]"""
-code = code.replace(old_generate, new_generate)
+    const years = [sy, sy + 1, sy + 2, sy + 3, sy + 4]
+    const tableRows = []
+    years.forEach(y => MONTH_NAMES.forEach((m, i) => {
+      const key = `${y}-${i + 1}`
+      const row = rows[key]
+      const actualUsd = actuals[key] || 0
+      if (row) tableRows.push([`${m} ${y}`, `${row.occ}%`, f(convertFromUsd(row.adr, 'USD', { USD: 1 })), f(Number(row.revenue) || 0), f(actualUsd), f((Number(row.revenue) || 0) - actualUsd)])
+    }))
+    const sections = [{ heading: 'Room Revenue Budget', columns: ['Month', 'Budgeted Occ %', 'Budgeted ADR', 'Budgeted Revenue', 'Actual Revenue', 'Variance'], rows: tableRows }]
+    const title = 'Room Revenue Budget'
+    const subtitle = `${activeCompany.name} • ${startYear}–${startYear + 4} • ${selections.currency}`
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'room_revenue_budget' })
+    if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'room_revenue_budget' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'room_revenue_budget' })
+  }"""
+
+new_report = """  async function generateBudgetReport(selections, format) {
+    const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
+    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
+    const sy = Number(selections.startYear || startYear)
+    const years = [sy, sy + 1, sy + 2, sy + 3, sy + 4]
+    const tableRows = []
+    years.forEach(y => MONTH_NAMES.forEach((m, i) => {
+      const key = `${y}-${i + 1}`
+      const row = rows[key]
+      const actualUsd = actuals[key] || 0
+      if (row) {
+        const days = daysInMonth(y, i + 1)
+        const monthlyRevUsd = (row.revenue_usd || 0) * days
+        const roomsOcc = Math.round(totalRooms * (Number(row.occ) || 0) / 100)
+        const adrUsd = roomsOcc > 0 ? (row.revenue_usd / roomsOcc) : 0
+        tableRows.push([
+          `${m} ${y}`, 
+          `${row.occ}%`, 
+          f(adrUsd), 
+          f(monthlyRevUsd), 
+          f(actualUsd), 
+          f(monthlyRevUsd - actualUsd)
+        ])
+      }
+    }))
+    const sections = [{ heading: 'Room Revenue Budget', columns: ['Month', 'Budgeted Occ %', 'Budgeted ADR', 'Budgeted Monthly Revenue', 'Actual Revenue', 'Variance'], rows: tableRows }]
+    const title = 'Room Revenue Budget'
+    const subtitle = `${activeCompany.name} • ${startYear}–${startYear + 4} • ${selections.currency}`
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'room_revenue_budget' })
+    if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'room_revenue_budget' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'room_revenue_budget' })
+  }"""
+code = code.replace(old_report, new_report)
 
 with open('src/pages/HotelBudget.jsx', 'w') as f:
     f.write(code)
