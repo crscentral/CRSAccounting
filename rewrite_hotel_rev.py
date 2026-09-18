@@ -1,138 +1,85 @@
-import { useEffect, useState } from 'react'
-import { Plus, Trash2, Pencil, BedDouble } from 'lucide-react'
-import { supabase } from '../lib/supabaseClient'
-import { useAuth } from '../lib/AuthContext'
-import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
-import { resolveReportPeriod } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
-import { CURRENCY_LIST } from '../lib/currencies'
-import PageHeader from '../components/PageHeader'
-import KpiCard from '../components/KpiCard'
-import DataTable from '../components/DataTable'
-import Modal, { Field } from '../components/Modal'
-import AccountFormModal from '../components/AccountFormModal'
-import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
+import re
 
-export default function HotelRevenue() {
-  const { activeCompany, activeProduct, can } = useAuth()
-  const cp = useCurrencyAndPeriod()
-  const [roomModalOpen, setRoomModalOpen] = useState(false)
+with open('src/pages/HotelRevenue.jsx', 'r') as f:
+    code = f.read()
+
+# 1. Add lock state
+old_states = """  const [modalOpen, setModalOpen] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
+  const [reportModalOpen, setReportModalOpen] = useState(false)"""
+
+new_states = """  const [roomModalOpen, setRoomModalOpen] = useState(false)
   const [ancillaryModalOpen, setAncillaryModalOpen] = useState(false)
   const [newHeadModalOpen, setNewHeadModalOpen] = useState(false)
+  const [editingRow, setEditingRow] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
-  const [roomStats, setRoomStats] = useState([])
-  const [ancillary, setAncillary] = useState([])
-  const [revenueAccounts, setRevenueAccounts] = useState([])
-  const [totalRooms, setTotalRooms] = useState(0)
+  const [isLocked, setIsLocked] = useState(localStorage.getItem(`daily_rev_lock_${activeCompany?.id}`) === 'true')"""
+# Wait, let's just do a clean replace using regex or find/replace on known strings.
 
-  useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
+code = re.sub(r'const \[roomModalOpen, setRoomModalOpen\] = useState\(false\)\n  const \[ancillaryModalOpen, setAncillaryModalOpen\] = useState\(false\)\n  const \[newHeadModalOpen, setNewHeadModalOpen\] = useState\(false\)\n  const \[editingRow, setEditingRow\] = useState\(null\)\n  const \[reportModalOpen, setReportModalOpen\] = useState\(false\)', new_states, code)
 
-  async function loadAll() {
-    const [{ data: room }, { data: anc }, { data: accs }, { data: settings }] = await Promise.all([
-      supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to).order('stat_date', { ascending: false }),
-      supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to).order('entry_date', { ascending: false }),
-      supabase.from('accounts').select('id, code, name').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').neq('code', '4010').order('code'),
-      supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
-    ])
-    setRoomStats(room || [])
-    setAncillary(anc || [])
-    setRevenueAccounts(accs || [])
-    setTotalRooms(settings?.total_rooms || 0)
-  }
-
-  function openEditRoom(row) {
-    setMode('room')
-    setEditingId(row.id)
-    setStatDate(row.stat_date)
-    setRoomsOccupied(row.rooms_occupied)
-    setCurrency(row.currency || 'USD')
-    setRoomRevenue(row.room_revenue)
-    setCollected(row.room_revenue_collected)
-    setNotes(row.notes || '')
-    setModalOpen(true)
-  }
-
-  function openEditRoom(row) {
-    setEditingRow(row)
-    setRoomModalOpen(true)
-  }
-
-  async function handleDeleteRoom(row) {
-    if (!confirm('Delete this room revenue entry?')) return
-    await supabase.from('hotel_room_stats').delete().eq('id', row.id)
-    loadAll()
-  }
-  function openEditAncillary(row) {
-    setEditingRow(row)
-    setAncillaryModalOpen(true)
-  }
-
-  async function handleDeleteAncillary(row) {
-    if (!confirm('Delete this entry?')) return
-    await supabase.from('hotel_revenue_entries').delete().eq('id', row.id)
-    loadAll()
-  }
-
-  async function generateRevenueReport(selections, format) {
-    const range = resolveReportPeriod(selections.period, 1, selections.customFrom, selections.customTo)
-    const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
-
-    const [{ data: room }, { data: anc }] = await Promise.all([
-      supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to).order('stat_date', { ascending: false }),
-      supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to).order('entry_date', { ascending: false }),
-    ])
-    const sections = [
-      { heading: 'Room Revenue', columns: ['Date', 'Rooms Occupied', 'Room Revenue', 'Collected'], rows: (room || []).map(r => [r.stat_date, r.rooms_occupied, f(r.room_revenue_usd), f(r.room_revenue_collected_usd)]) },
-      { heading: 'Ancillary Revenue', columns: ['Date', 'Head', 'Amount', 'Notes'], rows: (anc || []).map(r => [r.entry_date, r.account ? `${r.account.code} - ${r.account.name}` : '—', f(r.amount_usd), r.notes || '—']) },
-    ]
-    const title = 'Daily Revenue Collection'
-    const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'daily_revenue_collection' })
-    if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'daily_revenue_collection' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'daily_revenue_collection' })
-  }
-
-  if (!activeCompany) return null
-
-  const totalRoomRevenue = roomStats.reduce((s, r) => s + Number(r.room_revenue_usd), 0)
-  const totalCollected = roomStats.reduce((s, r) => s + Number(r.room_revenue_collected_usd), 0)
-  const totalAncillary = ancillary.reduce((s, r) => s + Number(r.amount_usd), 0)
-
-  return (
-    <div>
-      <PageHeader
-        title="Daily Revenue Collection"
-        subtitle={activeCompany.name}
-        currencyProps={cp.currencyProps}
-        periodProps={cp.periodProps}
-        actions={
-          <div className="flex flex-wrap gap-2">
+# 2. Add lock button to header actions
+old_header_actions = """        actions={
+          <div className="flex gap-2">
             <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400">
               Download Report
             </button>
             {can(['owner', 'admin', 'accountant']) && (
               <>
-                <button onClick={() => setRoomModalOpen(true)} className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
-                  <BedDouble size={15} /> Room Revenue
+                <button onClick={() => { setEditingRow(null); setRoomModalOpen(true) }} className="flex items-center gap-1.5 bg-navy-600 text-white text-sm font-medium px-3 py-2 rounded-lg hover:bg-navy-700">
+                  <Plus size={16} /> Room Revenue
                 </button>
-                <button onClick={() => setAncillaryModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg">
-                  <Plus size={15} /> Other Revenue
+                <button onClick={() => { setEditingRow(null); setAncillaryModalOpen(true) }} className="flex items-center gap-1.5 bg-white border border-slate-300 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:bg-slate-50">
+                  <Plus size={16} /> Other Revenue
                 </button>
               </>
             )}
           </div>
-        }
-      />
+        }"""
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
-        <KpiCard label="Room Revenue" value={cp.fmt(totalRoomRevenue)} tone="green" />
-        <KpiCard label="Room Revenue Collected" value={cp.fmt(totalCollected)} tone="blue" />
-        <KpiCard label="Ancillary Revenue" value={cp.fmt(totalAncillary)} tone="gold" />
-      </div>
+new_header_actions = """        actions={
+          <div className="flex gap-2 items-center">
+            {can(['owner', 'admin']) && (
+              <button onClick={() => {
+                const newVal = !isLocked
+                setIsLocked(newVal)
+                localStorage.setItem(`daily_rev_lock_${activeCompany?.id}`, String(newVal))
+              }} className={`flex items-center gap-1.5 border text-sm font-medium px-3 py-2 rounded-lg transition-colors ${isLocked ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}>
+                {isLocked ? '🔒 Unlock Page' : '🔓 Lock Page'}
+              </button>
+            )}
+            <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400">
+              Download Report
+            </button>
+            {can(['owner', 'admin', 'accountant']) && (
+              <>
+                <button disabled={isLocked} onClick={() => { setEditingRow(null); setRoomModalOpen(true) }} className="flex items-center gap-1.5 bg-navy-600 text-white text-sm font-medium px-3 py-2 rounded-lg hover:bg-navy-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <Plus size={16} /> Room Revenue
+                </button>
+                <button disabled={isLocked} onClick={() => { setEditingRow(null); setAncillaryModalOpen(true) }} className="flex items-center gap-1.5 bg-white border border-slate-300 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <Plus size={16} /> Other Revenue
+                </button>
+              </>
+            )}
+          </div>
+        }"""
+code = code.replace(old_header_actions, new_header_actions)
 
-      {isLocked && (
+# 3. Add lock message and rewrite room revenue table
+old_room_section = """      <h3 className="font-semibold text-slate-700 mb-3">Room Revenue</h3>
+      <DataTable
+        columns={[
+          { key: 'stat_date', label: 'Date' },
+          { key: 'rooms_occupied', label: 'Rooms Occupied' },
+          { key: 'room_revenue_usd', label: 'Room Revenue', render: r => cp.fmt(r.room_revenue_usd) },
+          { key: 'room_revenue_collected_usd', label: 'Collected', render: r => cp.fmt(r.room_revenue_collected_usd) },
+          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <button onClick={() => handleDeleteRoom(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button> }] : []),
+        ]}
+        rows={roomStats}
+        emptyMessage="No room revenue entries in this range."
+      />"""
+
+new_room_section = """      {isLocked && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
           <strong>🔒 Page Locked:</strong> Manual posting is disabled. Revenue is fed automatically from the Guest Invoices page. Click 'Unlock Page' above if you need to add manual walk-in entries.
         </div>
@@ -153,15 +100,23 @@ export default function HotelRevenue() {
         ]}
         rows={roomStats}
         emptyMessage="No room revenue entries in this range."
-      />
+      />"""
+code = code.replace(old_room_section, new_room_section)
 
-      <h3 className="font-semibold text-slate-700 mb-3 mt-6 flex items-center justify-between">
-        <span>Other Revenue (Extra Bed, Early Check-in, Late Check-out, Breakfast, Transportation, SPA, etc.)</span>
-        {can(['owner', 'admin', 'accountant']) && (
-          <button onClick={() => setNewHeadModalOpen(true)} className="text-xs text-navy-600 hover:text-navy-800 font-medium">+ Add Revenue Head</button>
-        )}
-      </h3>
-      <DataTable
+
+old_ancillary_table = """      <DataTable
+        columns={[
+          { key: 'entry_date', label: 'Date' },
+          { key: 'account', label: 'Revenue Head', render: r => r.account ? `${r.account.code} - ${r.account.name}` : '—' },
+          { key: 'amount_usd', label: 'Amount', render: r => cp.fmt(r.amount_usd) },
+          { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
+          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <button onClick={() => handleDeleteAncillary(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button> }] : []),
+        ]}
+        rows={ancillary}
+        emptyMessage="No other revenue entries in this range."
+      />"""
+
+new_ancillary_table = """      <DataTable
         columns={[
           { key: 'entry_date', label: 'Date' },
           { key: 'account', label: 'Revenue Head', render: r => r.account ? `${r.account.code} - ${r.account.name}` : '—' },
@@ -176,30 +131,14 @@ export default function HotelRevenue() {
         ]}
         rows={ancillary}
         emptyMessage="No other revenue entries in this range."
-      />
+      />"""
+code = code.replace(old_ancillary_table, new_ancillary_table)
 
-      {roomModalOpen && (
-        <RoomRevenueFormModal companyId={activeCompany.id} product={activeProduct} totalRooms={totalRooms} editingRow={editingRow} onClose={() => { setRoomModalOpen(false); setEditingRow(null); }} onSaved={loadAll} />
-      )}
-      {ancillaryModalOpen && (
-        <AncillaryRevenueFormModal companyId={activeCompany.id} product={activeProduct} accounts={revenueAccounts} totalRooms={totalRooms} editingRow={editingRow} roomStats={roomStats} onClose={() => { setAncillaryModalOpen(false); setEditingRow(null); }} onSaved={loadAll} />
-      )}
-      {newHeadModalOpen && (
-        <AccountFormModal companyId={activeCompany.id} product={activeProduct} account={{ type: 'Revenue', subtype: 'Front Office' }} onClose={() => setNewHeadModalOpen(false)} onSaved={loadAll} />
-      )}
-      {reportModalOpen && (
-        <ReportOptionsModal
-          title="Daily Revenue Collection"
-          fields={[{ type: 'currency', key: 'currency', default: cp.displayCurrency }, { type: 'period', key: 'period', default: 'ALL_TIME' }]}
-          onGenerate={generateRevenueReport}
-          onClose={() => setReportModalOpen(false)}
-        />
-      )}
-    </div>
-  )
-}
 
-function RoomRevenueFormModal({ companyId, product, totalRooms, editingRow, onClose, onSaved }) {
+# Rewrite RoomRevenueFormModal completely
+# using regex to just replace the whole function
+old_modal_regex = r'function RoomRevenueFormModal\(\{\s*companyId,\s*product,\s*totalRooms,\s*editingRow,\s*onClose,\s*onSaved\s*\}\) \{.*?\n\}'
+new_modal_code = """function RoomRevenueFormModal({ companyId, product, totalRooms, editingRow, onClose, onSaved }) {
   const [statDate, setStatDate] = useState(editingRow?.stat_date || new Date().toISOString().slice(0, 10))
   const [roomsOccupied, setRoomsOccupied] = useState(editingRow?.manual_rooms_occupied ?? '')
   const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
@@ -283,9 +222,14 @@ function RoomRevenueFormModal({ companyId, product, totalRooms, editingRow, onCl
     </Modal>
   )
 }
+"""
+
+code = re.sub(old_modal_regex, new_modal_code, code, flags=re.DOTALL)
 
 
-function AncillaryRevenueFormModal({ companyId, product, accounts, totalRooms, editingRow, roomStats, onClose, onSaved }) {
+# Rewrite AncillaryRevenueFormModal
+old_anc_regex = r'function AncillaryRevenueFormModal\(\{\s*companyId,\s*product,\s*accounts,\s*totalRooms,\s*editingRow,\s*roomStats,\s*onClose,\s*onSaved\s*\}\) \{.*?\n\}'
+new_anc_code = """function AncillaryRevenueFormModal({ companyId, product, accounts, totalRooms, editingRow, roomStats, onClose, onSaved }) {
   const [entryDate, setEntryDate] = useState(editingRow?.entry_date || new Date().toISOString().slice(0, 10))
   const [accountId, setAccountId] = useState(editingRow?.account_id || accounts[0]?.id || '')
   const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
@@ -357,4 +301,8 @@ function AncillaryRevenueFormModal({ companyId, product, accounts, totalRooms, e
     </Modal>
   )
 }
+"""
+code = re.sub(old_anc_regex, new_anc_code, code, flags=re.DOTALL)
 
+with open('src/pages/HotelRevenue.jsx', 'w') as f:
+    f.write(code)
