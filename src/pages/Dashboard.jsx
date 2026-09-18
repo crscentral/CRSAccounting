@@ -142,18 +142,18 @@ export default function Dashboard() {
       ...(recentS || []).map(r => ({ date: r.invoice_date, label: r.contact?.name || r.invoice_number, amount: r.amount, currency: r.currency })),
       ...(recentP || []).map(r => ({ date: r.invoice_date, label: r.contact?.name || r.supplier_name_freeform || r.invoice_number, amount: r.amount, currency: r.currency })),
       ...(recentR || []).map(r => ({ date: r.receipt_date, label: 'Payment Received', amount: r.amount, currency: r.currency })),
-    ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5)
+    ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 5)
     if (activeProduct === 'hotel') {
       const [{ data: hgi }, { data: hre }, { data: hee }] = await Promise.all([
-        supabase.from('hotel_guest_invoices').select('invoice_number, invoice_date, invoice_amount_usd, currency, guest_name').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }).limit(10),
+        supabase.from('hotel_guest_invoices').select('id, invoice_date, invoice_amount_usd, currency, guest_name').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }).limit(10),
         supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, currency, account:accounts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('entry_date', { ascending: false }).limit(10),
         supabase.from('hotel_expense_entries').select('expense_date, amount_usd, currency, account:accounts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('expense_date', { ascending: false }).limit(10),
       ])
       const hCombined = [
-        ...(hgi || []).map(r => ({ date: r.invoice_date, label: r.guest_name || r.invoice_number, amount: r.invoice_amount_usd, currency: 'USD' })),
+        ...(hgi || []).map(r => ({ date: r.invoice_date, label: r.guest_name || 'Guest Invoice', amount: r.invoice_amount_usd, currency: 'USD' })),
         ...(hre || []).map(r => ({ date: r.entry_date, label: r.account?.name || 'Revenue', amount: r.amount_usd, currency: 'USD' })),
         ...(hee || []).map(r => ({ date: r.expense_date, label: r.account?.name || 'Expense', amount: r.amount_usd, currency: 'USD' })),
-      ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10)
+      ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 10)
       setRecentTx(hCombined)
     } else {
       setRecentTx(combined)
@@ -240,7 +240,7 @@ export default function Dashboard() {
         ...sSel.map(i => ({ date: i.invoice_date, label: i.contact?.name || i.invoice_number, amount: fmt(i.amount_usd) })),
         ...pSel.map(i => ({ date: i.invoice_date, label: i.invoice_number, amount: fmt(i.amount_usd) })),
         ...rSel.map(i => ({ date: i.receipt_date, label: 'Payment Received', amount: fmt(i.amount_usd) })),
-      ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10)
+      ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 10)
       sections.push({ heading: 'Recent Transactions', columns: ['Date', 'Description', 'Amount'], rows: combined.map(t => [t.date, t.label, t.amount]) })
     }
 
@@ -308,7 +308,8 @@ export default function Dashboard() {
         amount: i.invoice_amount_usd,
         amount_usd: i.invoice_amount_usd,
         due_date: i.invoice_date,
-        status: 'Pending'
+        status: 'Pending',
+        invoice_number: i.id ? i.id.slice(0, 8).toUpperCase() : '—'
       }))
     : sales.filter(i => i.status !== 'Paid')
   const draftExpenses = activeProduct === 'hotel' ? [] : purchases.filter(i => i.status === 'Draft')
@@ -546,40 +547,48 @@ export default function Dashboard() {
           </div>
           {hotelStats.dailyTrend.length > 1 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-              <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-                <h3 className="font-semibold text-slate-700 mb-4">Actual vs Budget ({hotelStats.budgetCurrency})</h3>
-                <div className="h-64 sm:h-72 flex flex-col justify-center">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col items-center">
+                <h3 className="font-semibold text-slate-700 mb-4 self-start">Actual vs Budget ({hotelStats.budgetCurrency})</h3>
+                <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={[
                         { name: 'Actual', value: Math.abs(hotelStats.totalRevenue), realValue: hotelStats.totalRevenue, fill: '#1B3A6B' },
                         { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetUsd), realValue: hotelStats.totalBudgetUsd, fill: '#C9A84C' },
                         { name: 'Variance', value: Math.abs(hotelStats.totalVarianceUsd), realValue: hotelStats.totalVarianceUsd, fill: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444' }
-                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="60%" outerRadius="80%" paddingAngle={2} label={false}>
+                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} label={false}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
                       <Tooltip formatter={(val, name, props) => new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(props.payload.realValue)} />
-                      <Legend content={(props) => renderCustomLegend(props, (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(v))} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center text-sm mt-2 text-slate-600 w-full">
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#1B3A6B'}}></span> Actual: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(hotelStats.totalRevenue)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#C9A84C'}}></span> Budgeted: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(hotelStats.totalBudgetUsd)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444'}}></span> Variance: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(hotelStats.totalVarianceUsd)}</div>
+                </div>
               </div>
-              <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-                <h3 className="font-semibold text-slate-700 mb-4">Actual vs Budget ({cp.displayCurrency})</h3>
-                <div className="h-64 sm:h-72 flex flex-col justify-center">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col items-center">
+                <h3 className="font-semibold text-slate-700 mb-4 self-start">Actual vs Budget ({cp.displayCurrency})</h3>
+                <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={[
                         { name: 'Actual', value: Math.abs(hotelStats.totalRevenue), realValue: hotelStats.totalRevenue, fill: '#1B3A6B' },
                         { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetUsd), realValue: hotelStats.totalBudgetUsd, fill: '#C9A84C' },
                         { name: 'Variance', value: Math.abs(hotelStats.totalVarianceUsd), realValue: hotelStats.totalVarianceUsd, fill: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444' }
-                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="60%" outerRadius="80%" paddingAngle={2} label={false}>
+                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} label={false}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
                       <Tooltip formatter={(val, name, props) => cp.fmt(props.payload.realValue)} />
-                      <Legend content={(props) => renderCustomLegend(props, cp.fmt)} />
                     </PieChart>
                   </ResponsiveContainer>
+                </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center text-sm mt-2 text-slate-600 w-full">
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#1B3A6B'}}></span> Actual: {cp.fmt(hotelStats.totalRevenue)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#C9A84C'}}></span> Budgeted: {cp.fmt(hotelStats.totalBudgetUsd)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444'}}></span> Variance: {cp.fmt(hotelStats.totalVarianceUsd)}</div>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 lg:col-span-2">
