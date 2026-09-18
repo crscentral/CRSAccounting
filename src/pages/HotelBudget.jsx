@@ -243,7 +243,7 @@ export default function HotelBudget() {
   </div>
 </td>
                     <td className="py-1.5 px-3 text-slate-500 text-xs">{(row.currency || displayCurrency) === 'USD' ? formatMoney(row.revenue || 0, 'USD') : (row.revenue_usd ? formatMoney(row.revenue_usd, 'USD') : <span className="text-slate-300 italic text-[10px]">On save</span>)}</td>
-                    <td className="py-1.5 px-3 text-slate-500">{fmt(monthlyBudget)}</td>
+                    <td className="py-1.5 px-3 text-slate-500">{formatMoney(monthlyBudget, row.currency || displayCurrency)}</td>
                     <td className="py-1.5 px-3 text-slate-500">{fmt(actualUsd)}</td>
                     <td className="py-1.5 px-3">
                       {can(['owner', 'admin', 'accountant']) && (
