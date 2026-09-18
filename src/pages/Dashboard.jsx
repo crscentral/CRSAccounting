@@ -101,7 +101,8 @@ export default function Dashboard() {
     
     const dailyTrend = Object.values(dailyTrendMap).sort((a, b) => a.date.localeCompare(b.date))
     const totalVarianceUsd = totalRevenue - totalBudgetUsd
-    setHotelStats({ occupancyPct, adr, revpar, invoicesPending, totalRevenue, totalBudgetUsd, totalVarianceUsd, dailyTrend })
+    setHotelStats({ occupancyPct, adr, revpar, invoicesPending, totalRevenue, totalBudgetUsd, totalVarianceUsd,
+      budgetCurrency: budgetRows?.[0]?.currency || activeCompany?.currency || 'USD', dailyTrend })
   }
 
   async function loadData() {
@@ -263,8 +264,10 @@ export default function Dashboard() {
     outstanding = hotelGuestInvoices.reduce((s, i) => s + (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd)), 0)
     
     // Collected = Guest Invoices Paid + Daily Room Revenue Collected
-    collected = hotelGuestInvoices.reduce((s, i) => s + Number(i.collected_amount_usd), 0) + 
-                hotelRoomStats.reduce((s, r) => s + Number(r.room_revenue_collected_usd), 0)
+    const manualRoomCollected = hotelRoomStats.reduce((s, r) => s + Number(r.manual_room_revenue_collected_usd || 0), 0)
+    const guestInvoiceCollected = hotelGuestInvoices.reduce((s, i) => s + Number(i.collected_amount_usd || 0), 0)
+    const ancillaryCollected = hotelRevenueEntries.reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+    collected = manualRoomCollected + guestInvoiceCollected + ancillaryCollected
                 
     // Expenses Made = Expense entries + amortized AMC (assuming paid for simplicity)
     const start = new Date(cp.range.from)
@@ -283,7 +286,17 @@ export default function Dashboard() {
 
   const netProfit = totalBilled - totalExpenses
   const actualProfit = collected - expensesMade
-  const draftInvoices = activeProduct === 'hotel' ? hotelGuestInvoices.filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)) : sales.filter(i => i.status !== 'Paid')
+  const draftInvoices = activeProduct === 'hotel' 
+    ? hotelGuestInvoices.filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)).map(i => ({
+        ...i,
+        contact: { name: i.guest_name || 'Guest' },
+        balance_due: Number(i.invoice_amount_usd) - Number(i.collected_amount_usd),
+        amount: i.invoice_amount_usd,
+        amount_usd: i.invoice_amount_usd,
+        due_date: i.invoice_date,
+        status: 'Pending'
+      }))
+    : sales.filter(i => i.status !== 'Paid')
   const draftExpenses = activeProduct === 'hotel' ? [] : purchases.filter(i => i.status === 'Draft')
 
   // YTD (respects company fiscal year start month) — independent of the page's period selector
@@ -292,9 +305,8 @@ export default function Dashboard() {
   let ytdExpenses = 0
   
   if (activeProduct === 'hotel') {
-    // Note: since we only query ledgerEntries for the currently selected period (not YTD),
-    // calculating true YTD requires fetching ledger entries for the YTD range.
-    // For now, we will leave YTD as 0 for Hotel unless we fetch it.
+    ytdRevenue = totalBilled
+    ytdExpenses = totalExpenses
   } else {
     const ytdSales = allSales.filter(i => i.invoice_date >= ytdRange.from && i.invoice_date <= ytdRange.to)
     const ytdPurchases = allPurchases.filter(i => i.invoice_date >= ytdRange.from && i.invoice_date <= ytdRange.to)
@@ -308,8 +320,8 @@ export default function Dashboard() {
   const monthlyMap = {}
   
   if (activeProduct === 'hotel') {
-    allTimeRevenue = ledgerEntries.filter(e => accounts.find(a => a.id === e.account_id)?.type === 'Revenue').reduce((s, e) => s + (Number(e.credit_usd) - Number(e.debit_usd)), 0)
-    allTimeExpenses = ledgerEntries.filter(e => accounts.find(a => a.id === e.account_id)?.type === 'Expenses').reduce((s, e) => s + (Number(e.debit_usd) - Number(e.credit_usd)), 0)
+    allTimeRevenue = totalBilled
+    allTimeExpenses = totalExpenses
     
     hotelGuestInvoices.forEach(i => {
       const key = i.invoice_date.slice(0, 7)
@@ -521,7 +533,7 @@ export default function Dashboard() {
           {hotelStats.dailyTrend.length > 1 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
               <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-                <h3 className="font-semibold text-slate-700 mb-4">Actual vs Budget ({activeCompany?.currency || 'USD'})</h3>
+                <h3 className="font-semibold text-slate-700 mb-4">Actual vs Budget ({hotelStats.budgetCurrency})</h3>
                 <div className="h-64 sm:h-72 flex flex-col justify-center">
                   <ResponsiveContainer width="100%" height="80%">
                     <PieChart>
@@ -529,11 +541,11 @@ export default function Dashboard() {
                         { name: 'Actual', value: Math.abs(hotelStats.totalRevenue), realValue: hotelStats.totalRevenue, fill: '#1B3A6B' },
                         { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetUsd), realValue: hotelStats.totalBudgetUsd, fill: '#C9A84C' },
                         { name: 'Variance', value: Math.abs(hotelStats.totalVarianceUsd), realValue: hotelStats.totalVarianceUsd, fill: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444' }
-                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} label={false}>
+                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} label={false}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
-                      <Tooltip formatter={(val, name, props) => new Intl.NumberFormat('en-US', { style: 'currency', currency: activeCompany?.currency || 'USD' }).format(props.payload.realValue)} />
-                      <Legend content={(props) => renderCustomLegend(props, (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: activeCompany?.currency || 'USD' }).format(v))} />
+                      <Tooltip formatter={(val, name, props) => new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(props.payload.realValue)} />
+                      <Legend content={(props) => renderCustomLegend(props, (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(v))} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -547,7 +559,7 @@ export default function Dashboard() {
                         { name: 'Actual', value: Math.abs(hotelStats.totalRevenue), realValue: hotelStats.totalRevenue, fill: '#1B3A6B' },
                         { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetUsd), realValue: hotelStats.totalBudgetUsd, fill: '#C9A84C' },
                         { name: 'Variance', value: Math.abs(hotelStats.totalVarianceUsd), realValue: hotelStats.totalVarianceUsd, fill: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444' }
-                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} label={false}>
+                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} label={false}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
                       <Tooltip formatter={(val, name, props) => cp.fmt(props.payload.realValue)} />
