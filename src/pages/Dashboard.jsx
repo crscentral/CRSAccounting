@@ -52,13 +52,37 @@ export default function Dashboard() {
     // Daily Actual vs Budget trend -- budget is now saved as the DAILY budgeted figure directly.
     const budgetByMonth = {}
     ;(budgetRows || []).forEach(b => { budgetByMonth[`${b.budget_year}-${b.budget_month}`] = Number(b.budgeted_room_revenue_usd) })
-    const dailyTrend = (stats || []).map(s => {
-      const [y, m] = s.stat_date.split('-')
-      const key = `${y}-${Number(m)}`
-      const dailyBudget = budgetByMonth[key] || 0
-      return { date: s.stat_date, Actual: Number(s.room_revenue_usd), Budget: dailyBudget }
+    
+    // Create a complete date range array for the trend chart and budget calculation
+    const dailyTrendMap = {}
+    let currentDate = new Date(cp.range.from)
+    const endDate = new Date(cp.range.to)
+    let totalBudgetUsd = 0
+    
+    while (currentDate <= endDate) {
+      const d = currentDate.toISOString().slice(0, 10)
+      const y = currentDate.getUTCFullYear()
+      const m = currentDate.getUTCMonth() + 1
+      const dailyBudget = budgetByMonth[`${y}-${m}`] || 0
+      dailyTrendMap[d] = { date: d, Actual: 0, Budget: dailyBudget }
+      totalBudgetUsd += dailyBudget
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1)
+    }
+    
+    // Fill in the actuals
+    ;(stats || []).forEach(s => {
+      if (dailyTrendMap[s.stat_date]) {
+        dailyTrendMap[s.stat_date].Actual = Number(s.room_revenue_usd)
+      } else {
+        // If it's somehow out of bounds but returned by the query, add it anyway
+        const [y, m] = s.stat_date.split('-')
+        const dailyBudget = budgetByMonth[`${y}-${Number(m)}`] || 0
+        dailyTrendMap[s.stat_date] = { date: s.stat_date, Actual: Number(s.room_revenue_usd), Budget: dailyBudget }
+        totalBudgetUsd += dailyBudget
+      }
     })
-    const totalBudgetUsd = dailyTrend.reduce((sum, d) => sum + d.Budget, 0)
+    
+    const dailyTrend = Object.values(dailyTrendMap).sort((a, b) => a.date.localeCompare(b.date))
     const totalVarianceUsd = totalRevenue - totalBudgetUsd
     setHotelStats({ occupancyPct, adr, revpar, invoicesPending, totalRevenue, totalBudgetUsd, totalVarianceUsd, dailyTrend })
   }
@@ -445,7 +469,7 @@ export default function Dashboard() {
                         { name: 'Actual', value: Math.abs(hotelStats.totalRevenue), realValue: hotelStats.totalRevenue, fill: '#1B3A6B' },
                         { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetUsd), realValue: hotelStats.totalBudgetUsd, fill: '#C9A84C' },
                         { name: 'Variance', value: Math.abs(hotelStats.totalVarianceUsd), realValue: hotelStats.totalVarianceUsd, fill: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444' }
-                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} label={false}>
+                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={100} label={({ cx, cy, midAngle, innerRadius, outerRadius, realValue, name }) => { const RADIAN = Math.PI / 180; const radius = outerRadius + 30; const x = cx + radius * Math.cos(-midAngle * RADIAN); const y = cy + radius * Math.sin(-midAngle * RADIAN); return <text x={x} y={y} fill="#475569" textAnchor={x > cx ? "start" : "end"} dominantBaseline="central" fontSize={11}>{name}: {cp.fmt(realValue)}</text>; }}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
                       <Tooltip formatter={(val, name, props) => cp.fmt(props.payload.realValue)} />
@@ -463,7 +487,7 @@ export default function Dashboard() {
                         { name: 'Actual', value: Math.abs(hotelStats.totalRevenue), realValue: hotelStats.totalRevenue, fill: '#1B3A6B' },
                         { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetUsd), realValue: hotelStats.totalBudgetUsd, fill: '#C9A84C' },
                         { name: 'Variance', value: Math.abs(hotelStats.totalVarianceUsd), realValue: hotelStats.totalVarianceUsd, fill: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444' }
-                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} label={false}>
+                      ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={100} label={({ cx, cy, midAngle, innerRadius, outerRadius, realValue, name }) => { const RADIAN = Math.PI / 180; const radius = outerRadius + 30; const x = cx + radius * Math.cos(-midAngle * RADIAN); const y = cy + radius * Math.sin(-midAngle * RADIAN); return <text x={x} y={y} fill="#475569" textAnchor={x > cx ? "start" : "end"} dominantBaseline="central" fontSize={11}>{name}: {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(realValue)}</text>; }}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
                       <Tooltip formatter={(val, name, props) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(props.payload.realValue)} />

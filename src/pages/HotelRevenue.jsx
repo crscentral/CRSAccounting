@@ -137,8 +137,9 @@ export default function HotelRevenue() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
+        <KpiCard label="Total Daily Revenue" value={cp.fmt(totalRoomRevenue + totalAncillary)} tone="slate" />
         <KpiCard label="Room Revenue" value={cp.fmt(totalRoomRevenue)} tone="green" />
-        <KpiCard label="Room Revenue Collected" value={cp.fmt(totalCollected)} tone="blue" />
+        <KpiCard label="Room Rev. Collected" value={cp.fmt(totalCollected)} tone="blue" />
         <KpiCard label="Ancillary Revenue" value={cp.fmt(totalAncillary)} tone="gold" />
       </div>
 
