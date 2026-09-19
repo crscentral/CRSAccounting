@@ -36,7 +36,7 @@ const NAV_ITEMS = [
 ]
 
 // Bottom tab bar shows only the most-used items on phones; rest live in the drawer.
-const MOBILE_TAB_ITEMS = ['/', '/sales-invoices', '/purchase-invoices', '/analytics']
+const MOBILE_TAB_ITEMS = ['/', '/sales-invoices', '/purchase-invoices', '/hotel-stats', '/hotel-revenue', '/analytics']
 
 const PRODUCT_LABELS = { basic: 'CRS Basic Accounting', hotel: 'CRS Hotel Accounting', restaurant: 'CRS Restaurant Accounting' }
 
@@ -187,7 +187,7 @@ export default function AppShell() {
             className={({ isActive }) => `flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-[11px] ${isActive ? 'text-navy-600' : 'text-slate-400'}`}
           >
             <item.icon size={20} />
-            <span>{item.label.split(' ')[0]}</span>
+            {(() => { const short = item.to === '/hotel-stats' ? 'Rev & Occ' : item.to === '/hotel-revenue' ? 'Daily Rev' : item.label.split(' ')[0]; return <span>{short}</span> })()}
           </NavLink>
         ))}
         <button onClick={() => setDrawerOpen(true)} className="flex flex-col items-center gap-0.5 px-3 py-1.5 text-[11px] text-slate-400">

@@ -221,15 +221,15 @@ export default function FinancialPerformance() {
       )}
 
       {(tab === 'revenue' || tab === 'expenses') && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 overflow-x-auto">
           <h3 className="font-semibold text-slate-700 mb-4">{tab === 'revenue' ? 'Revenue' : 'Expenses'} by Account</h3>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left border-b border-slate-100 text-slate-400">
-                <th className="py-2 font-medium">Code</th>
-                <th className="py-2 font-medium">Account</th>
-                <th className="py-2 font-medium text-right">Amount</th>
-                <th className="py-2 font-medium text-right">% of Total</th>
+                <th className="py-2 font-medium whitespace-nowrap">Code</th>
+                <th className="py-2 font-medium whitespace-nowrap">Account</th>
+                <th className="py-2 font-medium text-right whitespace-nowrap">Amount</th>
+                <th className="py-2 font-medium text-right whitespace-nowrap">% of Total</th>
               </tr>
             </thead>
             <tbody>
@@ -271,23 +271,27 @@ export default function FinancialPerformance() {
             </div>
           </div>
 
-          <div className="grid grid-cols-5 gap-2 px-1 pb-2 text-[11px] font-semibold text-slate-400 uppercase">
-            <span>Month</span>
-            <span>Forecast Revenue</span>
-            <span>Forecast Expenses</span>
-            <span>Projected Profit</span>
-            <span>Profit Margin %</span>
-          </div>
-          <div className="space-y-2">
-            {MONTHS.map((m, i) => {
-              const month = i + 1
-              const row = monthMap[month] || { revenue_usd: 0, expenses_usd: 0 }
-              return (
-                <ForecastRow key={month} label={`${m} ${forecastYear}`} row={row}
-                  canEdit={can(['owner', 'admin', 'accountant'])}
-                  onSave={(rev, exp) => saveForecastRow(month, rev, exp)} fmt={cp.fmt} />
-              )
-            })}
+          <div className="overflow-x-auto">
+            <div className="min-w-[650px]">
+              <div className="grid grid-cols-5 gap-4 items-center pb-2 border-b border-slate-100 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <span>Month</span>
+                <span>Forecast Revenue</span>
+                <span>Forecast Expenses</span>
+                <span>Projected Profit</span>
+                <span>Profit Margin %</span>
+              </div>
+              <div className="space-y-2">
+                {MONTHS.map((m, i) => {
+                  const month = i + 1
+                  const row = monthMap[month] || { revenue_usd: 0, expenses_usd: 0 }
+                  return (
+                    <ForecastRow key={month} label={`${m} ${forecastYear}`} row={row}
+                      canEdit={can(['owner', 'admin', 'accountant'])}
+                      onSave={(rev, exp) => saveForecastRow(month, rev, exp)} fmt={cp.fmt} />
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -327,8 +331,8 @@ function ForecastRow({ label, row, canEdit, onSave, fmt }) {
   const profit = revenue - exp
   const marginPct = revenue ? (profit / revenue) * 100 : 0
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-center py-2 border-b border-slate-50 last:border-0">
-      <span className="text-sm text-slate-600 font-medium">{label}</span>
+    <div className="grid grid-cols-5 gap-4 items-center py-2 border-b border-slate-50 last:border-0">
+      <span className="text-sm text-slate-600 font-medium whitespace-nowrap">{label}</span>
       <input type="number" disabled={!canEdit} value={revenue} onChange={e => setRevenue(Number(e.target.value))}
         className="border border-slate-200 rounded-md px-2 py-1 text-sm disabled:bg-slate-50" />
       <input type="number" disabled={!canEdit} value={exp} onChange={e => setExp(Number(e.target.value))}
