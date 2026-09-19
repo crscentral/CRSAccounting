@@ -389,12 +389,16 @@ export default function HotelExpenseBudget() {
         </div>
       </div>
       
-      <ReportOptionsModal
-        open={reportModalOpen}
-        onClose={() => setReportModalOpen(false)}
-        onGenerate={generateReport}
-        includeYearSelection={false} 
-      />
+      {reportModalOpen && (
+        <ReportOptionsModal
+          onClose={() => setReportModalOpen(false)}
+          onGenerate={generateReport}
+          title="Expenses Budget"
+          fields={[
+            { type: 'currency', key: 'currency', default: displayCurrency }
+          ]}
+        />
+      )}
     </div>
   )
 }
