@@ -19,16 +19,31 @@ export default function Analytics() {
   const [sales, setSales] = useState([])
   const [purchases, setPurchases] = useState([])
   const [receipts, setReceipts] = useState([])
+  const [hotelRoomStats, setHotelRoomStats] = useState([])
+  const [hotelGuestInvoices, setHotelGuestInvoices] = useState([])
+  const [hotelExpenseEntries, setHotelExpenseEntries] = useState([])
+  const [hotelAmc, setHotelAmc] = useState([])
+  const [hotelRevenueEntries, setHotelRevenueEntries] = useState([])
 
   useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadData() {
-    const [{ data: s }, { data: p }, { data: r }] = await Promise.all([
+    const [{ data: s }, { data: p }, { data: r }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }] = await Promise.all([
       supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
+      activeProduct === 'hotel' ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to) : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to) : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to) : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct) : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to) : Promise.resolve({ data: [] }),
     ])
     setSales(s || []); setPurchases(p || []); setReceipts(r || [])
+    setHotelRoomStats(hrs || [])
+    setHotelGuestInvoices(hgi || [])
+    setHotelExpenseEntries(hee || [])
+    setHotelAmc(hamc || [])
+    setHotelRevenueEntries(hre || [])
   }
 
 
@@ -37,20 +52,55 @@ export default function Analytics() {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
 
-    const [{ data: s }, { data: p }, { data: r }] = await Promise.all([
+    const [{ data: s }, { data: p }, { data: r }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }] = await Promise.all([
       supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
       supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
       supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', range.from).lte('receipt_date', range.to),
+      activeProduct === 'hotel' ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to) : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to) : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', range.from).lte('expense_date', range.to) : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct) : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to) : Promise.resolve({ data: [] }),
     ])
     const sSel = s || [], pSel = p || [], rSel = r || []
-    const totalInvoiced = sSel.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
-    const outstanding = sSel.reduce((s2, i) => s2 + (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)), 0)
-    const collected = totalInvoiced - outstanding
-    const expenses = pSel.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
-
+    const hrsSel = hrs || [], hgiSel = hgi || [], heeSel = hee || [], hamcSel = hamc || [], hreSel = hre || []
+    let totalInvoiced = 0
+    let outstanding = 0
+    let collected = 0
+    let expenses = 0
     const monthlyMap = {}
-    sSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.amount_usd) })
-    rSel.forEach(i => { const k = i.receipt_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].collected += Number(i.amount_usd) })
+
+    if (activeProduct === 'hotel') {
+      const manualRoomCollected = hrsSel.reduce((s2, r) => s2 + Number(r.manual_room_revenue_collected_usd || 0), 0)
+      const manualRoomRevenue = hrsSel.reduce((s2, r) => s2 + Number(r.room_revenue_usd || 0), 0)
+      const guestInvoiceCollected = hgiSel.reduce((s2, i) => s2 + Number(i.collected_amount_usd || 0), 0)
+      const guestInvoiceRevenue = hgiSel.reduce((s2, i) => s2 + Number(i.invoice_amount_usd || 0), 0)
+      const ancillaryCollected = hreSel.reduce((s2, r) => s2 + Number(r.amount_usd || 0), 0)
+
+      totalInvoiced = manualRoomRevenue + guestInvoiceRevenue + ancillaryCollected
+      collected = manualRoomCollected + guestInvoiceCollected + ancillaryCollected
+      outstanding = hgiSel.reduce((s2, i) => s2 + (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd)), 0)
+
+      const start = new Date(range.from)
+      const end = new Date(Math.min(new Date(range.to).getTime(), new Date().getTime()))
+      const monthsInView = Math.max(1, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1)
+      const amcTotal = hamcSel.reduce((s2, r) => s2 + (Number(r.annual_amount_usd) / 12), 0) * monthsInView
+      expenses = heeSel.reduce((s2, e) => s2 + Number(e.amount_usd), 0) + amcTotal
+
+      hgiSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.invoice_amount_usd || 0); monthlyMap[k].collected += Number(i.collected_amount_usd || 0) })
+      hrsSel.forEach(i => { const k = i.stat_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.room_revenue_usd || 0); monthlyMap[k].collected += Number(i.manual_room_revenue_collected_usd || 0) })
+      hreSel.forEach(i => { const k = i.entry_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.amount_usd || 0); monthlyMap[k].collected += Number(i.amount_usd || 0) })
+
+    } else {
+      totalInvoiced = sSel.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
+      outstanding = sSel.reduce((s2, i) => s2 + (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)), 0)
+      collected = totalInvoiced - outstanding
+      expenses = pSel.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
+
+      sSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.amount_usd) })
+      rSel.forEach(i => { const k = i.receipt_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].collected += Number(i.amount_usd) })
+    }
+
     const monthlySel = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
 
     const sections = [
@@ -67,33 +117,100 @@ export default function Analytics() {
 
   if (!activeCompany) return null
 
-  const totalInvoiced = sales.reduce((s, i) => s + Number(i.amount_usd), 0)
-  const outstanding = sales.reduce((s, i) => s + (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)), 0)
-  const collected = totalInvoiced - outstanding
-  const expenses = purchases.reduce((s, i) => s + Number(i.amount_usd), 0)
-  const overdueCount = sales.filter(i => i.status === 'Overdue').length
+  let totalInvoiced = 0
+  let outstanding = 0
+  let collected = 0
+  let expenses = 0
+  let overdueCount = 0
 
   const monthlyMap = {}
-  sales.forEach(i => {
-    const key = i.invoice_date.slice(0, 7)
-    monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
-    monthlyMap[key].invoices += 1
-    monthlyMap[key].revenue += Number(i.amount_usd)
-  })
-  receipts.forEach(r => {
-    const key = r.receipt_date.slice(0, 7)
-    monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
-    monthlyMap[key].collected += Number(r.amount_usd)
-  })
+  let statusPie = []
+  let txTypePie = []
+
+  if (activeProduct === 'hotel') {
+    const manualRoomCollected = hotelRoomStats.reduce((s, r) => s + Number(r.manual_room_revenue_collected_usd || 0), 0)
+    const manualRoomRevenue = hotelRoomStats.reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
+    const guestInvoiceCollected = hotelGuestInvoices.reduce((s, i) => s + Number(i.collected_amount_usd || 0), 0)
+    const guestInvoiceRevenue = hotelGuestInvoices.reduce((s, i) => s + Number(i.invoice_amount_usd || 0), 0)
+    const ancillaryCollected = hotelRevenueEntries.reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+
+    totalInvoiced = manualRoomRevenue + guestInvoiceRevenue + ancillaryCollected
+    collected = manualRoomCollected + guestInvoiceCollected + ancillaryCollected
+    outstanding = hotelGuestInvoices.reduce((s, i) => s + (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd)), 0)
+
+    const start = new Date(cp.range.from)
+    const end = new Date(Math.min(new Date(cp.range.to).getTime(), new Date().getTime()))
+    const monthsInView = Math.max(1, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1)
+    const amcTotal = hotelAmc.reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0) * monthsInView
+    expenses = hotelExpenseEntries.reduce((s, e) => s + Number(e.amount_usd), 0) + amcTotal
+
+    overdueCount = hotelGuestInvoices.filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)).length
+
+    hotelGuestInvoices.forEach(i => {
+      const key = i.invoice_date.slice(0, 7)
+      monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
+      monthlyMap[key].invoices += 1
+      monthlyMap[key].revenue += Number(i.invoice_amount_usd || 0)
+      monthlyMap[key].collected += Number(i.collected_amount_usd || 0)
+    })
+    hotelRoomStats.forEach(r => {
+      const key = r.stat_date.slice(0, 7)
+      monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
+      monthlyMap[key].invoices += 1
+      monthlyMap[key].revenue += Number(r.room_revenue_usd || 0)
+      monthlyMap[key].collected += Number(r.manual_room_revenue_collected_usd || 0)
+    })
+    hotelRevenueEntries.forEach(r => {
+      const key = r.entry_date.slice(0, 7)
+      monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
+      monthlyMap[key].invoices += 1
+      monthlyMap[key].revenue += Number(r.amount_usd || 0)
+      monthlyMap[key].collected += Number(r.amount_usd || 0)
+    })
+
+    const fullyPaidCount = hotelGuestInvoices.filter(i => Number(i.collected_amount_usd) >= Number(i.invoice_amount_usd)).length
+    const pendingCount = hotelGuestInvoices.length - fullyPaidCount
+    statusPie = [
+      { name: 'Paid', value: fullyPaidCount },
+      { name: 'Pending', value: pendingCount }
+    ].filter(x => x.value > 0)
+
+    txTypePie = [
+      { name: 'Guest Invoices', value: hotelGuestInvoices.length },
+      { name: 'Daily Room Rev', value: hotelRoomStats.length },
+      { name: 'Ancillary Rev', value: hotelRevenueEntries.length },
+      { name: 'Expense Entries', value: hotelExpenseEntries.length }
+    ].filter(x => x.value > 0)
+
+  } else {
+    totalInvoiced = sales.reduce((s, i) => s + Number(i.amount_usd), 0)
+    outstanding = sales.reduce((s, i) => s + (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)), 0)
+    collected = totalInvoiced - outstanding
+    expenses = purchases.reduce((s, i) => s + Number(i.amount_usd), 0)
+    overdueCount = sales.filter(i => i.status === 'Overdue').length
+
+    sales.forEach(i => {
+      const key = i.invoice_date.slice(0, 7)
+      monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
+      monthlyMap[key].invoices += 1
+      monthlyMap[key].revenue += Number(i.amount_usd)
+    })
+    receipts.forEach(r => {
+      const key = r.receipt_date.slice(0, 7)
+      monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
+      monthlyMap[key].collected += Number(r.amount_usd)
+    })
+
+    const statusCounts = sales.reduce((acc, i) => { acc[i.status] = (acc[i.status] || 0) + 1; return acc }, {})
+    statusPie = Object.entries(statusCounts).map(([name, value]) => ({ name, value }))
+
+    txTypePie = [
+      { name: 'Sales Invoice', value: sales.length },
+      { name: 'Purchase Invoice', value: purchases.length },
+    ]
+  }
+
   const monthly = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
-
-  const statusCounts = sales.reduce((acc, i) => { acc[i.status] = (acc[i.status] || 0) + 1; return acc }, {})
-  const statusPie = Object.entries(statusCounts).map(([name, value]) => ({ name, value }))
-
-  const txTypePie = [
-    { name: 'Sales Invoice', value: sales.length },
-    { name: 'Purchase Invoice', value: purchases.length },
-  ]
 
   return (
     <div>
