@@ -218,8 +218,9 @@ export default function HotelBudget() {
 
       {years.map(year => (
         <div key={year} className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-5">
-          <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{year}</div>
-          <table className="w-full text-sm min-w-[720px]">
+          <div className="min-w-max w-full">
+            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{year}</div>
+            <table className="w-full text-sm">
             <thead className="bg-navy-800 text-white text-xs text-left">
               <tr>
                 <th className="py-2 px-3 font-semibold rounded-tl-lg">Month</th>
@@ -297,6 +298,7 @@ export default function HotelBudget() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       ))}
 
