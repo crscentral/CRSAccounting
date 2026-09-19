@@ -49,7 +49,7 @@ export default function HotelExpenseBudget() {
   useEffect(() => {
     async function fetchAccounts() {
       if (!activeCompany) return
-      const { data } = await supabase.from('accounts').select('code, name').eq('company_id', activeCompany.id).eq('type', 'Expense').order('code')
+      const { data } = await supabase.from('accounts').select('code, name').eq('company_id', activeCompany.id).eq('type', 'Expenses').order('code')
       setAccounts(data || [])
     }
     fetchAccounts()
@@ -62,7 +62,7 @@ export default function HotelExpenseBudget() {
 
       const [{ data: budgetRows }, { data: ledgerRows }] = await Promise.all([
         supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('budget_year', selectedYear),
-        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('entry_date', `${selectedYear}-01-01`).lte('entry_date', `${selectedYear}-12-31`).eq('accounts.type', 'Expense')
+        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('entry_date', `${selectedYear}-01-01`).lte('entry_date', `${selectedYear}-12-31`).eq('accounts.type', 'Expenses')
       ])
 
       const bMap = {}
