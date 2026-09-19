@@ -1,4 +1,6 @@
-import { useEffect, useState, useMemo } from 'react'
+const fs = require('fs')
+
+const code = `import { useEffect, useState, useMemo } from 'react'
 import { Save, TrendingUp, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
@@ -62,13 +64,13 @@ export default function HotelExpenseBudget() {
 
       const [{ data: budgetRows }, { data: ledgerRows }] = await Promise.all([
         supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('budget_year', selectedYear),
-        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('entry_date', `${selectedYear}-01-01`).lte('entry_date', `${selectedYear}-12-31`).eq('accounts.type', 'Expense')
+        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('entry_date', \`\${selectedYear}-01-01\`).lte('entry_date', \`\${selectedYear}-12-31\`).eq('accounts.type', 'Expense')
       ])
 
       const bMap = {}
       if (budgetRows) {
         budgetRows.forEach(r => {
-          bMap[`${r.account_code}-${r.budget_month}`] = { amount: r.amount, currency: r.currency, amount_usd: r.amount_usd }
+          bMap[\`\${r.account_code}-\${r.budget_month}\`] = { amount: r.amount, currency: r.currency, amount_usd: r.amount_usd }
         })
       }
       setBudgets(bMap)
@@ -77,7 +79,7 @@ export default function HotelExpenseBudget() {
       if (ledgerRows) {
         ledgerRows.forEach(r => {
           const m = parseInt(r.entry_date.split('-')[1], 10)
-          const k = `${r.accounts.code}-${m}`
+          const k = \`\${r.accounts.code}-\${m}\`
           const amt = (Number(r.debit_usd) || 0) - (Number(r.credit_usd) || 0) // Expenses are debits
           aMap[k] = (aMap[k] || 0) + amt
         })
@@ -89,7 +91,7 @@ export default function HotelExpenseBudget() {
 
   async function handleSaveRow(accountCode) {
     if (!activeCompany) return
-    const key = `${accountCode}-${selectedMonth}`
+    const key = \`\${accountCode}-\${selectedMonth}\`
     const row = budgets[key] || { amount: 0, currency: displayCurrency }
     if (!row.amount) return
 
@@ -114,7 +116,7 @@ export default function HotelExpenseBudget() {
   }
 
   function handleRowChange(accountCode, field, val) {
-    const key = `${accountCode}-${selectedMonth}`
+    const key = \`\${accountCode}-\${selectedMonth}\`
     const cur = budgets[key] || { amount: 0, currency: displayCurrency, amount_usd: 0 }
     const updated = { ...cur, [field]: val }
     
@@ -129,7 +131,7 @@ export default function HotelExpenseBudget() {
   }
 
   function clearRow(accountCode) {
-    const key = `${accountCode}-${selectedMonth}`
+    const key = \`\${accountCode}-\${selectedMonth}\`
     if (!budgets[key]) return
     const updated = { ...budgets[key], amount: 0, amount_usd: 0 }
     setBudgets(b => ({ ...b, [key]: updated }))
@@ -145,7 +147,7 @@ export default function HotelExpenseBudget() {
       let mBudget = 0
       let mActual = 0
       for (const a of accounts) {
-        const k = `${a.code}-${m}`
+        const k = \`\${a.code}-\${m}\`
         if (budgets[k]) mBudget += Number(budgets[k].amount_usd) || 0
         if (actuals[k]) mActual += Number(actuals[k]) || 0
       }
@@ -183,7 +185,7 @@ export default function HotelExpenseBudget() {
     ])
     
     sections.push({
-      title: `${selectedYear} Annual Summary`,
+      title: \`\${selectedYear} Annual Summary\`,
       headers: ['Month', 'Budget', 'Actual', 'Variance'],
       rows: summaryRows
     })
@@ -192,7 +194,7 @@ export default function HotelExpenseBudget() {
     const monthName = MONTH_NAMES[selectedMonth - 1]
     const detailRows = []
     for (const a of accounts) {
-      const key = `${a.code}-${selectedMonth}`
+      const key = \`\${a.code}-\${selectedMonth}\`
       const row = budgets[key] || { amount: 0, currency: displayCurrency, amount_usd: 0 }
       const monthlyUsd = Number(row.amount_usd) || 0
       const actualUsd = actuals[key] || 0
@@ -203,7 +205,7 @@ export default function HotelExpenseBudget() {
       const monthlyLocal = cur === 'USD' ? monthlyUsd : (monthlyUsd * rr)
       
       detailRows.push([
-        `${a.code} - ${a.name}`,
+        \`\${a.code} - \${a.name}\`,
         formatMoney(monthlyLocal, cur),
         f(monthlyUsd),
         formatMoney(actualLocal, cur),
@@ -214,16 +216,16 @@ export default function HotelExpenseBudget() {
     }
     
     sections.push({
-      title: `${monthName} ${selectedYear} Detailed Budget`,
+      title: \`\${monthName} \${selectedYear} Detailed Budget\`,
       headers: ['Account', 'Monthly Budget', 'Monthly (USD)', 'Actual', 'Actual (USD)', 'Variance', 'Variance (USD)'],
       rows: detailRows
     })
     
     const ctx = {
       companyName: activeCompany.name,
-      reportName: `Expenses Budget - ${selectedYear}`,
+      reportName: \`Expenses Budget - \${selectedYear}\`,
       currencyCode: selections.currency,
-      dateRange: `${selectedYear}`
+      dateRange: \`\${selectedYear}\`
     }
     
     if (format === 'pdf') exportMultiSectionPDF(ctx, sections)
@@ -256,14 +258,14 @@ export default function HotelExpenseBudget() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <KpiCard label={`${selectedYear} Total Budget`} value={fmt(monthlySummary.totalBudget)} icon={TrendingUp} tone="gold" />
-        <KpiCard label={`${selectedYear} Total Actual`} value={fmt(monthlySummary.totalActual)} icon={TrendingUp} tone="green" />
-        <KpiCard label={`${selectedYear} Total Variance`} value={fmt(monthlySummary.totalVariance)} icon={AlertTriangle} tone={monthlySummary.totalVariance > 0 ? "red" : "green"} />
+        <KpiCard label={\`\${selectedYear} Total Budget\`} value={fmt(monthlySummary.totalBudget)} icon={TrendingUp} tone="gold" />
+        <KpiCard label={\`\${selectedYear} Total Actual\`} value={fmt(monthlySummary.totalActual)} icon={TrendingUp} tone="green" />
+        <KpiCard label={\`\${selectedYear} Total Variance\`} value={fmt(monthlySummary.totalVariance)} icon={AlertTriangle} tone={monthlySummary.totalVariance > 0 ? "red" : "green"} />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-10">
         <div className="min-w-max w-full">
-          <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">${selectedYear} Annual Summary</div>
+          <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">\${selectedYear} Annual Summary</div>
           <table className="w-full text-sm">
             <thead className="bg-navy-800 text-white text-xs text-left">
               <tr>
@@ -279,7 +281,7 @@ export default function HotelExpenseBudget() {
                   <td className="py-2 px-3 font-medium text-slate-700 w-32">{m.name}</td>
                   <td className="py-2 px-3 text-slate-500">{fmt(m.budget)}</td>
                   <td className="py-2 px-3 text-slate-500">{fmt(m.actual)}</td>
-                  <td className={`py-2 px-3 font-medium ${m.variance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{fmt(m.variance)}</td>
+                  <td className={\`py-2 px-3 font-medium \${m.variance > 0 ? 'text-red-600' : 'text-emerald-600'}\`}>{fmt(m.variance)}</td>
                 </tr>
               ))}
             </tbody>
@@ -317,7 +319,7 @@ export default function HotelExpenseBudget() {
             </thead>
             <tbody>
               {accounts.map(a => {
-                const key = `${a.code}-${selectedMonth}`
+                const key = \`\${a.code}-\${selectedMonth}\`
                 const row = budgets[key] || { amount: 0, currency: displayCurrency, amount_usd: 0 }
                 
                 const monthlyUsd = Number(row.amount_usd) || 0
@@ -355,10 +357,10 @@ export default function HotelExpenseBudget() {
                     <td className="py-2 px-3 text-slate-500 min-w-[120px]">{formatMoney(actualLocal, cur)}</td>
                     <td className="py-2 px-3 text-slate-500 min-w-[120px]">{formatMoney(actualUsd, 'USD')}</td>
                     
-                    <td className={`py-2 px-3 font-medium min-w-[120px] ${varLocal > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                    <td className={\`py-2 px-3 font-medium min-w-[120px] \${varLocal > 0 ? 'text-red-600' : 'text-emerald-600'}\`}>
                       {formatMoney(varLocal, cur)}
                     </td>
-                    <td className={`py-2 px-3 font-medium min-w-[120px] ${varUsd > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                    <td className={\`py-2 px-3 font-medium min-w-[120px] \${varUsd > 0 ? 'text-red-600' : 'text-emerald-600'}\`}>
                       {formatMoney(varUsd, 'USD')}
                     </td>
 
@@ -398,3 +400,5 @@ export default function HotelExpenseBudget() {
     </div>
   )
 }
+`
+fs.writeFileSync('src/pages/HotelExpenseBudget.jsx', code)
