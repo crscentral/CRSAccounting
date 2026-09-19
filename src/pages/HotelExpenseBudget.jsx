@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Save } from 'lucide-react'
+import { Save, TrendingUp, AlertTriangle } from "lucide-react"
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { MONTH_NAMES } from '../lib/fiscalYear'
@@ -206,7 +206,7 @@ export default function HotelExpenseBudget() {
                       <div className="flex items-center gap-1 min-w-[180px]">
                         <select value={row.currency || displayCurrency} onChange={e => handleRowChange(year, month, 'currency', e.target.value)}
                           className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white" disabled={!can(['owner','admin','accountant'])}>
-                          {CURRENCY_LIST.map(c => <option key={c} value={c}>{c}</option>)}
+                          {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
                         </select>
                         <input type="number" value={row.amount || ''} onChange={e => handleRowChange(year, month, 'amount', e.target.value)}
                           placeholder="Amount" className="w-24 border border-slate-300 rounded-lg px-2 py-1.5 text-sm" disabled={!can(['owner','admin','accountant'])} />

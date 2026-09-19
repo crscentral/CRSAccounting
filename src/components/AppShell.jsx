@@ -59,6 +59,7 @@ export default function AppShell() {
     '/hotel-expenses',
     '/hotel-stats',
     '/hotel-budget',
+    '/hotel-expense-budget',
     '/contacts',
     '/accounts',
   ]
