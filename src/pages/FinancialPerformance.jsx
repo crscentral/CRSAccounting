@@ -203,18 +203,18 @@ export default function FinancialPerformance() {
       {tab === 'profit' && (
         <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
           <h3 className="font-semibold text-slate-700 mb-4">Profit & Loss Summary</h3>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="text-left border-b border-slate-100 text-slate-400">
-                <th className="py-2 font-medium">Item</th>
-                <th className="py-2 font-medium">Current Period</th>
-                <th className="py-2 font-medium">Amount %</th>
+                <th className="py-2 pr-4 font-medium whitespace-nowrap">Item</th>
+                <th className="py-2 px-4 font-medium whitespace-nowrap">Current Period</th>
+                <th className="py-2 pl-4 font-medium whitespace-nowrap">Amount %</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-slate-50"><td className="py-2.5 font-semibold">Total Revenue</td><td className="py-2.5">{cp.fmt(revenue)}</td><td className="py-2.5 text-slate-400">100.0%</td></tr>
-              <tr className="border-b border-slate-50"><td className="py-2.5">Total Expenses</td><td className="py-2.5">−{cp.fmt(expenses)}</td><td className="py-2.5 text-slate-400">{revenue ? ((expenses / revenue) * 100).toFixed(1) : 0}%</td></tr>
-              <tr className="bg-emerald-50"><td className="py-2.5 font-bold text-emerald-700">Gross Operating Profit (GOP)</td><td className="py-2.5 font-bold text-emerald-700">{cp.fmt(profit)}</td><td className="py-2.5 font-bold text-emerald-700">{margin.toFixed(1)}%</td></tr>
+              <tr className="border-b border-slate-50"><td className="py-2.5 pr-4 font-semibold whitespace-nowrap">Total Revenue</td><td className="py-2.5 px-4">{cp.fmt(revenue)}</td><td className="py-2.5 pl-4 text-slate-400">100.0%</td></tr>
+              <tr className="border-b border-slate-50"><td className="py-2.5 pr-4 whitespace-nowrap">Total Expenses</td><td className="py-2.5 px-4">−{cp.fmt(expenses)}</td><td className="py-2.5 pl-4 text-slate-400">{revenue ? ((expenses / revenue) * 100).toFixed(1) : 0}%</td></tr>
+              <tr className="bg-emerald-50"><td className="py-2.5 pr-4 font-bold text-emerald-700 whitespace-nowrap">Gross Operating Profit (GOP)</td><td className="py-2.5 px-4 font-bold text-emerald-700">{cp.fmt(profit)}</td><td className="py-2.5 pl-4 font-bold text-emerald-700">{margin.toFixed(1)}%</td></tr>
             </tbody>
           </table>
         </div>
@@ -223,13 +223,13 @@ export default function FinancialPerformance() {
       {(tab === 'revenue' || tab === 'expenses') && (
         <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 overflow-x-auto">
           <h3 className="font-semibold text-slate-700 mb-4">{tab === 'revenue' ? 'Revenue' : 'Expenses'} by Account</h3>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="text-left border-b border-slate-100 text-slate-400">
-                <th className="py-2 font-medium whitespace-nowrap">Code</th>
-                <th className="py-2 font-medium whitespace-nowrap">Account</th>
-                <th className="py-2 font-medium text-right whitespace-nowrap">Amount</th>
-                <th className="py-2 font-medium text-right whitespace-nowrap">% of Total</th>
+                <th className="py-2 pr-4 font-medium whitespace-nowrap w-24">Code</th>
+                <th className="py-2 px-4 font-medium whitespace-nowrap">Account</th>
+                <th className="py-2 px-4 font-medium text-right whitespace-nowrap">Amount</th>
+                <th className="py-2 pl-4 font-medium text-right whitespace-nowrap">% of Total</th>
               </tr>
             </thead>
             <tbody>
@@ -240,10 +240,10 @@ export default function FinancialPerformance() {
                 const total = tab === 'revenue' ? revenue : expenses
                 return (
                   <tr key={a.code} className="border-b border-slate-50">
-                    <td className="py-2.5">{a.code}</td>
-                    <td className="py-2.5">{a.name}</td>
-                    <td className="py-2.5 text-right">{cp.fmt(a.amount)}</td>
-                    <td className="py-2.5 text-right text-slate-400">{total ? ((a.amount / total) * 100).toFixed(1) : 0}%</td>
+                    <td className="py-2.5 pr-4 text-slate-500">{a.code}</td>
+                    <td className="py-2.5 px-4 font-medium whitespace-nowrap">{a.name}</td>
+                    <td className="py-2.5 px-4 text-right">{cp.fmt(a.amount)}</td>
+                    <td className="py-2.5 pl-4 text-right text-slate-400">{total ? ((a.amount / total) * 100).toFixed(1) : 0}%</td>
                   </tr>
                 )
               })}
