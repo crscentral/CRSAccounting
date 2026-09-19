@@ -49,11 +49,15 @@ export function getYTDRange(fiscalYearStartMonth = 1, today = new Date()) {
   const y = today.getUTCFullYear()
   const m = today.getUTCMonth() + 1 // 1-12
   let startYear = y
+  let endYear = y
   if (m < fiscalYearStartMonth) {
     startYear = y - 1
+  } else {
+    endYear = y + 1
   }
   const from = new Date(Date.UTC(startYear, fiscalYearStartMonth - 1, 1))
-  return { from: ymd(from), to: ymd(today) }
+  const to = new Date(Date.UTC(endYear, fiscalYearStartMonth - 1, 0))
+  return { from: ymd(from), to: ymd(to) }
 }
 
 /** Returns { from, to } for the last N full fiscal years plus current partial year. */

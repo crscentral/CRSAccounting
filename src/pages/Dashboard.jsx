@@ -59,7 +59,7 @@ export default function Dashboard() {
     const totalRooms = settings?.total_rooms || 0
     const totalOccupied = (stats || []).reduce((s, r) => s + r.rooms_occupied, 0)
     const totalRevenue = (stats || []).reduce((s, r) => s + Number(r.room_revenue_usd), 0)
-    const daysInView = Math.max(1, Math.round((new Date(cp.range.to) - new Date(cp.range.from)) / (1000 * 60 * 60 * 24)) + 1)
+    const daysInView = Math.max(1, Math.round((Math.min(new Date(cp.range.to).getTime(), new Date().getTime()) - new Date(cp.range.from).getTime()) / (1000 * 60 * 60 * 24)) + 1)
     const availableRoomNights = totalRooms * daysInView
     const occupancyPct = availableRoomNights > 0 ? (totalOccupied / availableRoomNights) * 100 : 0
     const adr = totalOccupied > 0 ? totalRevenue / totalOccupied : 0
@@ -73,7 +73,7 @@ export default function Dashboard() {
     // Create a complete date range array for the trend chart and budget calculation
     const dailyTrendMap = {}
     let currentDate = new Date(cp.range.from)
-    const endDate = new Date(cp.range.to)
+    const endDate = new Date(Math.min(new Date(cp.range.to).getTime(), new Date().getTime()))
     let totalBudgetUsd = 0
     
     while (currentDate <= endDate) {
