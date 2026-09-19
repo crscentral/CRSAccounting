@@ -20,8 +20,7 @@ export default function HotelBudget() {
   const [actuals, setActuals] = useState({}) // key: "year-month" -> revenue_usd actual
 
   // --- Ancillary Revenue State ---
-  const [ancillaryYear, setAncillaryYear] = useState(new Date().getFullYear())
-  const [ancillaryMonth, setAncillaryMonth] = useState(new Date().getMonth() + 1)
+    const [ancillaryMonth, setAncillaryMonth] = useState(new Date().getMonth() + 1)
   const [ancillaryAccounts, setAncillaryAccounts] = useState([])
   const [ancillaryBudgets, setAncillaryBudgets] = useState({})
   const [ancillaryActuals, setAncillaryActuals] = useState({})
@@ -43,8 +42,8 @@ export default function HotelBudget() {
       if (!activeCompany || ancillaryAccounts.length === 0) return
 
       const [{ data: budgetRows }, { data: ledgerRows }] = await Promise.all([
-        supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('budget_year', ancillaryYear),
-        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('entry_date', `${ancillaryYear}-01-01`).lte('entry_date', `${ancillaryYear}-12-31`).eq('accounts.type', 'Revenue').neq('accounts.code', '4010')
+        supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('budget_year', startYear),
+        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('entry_date', `${startYear}-01-01`).lte('entry_date', `${startYear}-12-31`).eq('accounts.type', 'Revenue').neq('accounts.code', '4010')
       ])
 
       const bMap = {}
@@ -67,7 +66,7 @@ export default function HotelBudget() {
       setAncillaryActuals(aMap)
     }
     loadAncillary()
-  }, [activeCompany, ancillaryYear, ancillaryAccounts])
+  }, [activeCompany, startYear, ancillaryAccounts])
 
   const ancillaryMonthlySummary = useMemo(() => {
     const summary = []
@@ -89,25 +88,51 @@ export default function HotelBudget() {
   }, [ancillaryBudgets, ancillaryActuals, ancillaryAccounts])
 
   const grandTotalRevenueBudget = useMemo(() => {
-    // Sum Room Revenue for the selected ancillaryYear
+    // Sum Room Revenue for the selected startYear
     let roomRev = 0
     for (let m = 1; m <= 12; m++) {
-      const row = rows[`${ancillaryYear}-${m}`]
+      const row = rows[`${startYear}-${m}`]
       if (row) {
-        const days = new Date(ancillaryYear, m, 0).getDate()
+        const days = new Date(startYear, m, 0).getDate()
         roomRev += (Number(row.revenue_usd) || 0) * days
       }
     }
     return roomRev + ancillaryMonthlySummary.totalBudget
-  }, [rows, ancillaryYear, ancillaryMonthlySummary.totalBudget])
+  }, [rows, startYear, ancillaryMonthlySummary.totalBudget])
+
+  
+  const revenueSummary = useMemo(() => {
+    let roomRev = 0
+    for (let m = 1; m <= 12; m++) {
+      const r = rows[`${startYear}-${m}`]
+      if (r) {
+        roomRev += (Number(r.revenue_usd) || 0) * new Date(startYear, m, 0).getDate()
+      }
+    }
+    
+    let frontOffice = roomRev
+    let fbService = 0
+    let otherRev = 0
+
+    for (let m = 1; m <= 12; m++) {
+      for (const a of ancillaryAccounts) {
+        const k = `${a.code}-${m}`
+        const amt = ancillaryBudgets[k] ? (Number(ancillaryBudgets[k].amount_usd) || 0) : 0
+        if (a.subtype === 'Front Office') frontOffice += amt
+        else if (a.subtype === 'F&B Service') fbService += amt
+        else otherRev += amt
+      }
+    }
+    return { frontOffice, fbService, otherRev }
+  }, [rows, ancillaryBudgets, ancillaryAccounts, startYear])
 
   const grandTotalRevenueActual = useMemo(() => {
     let roomRevActual = 0
     for (let m = 1; m <= 12; m++) {
-      roomRevActual += actuals[`${ancillaryYear}-${m}`] || 0
+      roomRevActual += actuals[`${startYear}-${m}`] || 0
     }
     return roomRevActual + ancillaryMonthlySummary.totalActual
-  }, [actuals, ancillaryYear, ancillaryMonthlySummary.totalActual])
+  }, [actuals, startYear, ancillaryMonthlySummary.totalActual])
 
   async function handleAncillarySaveRow(accountCode) {
     if (!activeCompany) return
@@ -123,7 +148,7 @@ export default function HotelBudget() {
     
     const { error } = await supabase.from('hotel_expense_budget').upsert({
       company_id: activeCompany.id,
-      budget_year: ancillaryYear,
+      budget_year: startYear,
       budget_month: ancillaryMonth,
       account_code: accountCode,
       amount: row.amount,
@@ -182,8 +207,8 @@ export default function HotelBudget() {
   async function loadAll() {
     const [{ data: settings }, { data: budgetRows }, { data: statRows }] = await Promise.all([
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
-      supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('budget_year', startYear).lte('budget_year', startYear + 4),
-      supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', `${startYear}-01-01`).lte('stat_date', `${startYear + 4}-12-31`),
+      supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', startYear),
+      supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', `${startYear}-01-01`).lte('stat_date', `${startYear}-12-31`),
     ])
     setTotalRooms(settings?.total_rooms || 0)
     const rowMap = {}
@@ -259,7 +284,7 @@ export default function HotelBudget() {
     const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
     const sy = Number(selections.startYear || startYear)
-    const years = [sy, sy + 1, sy + 2, sy + 3, sy + 4]
+    const years = [sy]
     const tableRows = []
     years.forEach(y => MONTH_NAMES.forEach((m, i) => {
       const key = `${y}-${i + 1}`
@@ -282,7 +307,7 @@ export default function HotelBudget() {
     }))
     const sections = [{ heading: 'Room Revenue Budget', columns: ['Month', 'Budgeted Occ %', 'Budgeted ADR', 'Budgeted Monthly Revenue', 'Actual Revenue', 'Variance'], rows: tableRows }]
     const title = 'Room Revenue Budget'
-    const subtitle = `${activeCompany.name} • ${startYear}–${startYear + 4} • ${selections.currency}`
+    const subtitle = `${activeCompany.name} • ${startYear} • ${selections.currency}`
     if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'room_revenue_budget' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'room_revenue_budget' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'room_revenue_budget' })
@@ -299,7 +324,7 @@ export default function HotelBudget() {
   const mtdActual = actuals[thisMonthKey] || 0
   const mtdPaceVariance = mtdActual - paceExpected
 
-  const years = [startYear, startYear + 1, startYear + 2, startYear + 3, startYear + 4]
+  const years = [startYear]
 
   return (
     <div>
@@ -346,24 +371,26 @@ export default function HotelBudget() {
       )}
 
       
+      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <KpiCard label={`${ancillaryYear} Total Revenue Budget`} value={fmt(grandTotalRevenueBudget)} icon={TrendingUp} tone="gold" sublabel="Room Revenue + Ancillary Revenue" />
-        <KpiCard label={`${ancillaryYear} Total Revenue Actual`} value={fmt(grandTotalRevenueActual)} icon={TrendingUp} tone="green" sublabel="Room Revenue + Ancillary Revenue" />
-        <KpiCard label={`${ancillaryYear} Total Revenue Variance`} value={fmt(grandTotalRevenueActual - grandTotalRevenueBudget)} icon={AlertTriangle} tone={(grandTotalRevenueActual - grandTotalRevenueBudget) < 0 ? "red" : "green"} />
+        <KpiCard label={`${startYear} Front Office Revenue`} value={fmt(revenueSummary.frontOffice)} icon={TrendingUp} tone="gold" sublabel="Room Revenue + Front Office" />
+        <KpiCard label={`${startYear} F&B Service Revenue`} value={fmt(revenueSummary.fbService)} icon={TrendingUp} tone="blue" sublabel="F&B Service Accounts" />
+        <KpiCard label={`${startYear} Other Revenue`} value={fmt(revenueSummary.otherRev)} icon={TrendingUp} tone="emerald" sublabel="Other Operating Income" />
       </div>
 
+
       <div className="flex items-center gap-2 mb-4">
-        <label className="text-sm text-slate-500">Starting Year:</label>
+        <label className="text-sm text-slate-500">Select Year:</label>
         <select value={startYear} onChange={e => setStartYear(Number(e.target.value))} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm">
           {Array.from({ length: 8 }, (_, i) => now.getFullYear() - 2 + i).map(y => <option key={y} value={y}>{y}</option>)}
         </select>
-        <span className="text-xs text-slate-400">Shows this year + next 4 (5 years total)</span>
+        <span className="text-xs text-slate-400">Select year for Room & Ancillary Revenue</span>
       </div>
 
       {years.map(year => (
         <div key={year} className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-5">
           <div className="min-w-max w-full">
-            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{year}</div>
+            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{year} - Room Revenue with ADR & Occ% vs Actual</div>
             <table className="w-full text-sm">
             <thead className="bg-navy-800 text-white text-xs text-left">
               <tr>
@@ -448,19 +475,11 @@ export default function HotelBudget() {
 
       
       <div className="mt-12 pt-8 border-t border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 font-[var(--font-display)] mb-6">Ancillary Revenue Budget</h2>
-
-        <div className="flex items-center gap-3 mb-6 bg-slate-50 p-3 rounded-xl border border-slate-200">
-          <span className="text-sm font-medium text-slate-600">Select Year:</span>
-          <select value={ancillaryYear} onChange={e => setAncillaryYear(Number(e.target.value))} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm">
-            {Array.from({ length: 8 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <span className="text-xs text-slate-400">View and manage ancillary revenue</span>
-        </div>
+        
 
         <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-10">
           <div className="min-w-max w-full">
-            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{ancillaryYear} Annual Ancillary Summary</div>
+            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{startYear} - Other Revenue vs Actuals</div>
             <table className="w-full text-sm">
               <thead className="bg-navy-800 text-white text-xs text-left">
                 <tr>
@@ -494,7 +513,7 @@ export default function HotelBudget() {
 
         <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-10">
           <div className="min-w-max w-full">
-            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{MONTH_NAMES[ancillaryMonth - 1]} {ancillaryYear}</div>
+            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{MONTH_NAMES[ancillaryMonth - 1]} {startYear}</div>
             <table className="w-full text-sm">
               <thead className="bg-navy-800 text-white text-xs text-left">
                 <tr>
@@ -580,7 +599,7 @@ export default function HotelBudget() {
             { 
               type: 'select', 
               key: 'startYear', 
-              label: 'Starting Year (Includes Next 4 Years)', 
+              label: 'Select Year', 
               default: startYear,
               options: Array.from({ length: 8 }, (_, i) => { const y = new Date().getFullYear() - 2 + i; return { value: y, label: String(y) } }) 
             }
