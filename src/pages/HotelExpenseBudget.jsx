@@ -148,9 +148,9 @@ export default function HotelExpenseBudget() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <KpiCard label={`${startYear} Budget`} amount={fmt(thisYearBudget)} icon={<TrendingUp size={20} className="text-emerald-600" />} />
-        <KpiCard label={`${startYear} Actual`} amount={fmt(thisYearActual)} icon={<TrendingUp size={20} className="text-emerald-600" />} />
-        <KpiCard label={`${startYear} Variance`} amount={fmt(thisYearVar)} amountColor={thisYearVar > 0 ? 'text-red-600' : 'text-emerald-600'} icon={<AlertTriangle size={20} className="text-rose-500" />} />
+        <KpiCard label={`${startYear} Budget`} value={fmt(thisYearBudget)} icon={TrendingUp} tone="gold" />
+        <KpiCard label={`${startYear} Actual`} value={fmt(thisYearActual)} icon={TrendingUp} tone="green" />
+        <KpiCard label={`${startYear} Variance`} value={fmt(thisYearVar)} icon={AlertTriangle} tone={thisYearVar > 0 ? "red" : "green"} />
       </div>
 
       <div className="flex items-center gap-3 mb-6 bg-slate-50 p-3 rounded-xl border border-slate-200">
