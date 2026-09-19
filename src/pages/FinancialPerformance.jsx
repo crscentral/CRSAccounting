@@ -55,19 +55,34 @@ export default function FinancialPerformance() {
   }
 
   async function loadForecast() {
-    const [{ data }, { data: budget }, { data: expBudget }] = await Promise.all([
+    const [{ data }, { data: budget }, { data: expBudget }, { data: accountsData }] = await Promise.all([
       supabase.from('forecast_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('forecast_year', forecastYear).order('forecast_month'),
       activeProduct === 'hotel' ? supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', forecastYear) : Promise.resolve({ data: [] }),
-      activeProduct === 'hotel' ? supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('budget_year', forecastYear) : Promise.resolve({ data: [] })
+      activeProduct === 'hotel' ? supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('budget_year', forecastYear) : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('accounts').select('code, type').eq('company_id', activeCompany.id) : Promise.resolve({ data: [] })
     ])
     
     const combined = data ? [...data] : []
     if (activeProduct === 'hotel') {
       const revMap = {}
-      if (budget) budget.forEach(b => revMap[b.budget_month] = (revMap[b.budget_month] || 0) + (b.budgeted_room_revenue_usd || 0))
+      if (budget) budget.forEach(b => { const days = new Date(forecastYear, b.budget_month, 0).getDate(); revMap[b.budget_month] = (revMap[b.budget_month] || 0) + ((b.budgeted_room_revenue_usd || 0) * days) })
       
       const expMap = {}
-      if (expBudget) expBudget.forEach(b => expMap[b.budget_month] = (expMap[b.budget_month] || 0) + (Number(b.amount_usd) || 0))
+      
+      // Separate Ancillary Revenue from Expenses based on account type
+      if (expBudget && accountsData) {
+        const accountTypeMap = {}
+        accountsData.forEach(a => accountTypeMap[a.code] = a.type)
+        
+        expBudget.forEach(b => {
+          const type = accountTypeMap[b.account_code]
+          if (type === 'Revenue') {
+            revMap[b.budget_month] = (revMap[b.budget_month] || 0) + (Number(b.amount_usd) || 0)
+          } else {
+            expMap[b.budget_month] = (expMap[b.budget_month] || 0) + (Number(b.amount_usd) || 0)
+          }
+        })
+      }
       
       for (let i=1; i<=12; i++) {
         if (revMap[i] || expMap[i]) {
