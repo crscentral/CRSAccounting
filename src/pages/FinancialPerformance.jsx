@@ -91,8 +91,8 @@ export default function FinancialPerformance() {
              f = { forecast_month: i, revenue_usd: 0, expenses_usd: 0 }
              combined.push(f)
           }
-          if (revMap[i] !== undefined) f.revenue_usd = revMap[i]
-          if (expMap[i] !== undefined) f.expenses_usd = expMap[i]
+          if (revMap[i] !== undefined) f.revenue_usd = Math.round(revMap[i])
+          if (expMap[i] !== undefined) f.expenses_usd = Math.round(expMap[i])
         }
       }
     }
