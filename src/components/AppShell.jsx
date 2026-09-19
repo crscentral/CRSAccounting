@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { to: '/purchase-invoices', label: 'Purchase Invoices', icon: FileText, products: ['basic'] },
   { to: '/hotel-stats', label: 'Revenue & Occupancy', icon: BedDouble, products: ['hotel'] },
   { to: '/hotel-budget', label: 'Room Revenue Budget', icon: Target, products: ['hotel'] },
+  { to: '/hotel-expense-budget', label: 'Expenses Budget', icon: Target, products: ['hotel'] },
   { to: '/hotel-revenue', label: 'Daily Revenue Collection', icon: Wallet, products: ['hotel'] },
   { to: '/hotel-expenses', label: 'Expenses', icon: Receipt, products: ['hotel'] },
   { to: '/hotel-guest-invoices', label: 'Guest Invoices', icon: ClipboardList, products: ['hotel'] },

@@ -23,6 +23,7 @@ import HistoricalImport from './pages/HistoricalImport'
 import PortfolioDashboard from './pages/PortfolioDashboard'
 import HotelOccupancyStats from './pages/HotelOccupancyStats'
 import HotelBudget from './pages/HotelBudget'
+import HotelExpenseBudget from './pages/HotelExpenseBudget'
 import HotelRevenue from './pages/HotelRevenue'
 import HotelExpenses from './pages/HotelExpenses'
 import HotelGuestInvoices from './pages/HotelGuestInvoices'
@@ -57,6 +58,7 @@ function AppRoutes() {
         <Route path="/purchase-invoices" element={<PurchaseInvoices />} />
         <Route path="/hotel-stats" element={<HotelOccupancyStats />} />
         <Route path="/hotel-budget" element={<HotelBudget />} />
+          <Route path="/hotel-expense-budget" element={<HotelExpenseBudget />} />
         <Route path="/hotel-revenue" element={<HotelRevenue />} />
         <Route path="/hotel-expenses" element={<HotelExpenses />} />
         <Route path="/hotel-guest-invoices" element={<HotelGuestInvoices />} />
