@@ -27,16 +27,19 @@ export default function Analytics() {
 
   useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
+  const [restaurantRevenue, setRestaurantRevenue] = useState([])
+
   async function loadData() {
-    const [{ data: s }, { data: p }, { data: r }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }] = await Promise.all([
+    const [{ data: s }, { data: p }, { data: r }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }] = await Promise.all([
       supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
-      activeProduct === 'hotel' ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to) : Promise.resolve({ data: [] }),
-      activeProduct === 'hotel' ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to) : Promise.resolve({ data: [] }),
-      activeProduct === 'hotel' ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to) : Promise.resolve({ data: [] }),
-      activeProduct === 'hotel' ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct) : Promise.resolve({ data: [] }),
-      activeProduct === 'hotel' ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] })
     ])
     setSales(s || []); setPurchases(p || []); setReceipts(r || [])
     setHotelRoomStats(hrs || [])
@@ -44,6 +47,7 @@ export default function Analytics() {
     setHotelExpenseEntries(hee || [])
     setHotelAmc(hamc || [])
     setHotelRevenueEntries(hre || [])
+    setRestaurantRevenue(rdr || [])
   }
 
 
@@ -56,11 +60,11 @@ export default function Analytics() {
       supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
       supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
       supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', range.from).lte('receipt_date', range.to),
-      activeProduct === 'hotel' ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to) : Promise.resolve({ data: [] }),
-      activeProduct === 'hotel' ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to) : Promise.resolve({ data: [] }),
-      activeProduct === 'hotel' ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', range.from).lte('expense_date', range.to) : Promise.resolve({ data: [] }),
-      activeProduct === 'hotel' ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct) : Promise.resolve({ data: [] }),
-      activeProduct === 'hotel' ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', range.from).lte('expense_date', range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to) : Promise.resolve({ data: [] }),
     ])
     const sSel = s || [], pSel = p || [], rSel = r || []
     const hrsSel = hrs || [], hgiSel = hgi || [], heeSel = hee || [], hamcSel = hamc || [], hreSel = hre || []
@@ -70,7 +74,7 @@ export default function Analytics() {
     let expenses = 0
     const monthlyMap = {}
 
-    if (activeProduct === 'hotel') {
+    if (['hotel', 'restaurant'].includes(activeProduct)) {
       const manualRoomCollected = hrsSel.reduce((s2, r) => s2 + Number(r.manual_room_revenue_collected_usd || 0), 0)
       const manualRoomRevenue = hrsSel.reduce((s2, r) => s2 + Number(r.room_revenue_usd || 0), 0)
       const guestInvoiceCollected = hgiSel.reduce((s2, i) => s2 + Number(i.collected_amount_usd || 0), 0)
@@ -127,15 +131,19 @@ export default function Analytics() {
   let statusPie = []
   let txTypePie = []
 
-  if (activeProduct === 'hotel') {
+  if (['hotel', 'restaurant'].includes(activeProduct)) {
     const manualRoomCollected = hotelRoomStats.reduce((s, r) => s + Number(r.manual_room_revenue_collected_usd || 0), 0)
     const manualRoomRevenue = hotelRoomStats.reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
     const guestInvoiceCollected = hotelGuestInvoices.reduce((s, i) => s + Number(i.collected_amount_usd || 0), 0)
     const guestInvoiceRevenue = hotelGuestInvoices.reduce((s, i) => s + Number(i.invoice_amount_usd || 0), 0)
-    const ancillaryCollected = hotelRevenueEntries.reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+    const ancillaryCollected = hotelRevenueEntries.reduce((s, r) => s + Number(r.collected_usd || r.amount_usd || 0), 0)
+    const ancillaryRevenue = hotelRevenueEntries.reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+    
+    const restRevRevenue = restaurantRevenue.reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
+    const restRevCollected = restaurantRevenue.reduce((s, r) => s + Number(r.collected_usd || 0), 0)
 
-    totalInvoiced = manualRoomRevenue + guestInvoiceRevenue + ancillaryCollected
-    collected = manualRoomCollected + guestInvoiceCollected + ancillaryCollected
+    totalInvoiced = manualRoomRevenue + guestInvoiceRevenue + ancillaryRevenue + restRevRevenue
+    collected = manualRoomCollected + guestInvoiceCollected + ancillaryCollected + restRevCollected
     outstanding = hotelGuestInvoices.reduce((s, i) => s + (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd)), 0)
 
     const start = new Date(cp.range.from)
