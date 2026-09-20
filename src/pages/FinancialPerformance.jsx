@@ -73,9 +73,14 @@ export default function FinancialPerformance() {
     ])
     
     const combined = data ? [...data] : []
-    if (activeProduct === 'hotel') {
+    if (['hotel', 'restaurant'].includes(activeProduct)) {
       const revMap = {}
-      if (budget) budget.forEach(b => { const days = new Date(forecastYear, b.budget_month, 0).getDate(); revMap[b.budget_month] = (revMap[b.budget_month] || 0) + ((b.budgeted_room_revenue_usd || 0) * days) })
+      if (budget) budget.forEach(b => { 
+        if (activeProduct === 'hotel') {
+          const days = new Date(forecastYear, b.budget_month, 0).getDate(); 
+          revMap[b.budget_month] = (revMap[b.budget_month] || 0) + ((b.budgeted_room_revenue_usd || 0) * days) 
+        }
+      })
       
       const expMap = {}
       
