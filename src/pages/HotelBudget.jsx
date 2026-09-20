@@ -89,15 +89,9 @@ export default function HotelBudget() {
             aMap[bevKey] = (aMap[bevKey] || 0) + (Number(r.beverage_amount_usd) || 0)
             aMap[otherKey] = (aMap[otherKey] || 0) + (Number(r.other_amount_usd) || 0)
             
-          } else if (activeProduct === 'restaurant') {
-            const foodKey = r.meal_period === 'Breakfast' ? `4016-${m}` : `4010-${m}`
-            const bevKey = `4011-${m}`
-            const otherKey = `4019-${m}`
-            
-            aMap[foodKey] = (aMap[foodKey] || 0) + (Number(r.food_amount_usd) || 0)
-            aMap[bevKey] = (aMap[bevKey] || 0) + (Number(r.beverage_amount_usd) || 0)
-            aMap[otherKey] = (aMap[otherKey] || 0) + (Number(r.other_amount_usd) || 0)
           }
+          // Note: If activeProduct === 'restaurant', we do NOT inject restRev manually because 
+          // those postings are already in ledger_entries and caught by ledgerQuery!
         })
       }
       setAncillaryActuals(aMap)
@@ -383,7 +377,7 @@ export default function HotelBudget() {
     <div>
       <PageHeader
         title={activeProduct === "restaurant" ? "F&B Revenue Budget" : "Room Revenue Budget"}
-        subtitle={`${activeCompany.name} • Feed any two of Occupancy % / ${activeProduct === "restaurant" ? "Avg Check" : "ADR"} / ${activeProduct === "restaurant" ? "F&B Revenue" : "Room Revenue"} — the third calculates automatically`}
+        subtitle={`${activeCompany.name} • ${activeProduct === "restaurant" ? "Manage your Monthly Budgets for Food, Beverage, and Other Revenue." : "Feed any two of Occupancy % / ADR / Room Revenue — the third calculates automatically"}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400">
@@ -426,9 +420,9 @@ export default function HotelBudget() {
       
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <KpiCard label={`${startYear} ${activeProduct === "restaurant" ? "Food Sales" : "Front Office Revenue"}`} value={fmt(revenueSummary.frontOffice)} icon={TrendingUp} tone="gold" sublabel={activeProduct === "restaurant" ? "Food Sales Account" : "Room Revenue + Front Office"} />
-        <KpiCard label={`${startYear} ${activeProduct === "restaurant" ? "Beverage Sales" : "F&B Service Revenue"}`} value={fmt(revenueSummary.fbService)} icon={TrendingUp} tone="blue" sublabel={activeProduct === "restaurant" ? "Beverage Sales Account" : "F&B Service Accounts"} />
-        <KpiCard label={`${startYear} Other Revenue`} value={fmt(revenueSummary.otherRev)} icon={TrendingUp} tone="emerald" sublabel="Other Operating Income" />
+        <KpiCard label={`${startYear} ${activeProduct === "restaurant" ? "Food Sales Budget" : "Front Office Revenue Budget"}`} value={fmt(revenueSummary.frontOffice)} icon={TrendingUp} tone="gold" sublabel={activeProduct === "restaurant" ? "Food Sales Account" : "Room Revenue + Front Office"} />
+        <KpiCard label={`${startYear} ${activeProduct === "restaurant" ? "Beverage Sales Budget" : "F&B Service Budget"}`} value={fmt(revenueSummary.fbService)} icon={TrendingUp} tone="blue" sublabel={activeProduct === "restaurant" ? "Beverage Sales Account" : "F&B Service Accounts"} />
+        <KpiCard label={`${startYear} Other Revenue Budget`} value={fmt(revenueSummary.otherRev)} icon={TrendingUp} tone="emerald" sublabel="Other Operating Income" />
       </div>
 
 
@@ -440,7 +434,7 @@ export default function HotelBudget() {
         <span className="text-xs text-slate-400">Select year for Revenue Budget</span>
       </div>
 
-      {years.map(year => activeProduct === 'hotel' ? (
+      {activeProduct === 'hotel' && years.map(year => (
         <div key={year} className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-5">
           <div className="min-w-max w-full">
             <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{year} - Room Revenue with ADR & Occ% vs Actual</div>
@@ -524,10 +518,10 @@ export default function HotelBudget() {
           </table>
           </div>
         </div>
-      ) : null)}
+      ))}
 
       
-      <div className="mt-12 pt-8 border-t border-slate-200">
+      <div className={activeProduct === 'hotel' ? "mt-12 pt-8 border-t border-slate-200" : ""}>
         
 
         <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-10">
