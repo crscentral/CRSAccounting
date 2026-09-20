@@ -36,7 +36,7 @@ export default function HotelRevenue() {
       supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to).order('entry_date', { ascending: false }),
       supabase.from('accounts').select('id, code, name').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').neq('code', '4010').order('code'),
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
-      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('food_amount_usd, beverage_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] })
+      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd, total_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to).order('revenue_date', { ascending: false }) : Promise.resolve({ data: [] })
     ])
     setRoomStats(room || [])
     setAncillary(anc || [])
@@ -103,11 +103,12 @@ export default function HotelRevenue() {
   const totalRoomRevenue = roomStats.reduce((s, r) => s + Number(r.room_revenue_usd), 0)
   const totalCollected = roomStats.reduce((s, r) => s + Number(r.room_revenue_collected_usd), 0)
   const totalAncillary = ancillary.reduce((s, r) => s + Number(r.amount_usd), 0)
-  const fbRev = restRevenue.reduce((s, r) => s + (Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0), 0)
+  const ancillaryCollected = ancillary.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0)
+  const fbRev = restRevenue.reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
   const fbCollected = restRevenue.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0)
   
   const totalRev = totalRoomRevenue + totalAncillary + fbRev
-  const totalRevCollected = totalCollected + totalAncillary + fbCollected
+  const totalRevCollected = totalCollected + ancillaryCollected + fbCollected
   const pendingCollection = totalRev - totalRevCollected
 
   return (
@@ -174,6 +175,7 @@ export default function HotelRevenue() {
           { key: 'rooms_occ', label: 'Rooms Occ.', render: r => <div>{r.rooms_occupied}<div className="text-[10px] text-slate-400">({r.manual_rooms_occupied||0} man. + {r.invoiced_rooms_occupied||0} inv.)</div></div> },
           { key: 'room_revenue', label: 'Total Room Rev', render: r => <div><span className="font-semibold">{cp.fmt(r.room_revenue_usd)}</span><div className="text-[10px] text-slate-500">({cp.fmt(r.manual_room_revenue_usd||0)} man. + {cp.fmt(r.invoiced_room_revenue_usd||0)} inv.)</div></div> },
           { key: 'room_revenue_collected', label: 'Collected', render: r => <div><span className="font-semibold">{cp.fmt(r.room_revenue_collected_usd)}</span><div className="text-[10px] text-slate-500">({cp.fmt(r.manual_room_revenue_collected_usd||0)} man. + {cp.fmt(r.invoiced_room_revenue_usd||0)} inv.)</div></div> },
+          { key: 'pending_collection', label: 'Pending Collection', render: r => <span className="font-semibold text-red-500">{cp.fmt((r.room_revenue_usd || 0) - (r.room_revenue_collected_usd || 0))}</span> },
           ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => (
             <div className="flex justify-end gap-1">
               <button disabled={isLocked} onClick={() => { setEditingRow(r); setRoomModalOpen(true) }} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size={15} /></button>
@@ -184,6 +186,23 @@ export default function HotelRevenue() {
         rows={roomStats}
         emptyMessage="No room revenue entries in this range."
       />
+
+      {activeProduct === 'hotel' && (
+        <>
+          <h3 className="font-semibold text-slate-700 mb-3 mt-6">F&B Revenue</h3>
+          <DataTable
+            columns={[
+              { key: 'revenue_date', label: 'Date' },
+              { key: 'meal_period', label: 'Meal Period' },
+              { key: 'total_amount_usd', label: 'Total F&B Rev', render: r => cp.fmt(r.total_amount_usd || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))) },
+              { key: 'collected_usd', label: 'Collected', render: r => cp.fmt(r.collected_usd) },
+              { key: 'pending_collection', label: 'Pending Collection', render: r => { const total = r.total_amount_usd || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0)); return <span className="font-semibold text-red-500">{cp.fmt(total - (r.collected_usd || 0))}</span> } },
+            ]}
+            data={restRevenue}
+            emptyState="No F&B revenue entries in this range."
+          />
+        </>
+      )}
 
       <h3 className="font-semibold text-slate-700 mb-3 mt-6 flex items-center justify-between">
         <span>Other Revenue (Extra Bed, Early Check-in, Late Check-out, Breakfast, Transportation, SPA, etc.)</span>
@@ -196,6 +215,8 @@ export default function HotelRevenue() {
           { key: 'entry_date', label: 'Date' },
           { key: 'account', label: 'Revenue Head', render: r => r.account ? `${r.account.code} - ${r.account.name}` : '—' },
           { key: 'amount_usd', label: 'Amount', render: r => cp.fmt(r.amount_usd) },
+          { key: 'collected_usd', label: 'Collected', render: r => cp.fmt(r.collected_usd || 0) },
+          { key: 'pending_usd', label: 'Pending Collection', render: r => <span className="text-red-500 font-medium">{cp.fmt((r.amount_usd || 0) - (r.collected_usd || 0))}</span> },
           { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
           ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => (
             <div className="flex justify-end gap-1">
@@ -320,6 +341,7 @@ function AncillaryRevenueFormModal({ companyId, product, accounts, totalRooms, e
   const [accountId, setAccountId] = useState(editingRow?.account_id || accounts[0]?.id || '')
   const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
   const [amount, setAmount] = useState(editingRow?.amount ?? '')
+  const [collected, setCollected] = useState(editingRow?.collected ?? '')
   const [notes, setNotes] = useState(editingRow?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -334,6 +356,7 @@ function AncillaryRevenueFormModal({ companyId, product, accounts, totalRooms, e
       const payload = {
         company_id: companyId, product, entry_date: entryDate, account_id: accountId,
         amount: Number(amount), currency, fx_rate_locked: fxRate, amount_usd: Math.round(Number(amount) / fxRate * 100) / 100,
+        collected: Number(collected) || 0, collected_usd: Math.round((Number(collected) || 0) / fxRate * 100) / 100,
         notes: notes || null,
       }
       let err = null
@@ -373,6 +396,11 @@ function AncillaryRevenueFormModal({ companyId, product, accounts, totalRooms, e
           </Field>
           <Field label="Amount *">
             <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Amount Collected">
+            <input type="number" step="0.01" min="0" value={collected} onChange={e => setCollected(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
           </Field>
         </div>
         <Field label="Notes">
