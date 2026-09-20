@@ -6,6 +6,7 @@ export const MONTH_NAMES = [
 ]
 
 export const PERIOD_TYPES = [
+  { value: 'YESTERDAY', label: 'Yesterday' },
   { value: 'MTD', label: 'Month' },
   { value: 'YTD', label: 'YTD' },
   { value: 'LAST_N_YEARS', label: 'Last N Years' },
@@ -16,6 +17,12 @@ export const PERIOD_TYPES = [
 
 function ymd(d) {
   return d.toISOString().slice(0, 10)
+}
+
+/** Returns { from, to } for Yesterday. */
+export function getYesterdayRange(today = new Date()) {
+  const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 1))
+  return { from: ymd(from), to: ymd(from) }
 }
 
 /** Returns { from, to } for one full calendar year. If it's the current year, `to` is
@@ -84,6 +91,7 @@ export function getNextNYearsRange(n, fiscalYearStartMonth = 1, today = new Date
 export function resolvePeriodRange(periodType, opts = {}) {
   const { fiscalYearStartMonth = 1, n = 1, customFrom, customTo, today = new Date(), year, month } = opts
   switch (periodType) {
+    case 'YESTERDAY': return getYesterdayRange(today)
     case 'MTD': return getMonthRange(year || today.getUTCFullYear(), month || (today.getUTCMonth() + 1), today)
     case 'YTD': return getYTDRange(fiscalYearStartMonth, today)
     case 'LAST_N_YEARS': return getLastNYearsRange(n, fiscalYearStartMonth, today)

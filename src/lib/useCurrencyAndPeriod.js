@@ -4,11 +4,11 @@ import { ensureTodayRatesCached, getLatestRatesMap, convertFromUsd, formatMoney 
 import { resolvePeriodRange } from './fiscalYear'
 import { CURRENCY_LIST } from './currencies'
 
-export function useCurrencyAndPeriod() {
+export function useCurrencyAndPeriod(defaultPeriod = 'YTD') {
   const { activeCompany } = useAuth()
   const [displayCurrency, setDisplayCurrency] = useState('USD')
   const [ratesMap, setRatesMap] = useState({ USD: 1 })
-  const [periodType, setPeriodType] = useState('YTD')
+  const [periodType, setPeriodType] = useState(defaultPeriod)
   const [n, setN] = useState(1)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)

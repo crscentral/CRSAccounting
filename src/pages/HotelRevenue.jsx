@@ -15,7 +15,7 @@ import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exp
 
 export default function HotelRevenue() {
   const { activeCompany, activeProduct, can } = useAuth()
-  const cp = useCurrencyAndPeriod()
+  const cp = useCurrencyAndPeriod('YESTERDAY')
   const [roomModalOpen, setRoomModalOpen] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
   const [ancillaryModalOpen, setAncillaryModalOpen] = useState(false)
@@ -26,20 +26,23 @@ export default function HotelRevenue() {
   const [ancillary, setAncillary] = useState([])
   const [revenueAccounts, setRevenueAccounts] = useState([])
   const [totalRooms, setTotalRooms] = useState(0)
+  const [restRevenue, setRestRevenue] = useState([])
 
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadAll() {
-    const [{ data: room }, { data: anc }, { data: accs }, { data: settings }] = await Promise.all([
+    const [{ data: room }, { data: anc }, { data: accs }, { data: settings }, { data: restRev }] = await Promise.all([
       supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to).order('stat_date', { ascending: false }),
       supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to).order('entry_date', { ascending: false }),
       supabase.from('accounts').select('id, code, name').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').neq('code', '4010').order('code'),
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
+      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('food_amount_usd, beverage_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] })
     ])
     setRoomStats(room || [])
     setAncillary(anc || [])
     setRevenueAccounts(accs || [])
     setTotalRooms(settings?.total_rooms || 0)
+    setRestRevenue(restRev || [])
   }
 
   function openEditRoom(row) {
@@ -100,6 +103,11 @@ export default function HotelRevenue() {
   const totalRoomRevenue = roomStats.reduce((s, r) => s + Number(r.room_revenue_usd), 0)
   const totalCollected = roomStats.reduce((s, r) => s + Number(r.room_revenue_collected_usd), 0)
   const totalAncillary = ancillary.reduce((s, r) => s + Number(r.amount_usd), 0)
+  const fbRev = restRevenue.reduce((s, r) => s + (Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0), 0)
+  
+  const totalRev = totalRoomRevenue + totalAncillary + fbRev
+  const totalRevCollected = totalCollected + totalAncillary + fbRev
+  const pendingCollection = totalRev - totalRevCollected
 
   return (
     <div>
@@ -145,10 +153,12 @@ export default function HotelRevenue() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
-        <KpiCard label="Total Daily Revenue" value={cp.fmt(totalRoomRevenue + totalAncillary)} tone="slate" />
+        <KpiCard label="Total Revenue" value={cp.fmt(totalRev)} tone="slate" />
         <KpiCard label="Room Revenue" value={cp.fmt(totalRoomRevenue)} tone="green" />
-        <KpiCard label="Room Rev. Collected" value={cp.fmt(totalCollected)} tone="blue" />
-        <KpiCard label="Ancillary Revenue" value={cp.fmt(totalAncillary)} tone="gold" />
+        <KpiCard label="F&B Revenue" value={cp.fmt(fbRev)} tone="amber" />
+        <KpiCard label="Other Revenue" value={cp.fmt(totalAncillary)} tone="gold" />
+        <KpiCard label="Rev. Collected" value={cp.fmt(totalRevCollected)} tone="blue" />
+        <KpiCard label="Revenue Pending Collection" value={cp.fmt(pendingCollection)} tone="red" />
       </div>
 
       {isLocked && (
