@@ -18,6 +18,11 @@ export default function HotelBudget() {
   const [startYear, setStartYear] = useState(new Date().getFullYear())
   const [rows, setRows] = useState({}) // key: "year-month" -> { occ, adr, revenue, currency }
   const [actuals, setActuals] = useState({}) // key: "year-month" -> revenue_usd actual
+  const [saving, setSaving] = useState({})
+  const [displayCurrency, setDisplayCurrency] = useState('USD')
+  const [rate, setRate] = useState(1)
+  const [rates, setRates] = useState({})
+
 
   // --- Ancillary Revenue State ---
     const [ancillaryMonth, setAncillaryMonth] = useState(new Date().getMonth() + 1)
@@ -189,10 +194,7 @@ export default function HotelBudget() {
     setAncillaryBudgets(b => ({ ...b, [key]: updated }))
   }
 
-  const [saving, setSaving] = useState({})
-  const [displayCurrency, setDisplayCurrency] = useState('USD')
-  const [rate, setRate] = useState(1)
-  const [rates, setRates] = useState({})
+
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, startYear])

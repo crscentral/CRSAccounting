@@ -1,20 +1,10 @@
-require('@babel/register')({
-  presets: [
-    ['@babel/preset-react', { runtime: 'automatic' }]
-  ],
-  extensions: ['.jsx', '.js']
-})
+import { renderToString } from 'react-dom/server'
+import React from 'react'
+import HotelBudget from './src/pages/HotelBudget.jsx'
 
-const React = require('react')
-const ReactDOMServer = require('react-dom/server')
+// Mock the AuthContext and other dependencies
+jest.mock('./src/lib/AuthContext', () => ({
+  useAuth: () => ({ activeCompany: { id: '123', name: 'Test' }, activeProduct: 'hotel', can: () => true })
+}))
 
-// Mock out imports that might fail in Node
-const mockModule = new Proxy({}, { get: () => () => null })
-require.cache[require.resolve('../lib/supabaseClient')] = { exports: { supabase: { from: () => ({ select: () => ({ eq: () => ({ order: () => ({ maybeSingle: () => ({}) }) }) }) }) } } }
-
-try {
-  const AppShell = require('./src/components/AppShell.jsx').default
-  console.log("AppShell parsed.")
-} catch (e) {
-  console.error("Parse Error:", e)
-}
+// We need babel to compile JSX on the fly
