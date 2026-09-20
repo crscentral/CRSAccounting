@@ -35,7 +35,7 @@ export default function HotelBudget() {
   useEffect(() => {
     async function fetchAncillaryAccounts() {
       if (!activeCompany) return
-      const { data } = await supabase.from('accounts').select('code, name, subtype').eq('company_id', activeCompany.id).eq('type', 'Revenue').neq('code', '4010').order('subtype', { ascending: true }).order('code', { ascending: true })
+      const { data } = await supabase.from('accounts').select('code, name, subtype').eq('company_id', activeCompany.id).eq('product', 'hotel').eq('type', 'Revenue').neq('code', '4010').order('subtype', { ascending: true }).order('code', { ascending: true })
       setAncillaryAccounts(data || [])
     }
     fetchAncillaryAccounts()

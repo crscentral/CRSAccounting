@@ -59,7 +59,7 @@ export default function FinancialPerformance() {
       supabase.from('forecast_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('forecast_year', forecastYear).order('forecast_month'),
       activeProduct === 'hotel' ? supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', forecastYear) : Promise.resolve({ data: [] }),
       activeProduct === 'hotel' ? supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('budget_year', forecastYear) : Promise.resolve({ data: [] }),
-      activeProduct === 'hotel' ? supabase.from('accounts').select('code, type').eq('company_id', activeCompany.id) : Promise.resolve({ data: [] })
+      activeProduct === 'hotel' ? supabase.from('accounts').select('code, type').eq('company_id', activeCompany.id).eq('product', 'hotel') : Promise.resolve({ data: [] })
     ])
     
     const combined = data ? [...data] : []

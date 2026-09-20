@@ -49,7 +49,7 @@ export default function HotelExpenseBudget() {
   useEffect(() => {
     async function fetchAccounts() {
       if (!activeCompany) return
-      const { data } = await supabase.from('accounts').select('code, name').eq('company_id', activeCompany.id).eq('type', 'Expenses').order('code')
+      const { data } = await supabase.from('accounts').select('code, name').eq('company_id', activeCompany.id).eq('product', 'hotel').eq('type', 'Expenses').order('code')
       setAccounts(data || [])
     }
     fetchAccounts()
