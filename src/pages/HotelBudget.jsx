@@ -71,15 +71,22 @@ export default function HotelBudget() {
       }
       
       // Inject Restaurant Table Revenue into Hotel F&B Revenue Actuals
-      if (restRev) {
+      if (activeProduct === 'hotel' && restRev) {
         restRev.forEach(r => {
           const m = parseInt(r.revenue_date.split('-')[1], 10)
           // food_amount -> 4019 - Restaurant Revenue
           const foodKey = `4019-${m}`
           // beverage_amount -> 4011 - Beverage Revenue
           const bevKey = `4011-${m}`
-          
           aMap[foodKey] = (aMap[foodKey] || 0) + (Number(r.food_amount_usd) || 0)
+          aMap[bevKey] = (aMap[bevKey] || 0) + (Number(r.beverage_amount_usd) || 0)
+        })
+      } else if (activeProduct === 'restaurant' && restRev) {
+        // In restaurant, the main Food Sales (4010) is handled above. 
+        // Beverage Sales is 4011. Other Operating Income is 4019.
+        restRev.forEach(r => {
+          const m = parseInt(r.revenue_date.split('-')[1], 10)
+          const bevKey = `4011-${m}`
           aMap[bevKey] = (aMap[bevKey] || 0) + (Number(r.beverage_amount_usd) || 0)
         })
       }
@@ -231,21 +238,30 @@ export default function HotelBudget() {
   function fmtRounded(usd) { return formatMoney(Math.round(convertFromUsd(usd, displayCurrency, { [displayCurrency]: rate })), displayCurrency).replace('.00', '') }
 
   async function loadAll() {
-    const [{ data: settings }, { data: budgetRows }, { data: statRows }] = await Promise.all([
+    const [{ data: settings }, { data: budgetRows }, { data: statRows }, { data: restRevRows }] = await Promise.all([
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
       supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', startYear),
-      supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', `${startYear}-01-01`).lte('stat_date', `${startYear}-12-31`),
+      activeProduct === 'hotel' ? supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', `${startYear}-01-01`).lte('stat_date', `${startYear}-12-31`) : Promise.resolve({ data: [] }),
+      activeProduct === 'restaurant' ? supabase.from('restaurant_daily_revenue').select('revenue_date, food_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', `${startYear}-01-01`).lte('revenue_date', `${startYear}-12-31`) : Promise.resolve({ data: [] })
     ])
     setTotalRooms(settings?.total_rooms || 0)
     const rowMap = {}
     ;(budgetRows || []).forEach(b => { rowMap[`${b.budget_year}-${b.budget_month}`] = { occ: b.budgeted_occupancy_pct, adr: b.budgeted_adr, revenue: b.budgeted_room_revenue, currency: b.currency, revenue_usd: b.budgeted_room_revenue_usd } })
     setRows(rowMap)
     const actualMap = {}
-    ;(statRows || []).forEach(s => {
-      const [y, m] = s.stat_date.split('-')
-      const key = `${y}-${Number(m)}`
-      actualMap[key] = (actualMap[key] || 0) + Number(s.room_revenue_usd)
-    })
+    if (activeProduct === 'hotel') {
+      ;(statRows || []).forEach(s => {
+        const [y, m] = s.stat_date.split('-')
+        const key = `${y}-${Number(m)}`
+        actualMap[key] = (actualMap[key] || 0) + Number(s.room_revenue_usd)
+      })
+    } else {
+      ;(restRevRows || []).forEach(s => {
+        const [y, m] = s.revenue_date.split('-')
+        const key = `${y}-${Number(m)}`
+        actualMap[key] = (actualMap[key] || 0) + (Number(s.food_amount_usd) || 0)
+      })
+    }
     setActuals(actualMap)
   }
 
@@ -355,8 +371,8 @@ export default function HotelBudget() {
   return (
     <div>
       <PageHeader
-        title="Room Revenue Budget"
-        subtitle={`${activeCompany.name} • Feed any two of Occupancy % / ADR / Room Revenue — the third calculates automatically`}
+        title={activeProduct === "restaurant" ? "F&B Revenue Budget" : "Room Revenue Budget"}
+        subtitle={`${activeCompany.name} • Feed any two of Occupancy % / ${activeProduct === "restaurant" ? "Avg Check" : "ADR"} / ${activeProduct === "restaurant" ? "F&B Revenue" : "Room Revenue"} — the third calculates automatically`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400">
@@ -370,8 +386,8 @@ export default function HotelBudget() {
       />
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mb-6">
-        <h3 className="font-semibold text-slate-700 mb-2">Room Inventory</h3>
-        <p className="text-xs text-slate-500 mb-3">Total rooms available — used to calculate Occupancy %, RevPAR, and rooms occupied from your budgeted occupancy percentage.</p>
+        <h3 className="font-semibold text-slate-700 mb-2">{activeProduct === "restaurant" ? "Seat Inventory" : "Room Inventory"}</h3>
+        <p className="text-xs text-slate-500 mb-3">{activeProduct === "restaurant" ? "Total seats available" : "Total rooms available"} — used to calculate Occupancy %, RevPAR, and rooms occupied from your budgeted occupancy percentage.</p>
         <div className="flex items-center gap-2">
           <input type="number" min="0" value={totalRooms} onChange={e => setTotalRooms(Number(e.target.value))} className="w-32 border border-slate-300 rounded-lg px-3 py-2 text-sm" />
           {can(['owner', 'admin', 'accountant']) && (
@@ -399,8 +415,8 @@ export default function HotelBudget() {
       
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <KpiCard label={`${startYear} Front Office Revenue`} value={fmt(revenueSummary.frontOffice)} icon={TrendingUp} tone="gold" sublabel="Room Revenue + Front Office" />
-        <KpiCard label={`${startYear} F&B Service Revenue`} value={fmt(revenueSummary.fbService)} icon={TrendingUp} tone="blue" sublabel="F&B Service Accounts" />
+        <KpiCard label={`${startYear} ${activeProduct === "restaurant" ? "Food Sales" : "Front Office Revenue"}`} value={fmt(revenueSummary.frontOffice)} icon={TrendingUp} tone="gold" sublabel={activeProduct === "restaurant" ? "Food Sales Account" : "Room Revenue + Front Office"} />
+        <KpiCard label={`${startYear} ${activeProduct === "restaurant" ? "Beverage Sales" : "F&B Service Revenue"}`} value={fmt(revenueSummary.fbService)} icon={TrendingUp} tone="blue" sublabel={activeProduct === "restaurant" ? "Beverage Sales Account" : "F&B Service Accounts"} />
         <KpiCard label={`${startYear} Other Revenue`} value={fmt(revenueSummary.otherRev)} icon={TrendingUp} tone="emerald" sublabel="Other Operating Income" />
       </div>
 
@@ -410,7 +426,7 @@ export default function HotelBudget() {
         <select value={startYear} onChange={e => setStartYear(Number(e.target.value))} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm">
           {Array.from({ length: 8 }, (_, i) => now.getFullYear() - 2 + i).map(y => <option key={y} value={y}>{y}</option>)}
         </select>
-        <span className="text-xs text-slate-400">Select year for Room & Ancillary Revenue</span>
+        <span className="text-xs text-slate-400">Select year for Revenue Budget</span>
       </div>
 
       {years.map(year => (
@@ -422,8 +438,8 @@ export default function HotelBudget() {
               <tr>
                 <th className="py-2 px-3 font-semibold rounded-tl-lg">Month</th>
                 <th className="py-2 px-3 font-semibold">Occupancy %</th>
-                <th className="py-2 px-3 font-semibold">ADR</th>
-                <th className="py-2 px-3 font-semibold">Rooms Occ.</th>
+                <th className="py-2 px-3 font-semibold">{activeProduct === "restaurant" ? "Avg Check" : "ADR"}</th>
+                <th className="py-2 px-3 font-semibold">{activeProduct === "restaurant" ? "Covers" : "Rooms Occ."}</th>
                 <th className="py-2 px-3 font-semibold">Daily Budget</th>
                 <th className="py-2 px-3 font-semibold">Daily (USD)</th>
                 <th className="py-2 px-3 font-semibold">Monthly Budget</th>
@@ -633,7 +649,7 @@ export default function HotelBudget() {
 
       {reportModalOpen && (
         <ReportOptionsModal
-          title="Room Revenue Budget"
+          title={activeProduct === "restaurant" ? "F&B Revenue Budget" : "Room Revenue Budget"}
           fields={[
             { type: 'currency', key: 'currency', default: displayCurrency },
             { 

@@ -59,6 +59,8 @@ function AppRoutes() {
         <Route path="/hotel-stats" element={<HotelOccupancyStats />} />
         <Route path="/hotel-budget" element={<HotelBudget />} />
           <Route path="/hotel-expense-budget" element={<HotelExpenseBudget />} />
+        <Route path="/restaurant-budget" element={<HotelBudget />} />
+        <Route path="/restaurant-expense-budget" element={<HotelExpenseBudget />} />
         <Route path="/hotel-revenue" element={<HotelRevenue />} />
         <Route path="/hotel-expenses" element={<HotelExpenses />} />
         <Route path="/hotel-guest-invoices" element={<HotelGuestInvoices />} />

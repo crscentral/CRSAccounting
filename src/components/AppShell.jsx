@@ -25,6 +25,8 @@ const NAV_ITEMS = [
   { to: '/hotel-expenses', label: 'Expenses', icon: Receipt, products: ['hotel'] },
   { to: '/hotel-guest-invoices', label: 'Guest Invoices', icon: ClipboardList, products: ['hotel'] },
   { to: '/restaurant-revenue', label: 'Table Revenue', icon: UtensilsCrossed, products: ['restaurant'] },
+  { to: '/restaurant-budget', label: 'F&B Revenue Budget', icon: Target, products: ['restaurant'] },
+  { to: '/restaurant-expense-budget', label: 'F&B Expense Budget', icon: Target, products: ['restaurant'] },
   { to: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { to: '/ledger', label: 'Ledger', icon: BookText },
   { to: '/analytics', label: 'Analytics', icon: TrendingUp },

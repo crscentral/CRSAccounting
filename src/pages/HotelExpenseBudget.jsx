@@ -49,7 +49,7 @@ export default function HotelExpenseBudget() {
   useEffect(() => {
     async function fetchAccounts() {
       if (!activeCompany) return
-      const { data } = await supabase.from('accounts').select('code, name').eq('company_id', activeCompany.id).eq('product', 'hotel').eq('type', 'Expenses').order('code')
+      const { data } = await supabase.from('accounts').select('code, name').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Expenses').order('code')
       setAccounts(data || [])
     }
     fetchAccounts()
@@ -61,8 +61,8 @@ export default function HotelExpenseBudget() {
       if (!activeCompany || accounts.length === 0) return
 
       const [{ data: budgetRows }, { data: ledgerRows }] = await Promise.all([
-        supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('budget_year', selectedYear),
-        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('entry_date', `${selectedYear}-01-01`).lte('entry_date', `${selectedYear}-12-31`).eq('accounts.type', 'Expenses')
+        supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', selectedYear),
+        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', `${selectedYear}-01-01`).lte('entry_date', `${selectedYear}-12-31`).eq('accounts.type', 'Expenses')
       ])
 
       const bMap = {}
@@ -101,6 +101,7 @@ export default function HotelExpenseBudget() {
     
     const { error } = await supabase.from('hotel_expense_budget').upsert({
       company_id: activeCompany.id,
+      product: activeProduct,
       budget_year: selectedYear,
       budget_month: selectedMonth,
       account_code: accountCode,
@@ -234,7 +235,7 @@ export default function HotelExpenseBudget() {
   return (
     <div>
       <PageHeader
-        title="Expenses Budget"
+        title={activeProduct === "restaurant" ? "F&B Expense Budget" : "Expenses Budget"}
         subtitle="Manage monthly budgets for all expense categories"
         actions={
           <div className="flex items-center gap-3">
@@ -393,7 +394,7 @@ export default function HotelExpenseBudget() {
         <ReportOptionsModal
           onClose={() => setReportModalOpen(false)}
           onGenerate={generateReport}
-          title="Expenses Budget"
+          title={activeProduct === "restaurant" ? "F&B Expense Budget" : "Expenses Budget"}
           fields={[
             { type: 'currency', key: 'currency', default: displayCurrency }
           ]}
