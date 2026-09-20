@@ -35,7 +35,9 @@ export default function HotelBudget() {
   useEffect(() => {
     async function fetchAncillaryAccounts() {
       if (!activeCompany) return
-      const { data } = await supabase.from('accounts').select('code, name, subtype').eq('company_id', activeCompany.id).eq('product', 'hotel').eq('type', 'Revenue').neq('code', '4010').order('subtype', { ascending: true }).order('code', { ascending: true })
+            let query = supabase.from('accounts').select('code, name, subtype').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').order('subtype', { ascending: true }).order('code', { ascending: true })
+      if (activeProduct === 'hotel') query = query.neq('code', '4010')
+      const { data } = await query
       setAncillaryAccounts(data || [])
     }
     fetchAncillaryAccounts()
@@ -46,10 +48,13 @@ export default function HotelBudget() {
     async function loadAncillary() {
       if (!activeCompany || ancillaryAccounts.length === 0) return
 
+      let ledgerQuery = supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', `${startYear}-01-01`).lte('entry_date', `${startYear}-12-31`).eq('accounts.type', 'Revenue')
+      if (activeProduct === 'hotel') ledgerQuery = ledgerQuery.neq('accounts.code', '4010')
+      
       const [{ data: budgetRows }, { data: ledgerRows }, { data: restRev }] = await Promise.all([
-        supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('budget_year', startYear),
-        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('entry_date', `${startYear}-01-01`).lte('entry_date', `${startYear}-12-31`).eq('accounts.type', 'Revenue').neq('accounts.code', '4010'),
-        supabase.from('restaurant_daily_revenue').select('revenue_date, food_amount_usd, beverage_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', `${startYear}-01-01`).lte('revenue_date', `${startYear}-12-31`)
+        supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', startYear),
+        ledgerQuery,
+        supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', `${startYear}-01-01`).lte('revenue_date', `${startYear}-12-31`)
       ])
 
       const bMap = {}
@@ -70,24 +75,29 @@ export default function HotelBudget() {
         })
       }
       
-      // Inject Restaurant Table Revenue into Hotel F&B Revenue Actuals
-      if (activeProduct === 'hotel' && restRev) {
+      // Dynamically Inject Restaurant Table Revenue based on activeProduct and Meal Period
+      if (restRev) {
         restRev.forEach(r => {
           const m = parseInt(r.revenue_date.split('-')[1], 10)
-          // food_amount -> 4019 - Restaurant Revenue
-          const foodKey = `4019-${m}`
-          // beverage_amount -> 4011 - Beverage Revenue
-          const bevKey = `4011-${m}`
-          aMap[foodKey] = (aMap[foodKey] || 0) + (Number(r.food_amount_usd) || 0)
-          aMap[bevKey] = (aMap[bevKey] || 0) + (Number(r.beverage_amount_usd) || 0)
-        })
-      } else if (activeProduct === 'restaurant' && restRev) {
-        // In restaurant, the main Food Sales (4010) is handled above. 
-        // Beverage Sales is 4011. Other Operating Income is 4019.
-        restRev.forEach(r => {
-          const m = parseInt(r.revenue_date.split('-')[1], 10)
-          const bevKey = `4011-${m}`
-          aMap[bevKey] = (aMap[bevKey] || 0) + (Number(r.beverage_amount_usd) || 0)
+          
+          if (activeProduct === 'hotel') {
+            const foodKey = r.meal_period === 'Breakfast' ? `4016-${m}` : `4011-${m}`
+            const bevKey = `4020-${m}`
+            const otherKey = `4021-${m}`
+            
+            aMap[foodKey] = (aMap[foodKey] || 0) + (Number(r.food_amount_usd) || 0)
+            aMap[bevKey] = (aMap[bevKey] || 0) + (Number(r.beverage_amount_usd) || 0)
+            aMap[otherKey] = (aMap[otherKey] || 0) + (Number(r.other_amount_usd) || 0)
+            
+          } else if (activeProduct === 'restaurant') {
+            const foodKey = r.meal_period === 'Breakfast' ? `4016-${m}` : `4010-${m}`
+            const bevKey = `4011-${m}`
+            const otherKey = `4019-${m}`
+            
+            aMap[foodKey] = (aMap[foodKey] || 0) + (Number(r.food_amount_usd) || 0)
+            aMap[bevKey] = (aMap[bevKey] || 0) + (Number(r.beverage_amount_usd) || 0)
+            aMap[otherKey] = (aMap[otherKey] || 0) + (Number(r.other_amount_usd) || 0)
+          }
         })
       }
       setAncillaryActuals(aMap)
@@ -154,7 +164,7 @@ export default function HotelBudget() {
       for (const a of ancillaryAccounts) {
         const k = `${a.code}-${m}`
         const amt = ancillaryBudgets[k] ? (Number(ancillaryBudgets[k].amount_usd) || 0) : 0
-        if (a.subtype === 'Front Office') frontOffice += amt
+        if (a.subtype === 'Front Office' || (activeProduct === 'restaurant' && (a.code === '4010' || a.subtype === 'F&B Revenue' || a.subtype === 'Sales'))) frontOffice += amt
         else if (a.subtype === 'F&B Service') fbService += amt
         else otherRev += amt
       }
@@ -580,7 +590,7 @@ export default function HotelBudget() {
                   const subtypes = [...new Set(ancillaryAccounts.map(a => a.subtype))].sort((a, b) => {
                     if (a === 'Other Revenue') return 1;
                     if (b === 'Other Revenue') return -1;
-                    const order = { 'Room Revenue': 1, 'Front Office': 1, 'F&B Service': 2 };
+                    const order = { 'Room Revenue': 1, 'Front Office': 1, 'Sales': 1, 'F&B Revenue': 1, 'F&B Service': 2 };
                     const oa = order[a] || 99;
                     const ob = order[b] || 99;
                     if (oa !== ob) return oa - ob;
