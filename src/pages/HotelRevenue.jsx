@@ -33,13 +33,28 @@ export default function HotelRevenue() {
   async function loadAll() {
     const [{ data: room }, { data: anc }, { data: accs }, { data: settings }, { data: restRev }] = await Promise.all([
       supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to).order('stat_date', { ascending: false }),
-      supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to).order('entry_date', { ascending: false }),
-      supabase.from('accounts').select('id, code, name').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').neq('code', '4010').order('code'),
+      supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to).order('entry_date', { ascending: false }),
+      supabase.from('accounts').select('id, code, name, subtype').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').neq('code', '4010').order('code'),
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
-      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd, total_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to).order('revenue_date', { ascending: false }) : Promise.resolve({ data: [] })
+      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to).order('revenue_date', { ascending: false }) : Promise.resolve({ data: [] })
     ])
     setRoomStats(room || [])
     setAncillary(anc || [])
+    const aRoom = []; const aFB = []; const aOther = [];
+    (anc || []).forEach(a => {
+      const st = (a.account?.subtype || '').toLowerCase()
+      const nm = (a.account?.name || '').toLowerCase()
+      if (st.includes('f&b') || nm.includes('breakfast') || nm.includes('food') || nm.includes('beverage')) {
+        aFB.push(a)
+      } else if (st.includes('room') || st.includes('front office') || nm.includes('extra bed') || nm.includes('early check') || nm.includes('late check')) {
+        aRoom.push(a)
+      } else {
+        aOther.push(a)
+      }
+    })
+    setAncRoom(aRoom)
+    setAncFB(aFB)
+    setAncOther(aOther)
     setRevenueAccounts(accs || [])
     setTotalRooms(settings?.total_rooms || 0)
     setRestRevenue(restRev || [])
@@ -98,14 +113,29 @@ export default function HotelRevenue() {
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'daily_revenue_collection' })
   }
 
+  const ancillaryCols = [
+    { key: 'entry_date', label: 'Date' },
+    { key: 'account', label: 'Revenue Head', render: r => r.account ? `${r.account.code} - ${r.account.name}` : '—' },
+    { key: 'amount_usd', label: 'Amount', render: r => cp.fmt(r.amount_usd) },
+    { key: 'collected_usd', label: 'Collected', render: r => cp.fmt(r.collected_usd || 0) },
+    { key: 'pending_usd', label: 'Pending Collection', render: r => <span className="text-red-500 font-medium">{cp.fmt((r.amount_usd || 0) - (r.collected_usd || 0))}</span> },
+    { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
+    ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => (
+      <div className="flex justify-end gap-1">
+        <button disabled={isLocked} onClick={() => { setEditingRow(r); setAncillaryModalOpen(true) }} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size={15} /></button>
+        <button disabled={isLocked} onClick={() => handleDeleteAncillary(r)} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30"><Trash2 size={15} /></button>
+      </div>
+    ) }] : []),
+  ]
+
   if (!activeCompany) return null
 
-  const totalRoomRevenue = roomStats.reduce((s, r) => s + Number(r.room_revenue_usd), 0)
-  const totalCollected = roomStats.reduce((s, r) => s + Number(r.room_revenue_collected_usd), 0)
-  const totalAncillary = ancillary.reduce((s, r) => s + Number(r.amount_usd), 0)
-  const ancillaryCollected = ancillary.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0)
-  const fbRev = restRevenue.reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
-  const fbCollected = restRevenue.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0)
+  const totalRoomRevenue = roomStats.reduce((s, r) => s + Number(r.room_revenue_usd), 0) + ancRoom.reduce((s, r) => s + Number(r.amount_usd), 0)
+  const totalCollected = roomStats.reduce((s, r) => s + Number(r.room_revenue_collected_usd), 0) + ancRoom.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0)
+  const totalAncillary = ancOther.reduce((s, r) => s + Number(r.amount_usd), 0)
+  const ancillaryCollected = ancOther.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0)
+  const fbRev = restRevenue.reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0) + ancFB.reduce((s, r) => s + Number(r.amount_usd), 0)
+  const fbCollected = restRevenue.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0) + ancFB.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0)
   
   const totalRev = totalRoomRevenue + totalAncillary + fbRev
   const totalRevCollected = totalCollected + ancillaryCollected + fbCollected
@@ -186,6 +216,12 @@ export default function HotelRevenue() {
         rows={roomStats}
         emptyMessage="No room revenue entries in this range."
       />
+      {ancRoom.length > 0 && (
+        <div className="mt-4">
+          <h4 className="text-sm font-medium text-slate-600 mb-2">Room Revenue Postings</h4>
+          <DataTable columns={ancillaryCols} rows={ancRoom} emptyMessage="No postings." />
+        </div>
+      )}
 
       {activeProduct === 'hotel' && (
         <>
@@ -198,34 +234,27 @@ export default function HotelRevenue() {
               { key: 'collected_usd', label: 'Collected', render: r => cp.fmt(r.collected_usd) },
               { key: 'pending_collection', label: 'Pending Collection', render: r => { const total = r.total_amount_usd || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0)); return <span className="font-semibold text-red-500">{cp.fmt(total - (r.collected_usd || 0))}</span> } },
             ]}
-            data={restRevenue}
-            emptyState="No F&B revenue entries in this range."
+            rows={restRevenue}
+            emptyMessage="No F&B revenue entries in this range."
           />
+          {ancFB.length > 0 && (
+            <div className="mt-4">
+              <h4 className="text-sm font-medium text-slate-600 mb-2">F&B Revenue Postings</h4>
+              <DataTable columns={ancillaryCols} rows={ancFB} emptyMessage="No postings." />
+            </div>
+          )}
         </>
       )}
 
       <h3 className="font-semibold text-slate-700 mb-3 mt-6 flex items-center justify-between">
-        <span>Other Revenue (Extra Bed, Early Check-in, Late Check-out, Breakfast, Transportation, SPA, etc.)</span>
+        <span>Other Revenue</span>
         {can(['owner', 'admin', 'accountant']) && (
           <button onClick={() => setNewHeadModalOpen(true)} className="text-xs text-navy-600 hover:text-navy-800 font-medium">+ Add Revenue Head</button>
         )}
       </h3>
       <DataTable
-        columns={[
-          { key: 'entry_date', label: 'Date' },
-          { key: 'account', label: 'Revenue Head', render: r => r.account ? `${r.account.code} - ${r.account.name}` : '—' },
-          { key: 'amount_usd', label: 'Amount', render: r => cp.fmt(r.amount_usd) },
-          { key: 'collected_usd', label: 'Collected', render: r => cp.fmt(r.collected_usd || 0) },
-          { key: 'pending_usd', label: 'Pending Collection', render: r => <span className="text-red-500 font-medium">{cp.fmt((r.amount_usd || 0) - (r.collected_usd || 0))}</span> },
-          { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
-          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => (
-            <div className="flex justify-end gap-1">
-              <button disabled={isLocked} onClick={() => { setEditingRow(r); setAncillaryModalOpen(true) }} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size={15} /></button>
-              <button disabled={isLocked} onClick={() => handleDeleteAncillary(r)} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30"><Trash2 size={15} /></button>
-            </div>
-          ) }] : []),
-        ]}
-        rows={ancillary}
+columns={ancillaryCols}
+        rows={ancOther}
         emptyMessage="No other revenue entries in this range."
       />
 
