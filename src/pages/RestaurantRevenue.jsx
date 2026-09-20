@@ -173,7 +173,11 @@ export default function RestaurantRevenue() {
           { key: 'beverage_amount_usd', label: 'Beverage', render: r => cp.fmt(r.beverage_amount_usd) },
           { key: 'other_amount_usd', label: 'Other', render: r => cp.fmt(r.other_amount_usd) },
           { key: 'amount_usd', label: 'Total', render: r => cp.fmt(r.amount_usd) },
-          { key: 'per_cover', label: 'Rev/Cover', render: r => r.covers > 0 ? cp.fmt(r.amount_usd / r.covers) : '—' },
+          { key: 'collected_usd', label: 'Collected', render: r => <span className="text-emerald-600 font-medium">{cp.fmt(r.collected_usd || 0)}</span> },
+          { key: 'balance', label: 'Balance', render: r => {
+              const bal = Number(r.amount_usd) - (Number(r.collected_usd) || 0)
+              return <span className={bal > 0 ? "text-red-600 font-medium" : "text-slate-500"}>{cp.fmt(bal)}</span>
+          } },
           ...(can(['owner', 'admin', 'accountant']) ? [{
             key: 'actions', label: '', render: r => (
               <div className="flex gap-2 justify-end md:justify-start">

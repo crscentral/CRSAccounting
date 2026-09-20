@@ -36,7 +36,7 @@ export default function HotelRevenue() {
       supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to).order('entry_date', { ascending: false }),
       supabase.from('accounts').select('id, code, name').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').neq('code', '4010').order('code'),
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
-      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('food_amount_usd, beverage_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] })
+      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('food_amount_usd, beverage_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] })
     ])
     setRoomStats(room || [])
     setAncillary(anc || [])
@@ -104,9 +104,10 @@ export default function HotelRevenue() {
   const totalCollected = roomStats.reduce((s, r) => s + Number(r.room_revenue_collected_usd), 0)
   const totalAncillary = ancillary.reduce((s, r) => s + Number(r.amount_usd), 0)
   const fbRev = restRevenue.reduce((s, r) => s + (Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0), 0)
+  const fbCollected = restRevenue.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0)
   
   const totalRev = totalRoomRevenue + totalAncillary + fbRev
-  const totalRevCollected = totalCollected + totalAncillary + fbRev
+  const totalRevCollected = totalCollected + totalAncillary + fbCollected
   const pendingCollection = totalRev - totalRevCollected
 
   return (

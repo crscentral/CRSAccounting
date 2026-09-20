@@ -1,23 +1,24 @@
 import re
 
 with open('src/pages/HotelRevenue.jsx', 'r') as f:
-    code = f.read()
+    content = f.read()
 
-old_kpis = r"""<KpiCard label="Room Revenue" value=\{cp\.fmt\(totalRoomRevenue\)\} tone="green" />
-        <KpiCard label="Room Revenue Collected" value=\{cp\.fmt\(totalCollected\)\} tone="blue" />
-        <KpiCard label="Ancillary Revenue" value=\{cp\.fmt\(totalAncillary\)\} tone="gold" />"""
+old_query = "supabase.from('restaurant_daily_revenue').select('food_amount_usd, beverage_amount_usd')"
+new_query = "supabase.from('restaurant_daily_revenue').select('food_amount_usd, beverage_amount_usd, collected_usd')"
+content = content.replace(old_query, new_query)
 
-new_kpis = """<KpiCard label="Total Daily Revenue" value={cp.fmt(totalRoomRevenue + totalAncillary)} tone="slate" />
-        <KpiCard label="Room Revenue" value={cp.fmt(totalRoomRevenue)} tone="green" />
-        <KpiCard label="Room Rev. Collected" value={cp.fmt(totalCollected)} tone="blue" />
-        <KpiCard label="Ancillary Revenue" value={cp.fmt(totalAncillary)} tone="gold" />"""
-
-# Also update the grid cols to 4
-old_grid = r'<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">'
-new_grid = '<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">'
-
-code = re.sub(old_kpis, new_kpis, code)
-code = re.sub(old_grid, new_grid, code)
+old_calcs = """  const fbRev = restRevenue.reduce((s, r) => s + (Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0), 0)
+  
+  const totalRev = totalRoomRevenue + totalAncillary + fbRev
+  const totalRevCollected = totalCollected + totalAncillary + fbRev
+  const pendingCollection = totalRev - totalRevCollected"""
+new_calcs = """  const fbRev = restRevenue.reduce((s, r) => s + (Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0), 0)
+  const fbCollected = restRevenue.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0)
+  
+  const totalRev = totalRoomRevenue + totalAncillary + fbRev
+  const totalRevCollected = totalCollected + totalAncillary + fbCollected
+  const pendingCollection = totalRev - totalRevCollected"""
+content = content.replace(old_calcs, new_calcs)
 
 with open('src/pages/HotelRevenue.jsx', 'w') as f:
-    f.write(code)
+    f.write(content)

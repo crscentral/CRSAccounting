@@ -15,12 +15,14 @@ export default function RestaurantRevenueFormModal({ companyId, product, company
   const [foodAmount, setFoodAmount] = useState(entry?.food_amount ?? 0)
   const [beverageAmount, setBeverageAmount] = useState(entry?.beverage_amount ?? 0)
   const [otherAmount, setOtherAmount] = useState(entry?.other_amount ?? 0)
+  const [collected, setCollected] = useState(entry?.collected ?? '')
   const [notes, setNotes] = useState(entry?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const total = Number(foodAmount || 0) + Number(beverageAmount || 0) + Number(otherAmount || 0)
   const perCover = covers > 0 ? total / covers : 0
+  const balance = total - (Number(collected) || 0)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -46,6 +48,8 @@ export default function RestaurantRevenueFormModal({ companyId, product, company
         beverage_amount_usd: Math.round((Number(beverageAmount) || 0) / fxRate * 100) / 100,
         other_amount_usd: Math.round((Number(otherAmount) || 0) / fxRate * 100) / 100,
         amount_usd: Math.round(total / fxRate * 100) / 100,
+        collected: Number(collected) || 0,
+        collected_usd: Math.round((Number(collected) || 0) / fxRate * 100) / 100,
         notes: notes || null,
       }
       if (entry) {
@@ -110,9 +114,20 @@ export default function RestaurantRevenueFormModal({ companyId, product, company
           </Field>
         </div>
 
-        <div className="bg-slate-50 rounded-lg p-3 flex items-center justify-between text-sm">
-          <span className="text-slate-500">Total: <strong className="text-slate-700">{total.toFixed(2)} {currency}</strong></span>
-          <span className="text-slate-500">Revenue / Cover: <strong className="text-slate-700">{perCover.toFixed(2)} {currency}</strong></span>
+        <Field label="Amount Collected (Optional)">
+          <input type="number" step="0.01" min="0" value={collected} onChange={e => setCollected(e.target.value)}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder={`Defaults to 0`} />
+        </Field>
+
+        <div className="bg-slate-50 rounded-lg p-3 flex flex-col gap-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500">Total Rev: <strong className="text-slate-700">{total.toFixed(2)} {currency}</strong></span>
+            <span className="text-slate-500">Rev/Cover: <strong className="text-slate-700">{perCover.toFixed(2)} {currency}</strong></span>
+          </div>
+          <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+            <span className="text-slate-500">Collected: <strong className="text-emerald-600">{(Number(collected)||0).toFixed(2)} {currency}</strong></span>
+            <span className="text-slate-500">Balance: <strong className={balance > 0 ? "text-red-600" : "text-slate-700"}>{balance.toFixed(2)} {currency}</strong></span>
+          </div>
         </div>
 
         <Field label="Notes">
