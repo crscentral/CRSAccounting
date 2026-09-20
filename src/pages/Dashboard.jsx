@@ -290,17 +290,7 @@ export default function Dashboard() {
     const restRevCollected = restaurantRevenue.reduce((s, r) => s + Number(r.collected_usd || 0), 0)
     collected = manualRoomCollected + guestInvoiceCollected + ancillaryCollected + restRevCollected
     
-    // Add restaurant daily revenue to totalBilled
-    const restRevTotal = restaurantRevenue.reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
-    totalBilled += restRevTotal
-    
-    // Add missing ancillary billing to totalBilled
-    const ancillaryTotal = hotelRevenueEntries.reduce((s, r) => s + Number(r.amount_usd || 0), 0)
-    totalBilled += ancillaryTotal
-    
-    // Add missing room revenue to totalBilled
-    const manualRoomTotal = hotelRoomStats.reduce((s, r) => s + Number(r.manual_room_revenue_usd || 0), 0)
-    totalBilled += manualRoomTotal
+
                 
     // Expenses Made = Expense entries + amortized AMC (assuming paid for simplicity)
     const start = new Date(cp.range.from)

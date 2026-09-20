@@ -194,13 +194,14 @@ export default function HotelBudget() {
     
     const { error } = await supabase.from('hotel_expense_budget').upsert({
       company_id: activeCompany.id,
+      product: activeProduct,
       budget_year: startYear,
       budget_month: ancillaryMonth,
       account_code: accountCode,
       amount: row.amount,
       currency: currency,
       amount_usd: amountUsd
-    }, { onConflict: 'company_id, budget_year, budget_month, account_code' })
+    }, { onConflict: 'company_id, product, budget_year, budget_month, account_code' })
     
     if (error) alert('Error saving budget: ' + error.message)
     setAncillarySaving(s => ({ ...s, [accountCode]: false }))
