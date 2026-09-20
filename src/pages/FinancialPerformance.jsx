@@ -29,12 +29,22 @@ export default function FinancialPerformance() {
   useEffect(() => { if (activeCompany) loadForecast() }, [activeCompany, activeProduct, forecastYear])
 
   async function loadData() {
-    const [{ data: s }, { data: p }, { data: entries }] = await Promise.all([
+    const [{ data: s }, { data: p }, { data: entries }, { data: accs }, { data: restRev }] = await Promise.all([
       supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
+      activeProduct === 'hotel' ? supabase.from('accounts').select('id, code, name, type').eq('company_id', activeCompany.id).eq('product', 'hotel') : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('food_amount_usd, beverage_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] })
     ])
-    setSales(s || []); setPurchases(p || [])
+    
+    let salesData = s || []
+    if (activeProduct === 'hotel' && restRev) {
+      restRev.forEach(r => {
+        const total = (Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0)
+        if (total > 0) salesData.push({ amount_usd: total })
+      })
+    }
+    setSales(salesData); setPurchases(p || [])
 
     // Breakdown by account, for the Revenue and Expenses tabs
     const revMap = {}, expMap = {}
@@ -113,12 +123,22 @@ export default function FinancialPerformance() {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
 
-    const [{ data: s }, { data: p }, { data: entries }] = await Promise.all([
+    const [{ data: s }, { data: p }, { data: entries }, { data: accs }, { data: restRev }] = await Promise.all([
       supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
       supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
       supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to),
+      activeProduct === 'hotel' ? supabase.from('accounts').select('id, code, name, type').eq('company_id', activeCompany.id).eq('product', 'hotel') : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('food_amount_usd, beverage_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to) : Promise.resolve({ data: [] })
     ])
-    const rev = (s || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
+    
+    let salesData = s || []
+    if (activeProduct === 'hotel' && restRev) {
+      restRev.forEach(r => {
+        const total = (Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0)
+        if (total > 0) salesData.push({ amount_usd: total })
+      })
+    }
+    const rev = salesData.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
     const exp = (p || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
     const gop = rev - exp
     const marginPct = rev ? (gop / rev) * 100 : 0
@@ -131,6 +151,17 @@ export default function FinancialPerformance() {
       if (acc.type === 'Revenue') { revMap[acc.id] = revMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; revMap[acc.id].amount += -net }
       else if (acc.type === 'Expenses') { expMap[acc.id] = expMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; expMap[acc.id].amount += net }
     })
+    
+    if (activeProduct === 'hotel' && restRev && accs) {
+      const acc4019 = accs.find(a => a.code === '4019')
+      const acc4011 = accs.find(a => a.code === '4011')
+      restRev.forEach(r => {
+        const f = Number(r.food_amount_usd) || 0
+        const b = Number(r.beverage_amount_usd) || 0
+        if (f > 0 && acc4019) { revMap[acc4019.id] = revMap[acc4019.id] || { code: acc4019.code, name: acc4019.name, amount: 0 }; revMap[acc4019.id].amount += f }
+        if (b > 0 && acc4011) { revMap[acc4011.id] = revMap[acc4011.id] || { code: acc4011.code, name: acc4011.name, amount: 0 }; revMap[acc4011.id].amount += b }
+      })
+    }
 
     const sections = [
       {

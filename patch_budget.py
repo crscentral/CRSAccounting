@@ -1,92 +1,56 @@
 import re
 
 with open('src/pages/HotelBudget.jsx', 'r') as f:
-    code = f.read()
+    content = f.read()
 
-# Add clearRow function
-old_save = """  async function saveRow(year, month) {
-    const key = `${year}-${month}`
-    const row = rows[key]"""
+# 1. Add restaurant_daily_revenue to Promise.all in loadAncillary
+old_promise = """      const [{ data: budgetRows }, { data: ledgerRows }] = await Promise.all([
+        supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('budget_year', startYear),
+        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('entry_date', `${startYear}-01-01`).lte('entry_date', `${startYear}-12-31`).eq('accounts.type', 'Revenue').neq('accounts.code', '4010')
+      ])"""
 
-new_save = """  async function clearRow(year, month) {
-    if (!confirm('Clear budget entry for this month?')) return
-    const key = `${year}-${month}`
-    setSaving(s => ({ ...s, [key]: true }))
-    await supabase.from('hotel_room_revenue_budget').delete().eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', year).eq('budget_month', month)
-    setRows(r => { const next = { ...r }; delete next[key]; return next })
-    setSaving(s => ({ ...s, [key]: false }))
-  }
+new_promise = """      const [{ data: budgetRows }, { data: ledgerRows }, { data: restRev }] = await Promise.all([
+        supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('budget_year', startYear),
+        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('entry_date', `${startYear}-01-01`).lte('entry_date', `${startYear}-12-31`).eq('accounts.type', 'Revenue').neq('accounts.code', '4010'),
+        supabase.from('restaurant_daily_revenue').select('revenue_date, food_amount_usd, beverage_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', `${startYear}-01-01`).lte('revenue_date', `${startYear}-12-31`)
+      ])"""
 
-  async function saveRow(year, month) {
-    const key = `${year}-${month}`
-    const row = rows[key]"""
-code = code.replace(old_save, new_save)
+content = content.replace(old_promise, new_promise)
 
+# 2. Add injection logic after ledgerRows
+old_amap = """      if (ledgerRows) {
+        ledgerRows.forEach(r => {
+          const m = parseInt(r.entry_date.split('-')[1], 10)
+          const k = `${r.accounts.code}-${m}`
+          const amt = (Number(r.credit_usd) || 0) - (Number(r.debit_usd) || 0) // Revenue is credit
+          aMap[k] = (aMap[k] || 0) + amt
+        })
+      }"""
 
-# Update the render logic for the table rows
-old_table_row = """          const row = rows[`${year}-${m.num}`] || { occ: 0, adr: 0, revenue: 0, currency: displayCurrency, revenue_usd: 0 }
-          const days = daysInMonth(year, m.num)
-          const roomsOcc = Math.round(totalRooms * (Number(row.occ) || 0) / 100)
-          const monthlyBudget = (Number(row.revenue) || 0) * days
-          const isSaving = saving[`${year}-${m.num}`]
-          return (
-            <tr key={m.num} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-              <td className="py-1.5 px-3 font-medium text-slate-700">{m.name}</td>
-              <td className="py-1.5 px-3"><input type="number" min="0" max="100" step="0.01" value={row.occ === 0 ? '' : row.occ} onChange={(e) => updateRow(year, m.num, 'occ', e.target.value)} placeholder="%" className="w-16 border border-slate-300 rounded text-sm px-2 py-1" /></td>
-              <td className="py-1.5 px-3"><input type="number" min="0" step="0.01" value={row.adr === 0 ? '' : row.adr} onChange={(e) => updateRow(year, m.num, 'adr', e.target.value)} placeholder="ADR" className="w-20 border border-slate-300 rounded text-sm px-2 py-1" /></td>
-              <td className="py-1.5 px-3 text-slate-500">{roomsOcc}</td>
-              <td className="py-1.5 px-3">
-                <div className="flex items-center gap-1">
-                  <select value={row.currency || displayCurrency} onChange={(e) => updateRow(year, m.num, 'currency', e.target.value)} className="w-16 border border-slate-300 rounded text-sm px-1 py-1 bg-slate-50">
-                    {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-                  </select>
-                  <input type="number" min="0" step="0.01" value={row.revenue === 0 ? '' : row.revenue} onChange={(e) => updateRow(year, m.num, 'revenue', e.target.value)} placeholder="Revenue" className="w-24 border border-slate-300 rounded text-sm px-2 py-1" />
-                </div>
-              </td>
-              <td className="py-1.5 px-3 text-slate-500">{fmt(row.revenue_usd || 0)}</td>
-              <td className="py-1.5 px-3 text-slate-500">{fmt(monthlyBudget)}</td>
-              <td className="py-1.5 px-3 text-slate-500">{fmt(actuals[`${year}-${m.num}`] || 0)}</td>
-              <td className="py-1.5 px-3 text-right">
-                <button onClick={() => saveRow(year, m.num)} disabled={isSaving} className="text-navy-600 hover:text-navy-800 font-medium text-sm disabled:opacity-50">
-                  {isSaving ? '...' : 'Save'}
-                </button>
-              </td>
-            </tr>"""
+new_amap = """      if (ledgerRows) {
+        ledgerRows.forEach(r => {
+          const m = parseInt(r.entry_date.split('-')[1], 10)
+          const k = `${r.accounts.code}-${m}`
+          const amt = (Number(r.credit_usd) || 0) - (Number(r.debit_usd) || 0) // Revenue is credit
+          aMap[k] = (aMap[k] || 0) + amt
+        })
+      }
+      
+      // Inject Restaurant Table Revenue into Hotel F&B Revenue Actuals
+      if (restRev) {
+        restRev.forEach(r => {
+          const m = parseInt(r.revenue_date.split('-')[1], 10)
+          // food_amount -> 4019 - Restaurant Revenue
+          const foodKey = `4019-${m}`
+          // beverage_amount -> 4011 - Beverage Revenue
+          const bevKey = `4011-${m}`
+          
+          aMap[foodKey] = (aMap[foodKey] || 0) + (Number(r.food_amount_usd) || 0)
+          aMap[bevKey] = (aMap[bevKey] || 0) + (Number(r.beverage_amount_usd) || 0)
+        })
+      }"""
 
-new_table_row = """          const row = rows[`${year}-${m.num}`] || { occ: 0, adr: 0, revenue: 0, currency: displayCurrency, revenue_usd: 0 }
-          const days = daysInMonth(year, m.num)
-          const roomsOcc = Math.round(totalRooms * (Number(row.occ) || 0) / 100)
-          const monthlyBudget = (Number(row.revenue) || 0) * days
-          const isSaving = saving[`${year}-${m.num}`]
-          return (
-            <tr key={m.num} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-              <td className="py-1.5 px-3 font-medium text-slate-700">{m.name}</td>
-              <td className="py-1.5 px-3"><input type="number" min="0" max="100" step="0.01" value={row.occ === 0 ? '' : row.occ} onChange={(e) => updateRow(year, m.num, 'occ', e.target.value)} placeholder="%" className="w-16 border border-slate-300 rounded text-sm px-2 py-1" /></td>
-              <td className="py-1.5 px-3"><input type="number" min="0" step="0.01" value={row.adr === 0 ? '' : row.adr} onChange={(e) => updateRow(year, m.num, 'adr', e.target.value)} placeholder="ADR" className="w-20 border border-slate-300 rounded text-sm px-2 py-1" /></td>
-              <td className="py-1.5 px-3 text-slate-500">{roomsOcc}</td>
-              <td className="py-1.5 px-3">
-                <div className="flex items-center gap-1">
-                  <select value={row.currency || displayCurrency} onChange={(e) => updateRow(year, m.num, 'currency', e.target.value)} className="w-16 border border-slate-300 rounded text-sm px-1 py-1 bg-slate-50">
-                    {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-                  </select>
-                  <input type="number" min="0" step="0.01" value={row.revenue === 0 ? '' : row.revenue} onChange={(e) => updateRow(year, m.num, 'revenue', e.target.value)} placeholder="Revenue" className="w-24 border border-slate-300 rounded text-sm px-2 py-1" />
-                </div>
-              </td>
-              <td className="py-1.5 px-3 text-slate-500">{fmt(row.revenue_usd || 0)}</td>
-              <td className="py-1.5 px-3 text-slate-500">{formatMoney(monthlyBudget, row.currency || displayCurrency)}</td>
-              <td className="py-1.5 px-3 text-slate-500">{fmt(actuals[`${year}-${m.num}`] || 0)}</td>
-              <td className="py-1.5 px-3 text-right">
-                <div className="flex justify-end gap-2">
-                  <button onClick={() => saveRow(year, m.num)} disabled={isSaving} className="text-navy-600 hover:text-navy-800 font-medium text-sm disabled:opacity-50">
-                    {isSaving ? '...' : 'Save'}
-                  </button>
-                  <button onClick={() => clearRow(year, m.num)} disabled={isSaving} className="text-red-500 hover:text-red-700 font-medium text-sm disabled:opacity-50" title="Clear Entry">
-                    Clear
-                  </button>
-                </div>
-              </td>
-            </tr>"""
-code = code.replace(old_table_row, new_table_row)
+content = content.replace(old_amap, new_amap)
 
 with open('src/pages/HotelBudget.jsx', 'w') as f:
-    f.write(code)
+    f.write(content)
