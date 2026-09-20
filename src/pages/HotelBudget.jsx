@@ -395,7 +395,7 @@ export default function HotelBudget() {
         }
       />
 
-      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mb-6">
+      {activeProduct === 'hotel' && (<div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mb-6">
         <h3 className="font-semibold text-slate-700 mb-2">{activeProduct === "restaurant" ? "Seat Inventory" : "Room Inventory"}</h3>
         <p className="text-xs text-slate-500 mb-3">{activeProduct === "restaurant" ? "Total seats available" : "Total rooms available"} — used to calculate Occupancy %, RevPAR, and rooms occupied from your budgeted occupancy percentage.</p>
         <div className="flex items-center gap-2">
@@ -406,7 +406,7 @@ export default function HotelBudget() {
             </button>
           )}
         </div>
-      </div>
+      </div>)}
 
       {thisMonthRow && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
@@ -439,7 +439,7 @@ export default function HotelBudget() {
         <span className="text-xs text-slate-400">Select year for Revenue Budget</span>
       </div>
 
-      {years.map(year => (
+      {years.map(year => activeProduct === 'hotel' ? (
         <div key={year} className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-5">
           <div className="min-w-max w-full">
             <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{year} - Room Revenue with ADR & Occ% vs Actual</div>
@@ -523,7 +523,7 @@ export default function HotelBudget() {
           </table>
           </div>
         </div>
-      ))}
+      ) : null)}
 
       
       <div className="mt-12 pt-8 border-t border-slate-200">
@@ -531,7 +531,7 @@ export default function HotelBudget() {
 
         <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-10">
           <div className="min-w-max w-full">
-            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{startYear} - Other Revenue vs Actuals</div>
+            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{activeProduct === 'restaurant' ? `${startYear} - F&B Revenue & Actual` : `${startYear} - Other Revenue vs Actuals`}</div>
             <table className="w-full text-sm">
               <thead className="bg-navy-800 text-white text-xs text-left">
                 <tr>

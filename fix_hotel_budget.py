@@ -1,28 +1,64 @@
 import re
 
 with open('src/pages/HotelBudget.jsx', 'r') as f:
-    code = f.read()
+    content = f.read()
 
-# Remove negative sign from variance and round numbers
-# Current:
-# <td className={`py-1.5 px-3 text-xs font-medium ${varLocal < 0 ? 'text-red-500' : varLocal > 0 ? 'text-green-600' : 'text-slate-400'}`}>{varLocal > 0 ? '+' : ''}{formatMoney(varLocal, row.currency || displayCurrency)}</td>
-# <td className={`py-1.5 px-3 text-xs ${varUsd < 0 ? 'text-red-500' : varUsd > 0 ? 'text-green-600' : 'text-slate-400'}`}>{varUsd > 0 ? '+' : ''}{fmt(varUsd)}</td>
+# 1. HIDE the Top Table
+old_top_table_start = """        <div key={year} className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-5">
+          <div className="min-w-max w-full">
+            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{year} - Room Revenue with ADR & Occ% vs Actual</div>"""
+new_top_table_start = """        {activeProduct === 'hotel' && (
+        <div key={year} className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-5">
+          <div className="min-w-max w-full">
+            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{year} - Room Revenue with ADR & Occ% vs Actual</div>"""
+content = content.replace(old_top_table_start, new_top_table_start)
 
-old_var_local = r"<td className=\{`py-1.5 px-3 text-xs font-medium \$\{varLocal < 0 \? 'text-red-500' : varLocal > 0 \? 'text-green-600' : 'text-slate-400'\}`\}>\{varLocal > 0 \? '\+' : ''\}\{formatMoney\(varLocal, row.currency \|\| displayCurrency\)\}</td>"
-new_var_local = r"<td className={`py-1.5 px-3 text-xs font-medium ${varLocal < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varLocal)), row.currency || displayCurrency).replace('.00', '')}</td>"
-code = re.sub(old_var_local, new_var_local, code)
+# The end of the top table
+old_top_table_end = """              </tbody>
+            </table>
+          </div>
+        </div>
 
-old_var_usd = r"<td className=\{`py-1.5 px-3 text-xs \$\{varUsd < 0 \? 'text-red-500' : varUsd > 0 \? 'text-green-600' : 'text-slate-400'\}`\}>\{varUsd > 0 \? '\+' : ''\}\{fmt\(varUsd\)\}</td>"
-new_var_usd = r"<td className={`py-1.5 px-3 text-xs ${varUsd < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varUsd)), 'USD').replace('.00', '')}</td>"
-code = re.sub(old_var_usd, new_var_usd, code)
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-10">
+          <div className="min-w-max w-full">
+            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{startYear} - Other Revenue vs Actuals</div>"""
+new_top_table_end = """              </tbody>
+            </table>
+          </div>
+        </div>
+        )}
 
-old_monthly_local = r"<td className=\"py-1.5 px-3 text-slate-500 text-xs font-medium\">\{formatMoney\(monthlyBudget, row.currency \|\| displayCurrency\)\}</td>"
-new_monthly_local = r"<td className=\"py-1.5 px-3 text-slate-500 text-xs font-medium\">{formatMoney(Math.round(monthlyBudget), row.currency || displayCurrency).replace('.00', '')}</td>"
-code = re.sub(old_monthly_local, new_monthly_local, code)
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-10">
+          <div className="min-w-max w-full">
+            <div className="px-4 py-2.5 bg-navy-700 text-white font-semibold text-sm">{activeProduct === 'restaurant' ? `${startYear} - F&B Revenue & Actual` : `${startYear} - Other Revenue vs Actuals`}</div>"""
+content = content.replace(old_top_table_end, new_top_table_end)
 
-old_monthly_usd = r"<td className=\"py-1.5 px-3 text-slate-500 text-xs\">\{fmt\(monthlyUsd\)\}</td>"
-new_monthly_usd = r"<td className=\"py-1.5 px-3 text-slate-500 text-xs\">{formatMoney(Math.round(monthlyUsd), 'USD').replace('.00', '')}</td>"
-code = re.sub(old_monthly_usd, new_monthly_usd, code)
+# 2. HIDE Seat Inventory
+old_inventory_start = """      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
+        <h3 className="font-semibold text-slate-800 mb-2">{activeProduct === "restaurant" ? "Seat Inventory" : "Room Inventory"}</h3>"""
+new_inventory_start = """      {activeProduct === 'hotel' && (
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
+        <h3 className="font-semibold text-slate-800 mb-2">{activeProduct === "restaurant" ? "Seat Inventory" : "Room Inventory"}</h3>"""
+content = content.replace(old_inventory_start, new_inventory_start)
+
+old_inventory_end = """          <button disabled={savingRooms} onClick={saveTotalRooms} className="bg-navy-600 hover:bg-navy-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+            <Save size={16} /> Save
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <div className="flex items-center gap-3">"""
+new_inventory_end = """          <button disabled={savingRooms} onClick={saveTotalRooms} className="bg-navy-600 hover:bg-navy-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+            <Save size={16} /> Save
+          </button>
+        </div>
+      </div>
+      )}
+
+      <div className="mb-4">
+        <div className="flex items-center gap-3">"""
+content = content.replace(old_inventory_end, new_inventory_end)
 
 with open('src/pages/HotelBudget.jsx', 'w') as f:
-    f.write(code)
+    f.write(content)
