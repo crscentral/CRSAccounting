@@ -3,8 +3,16 @@ import re
 with open('src/lib/exportUtils.js', 'r') as f:
     content = f.read()
 
-# 1. Remove cleanPhone definition
-content = re.sub(r'function cleanPhone\(p\) \{.*?\}\n', '', content, flags=re.DOTALL)
+# 1. Remove cleanPhone properly
+old_clean = """function cleanPhone(p) {
+  if (!p) return null;
+  let s = p.replace(/[\s.]+/g, '').trim();
+  if (s.startsWith('+')) {
+    s = s.replace(/^(\+\d{2,3})(\d+)/, '$1 $2');
+  }
+  return s;
+}"""
+content = content.replace(old_clean, '')
 
 # 2. Remove cleanPhone usage
 content = content.replace('cleanPhone(company?.phone)', 'company?.phone')
@@ -44,6 +52,32 @@ new_company_lines = """  const companyLines = [
     company?.tax_id ? `Tax ID: ${company.tax_id}` : null,
   ].filter(Boolean)"""
 content = content.replace(old_company_lines, new_company_lines)
+
+old_render = """  function renderColumn(lines, x, maxWidth, startY) {
+    let cy = startY
+    lines.forEach(line => {
+      const wrapped = doc.splitTextToSize(line, maxWidth)
+      doc.text(wrapped, x, cy)
+      cy += wrapped.length * 4.5
+    })
+    return cy
+  }"""
+
+new_render = """  function renderColumn(lines, x, maxWidth, startY) {
+    let cy = startY
+    lines.forEach(line => {
+      const explicitLines = line.split('\\n')
+      explicitLines.forEach(el => {
+        const wrapped = doc.splitTextToSize(el, maxWidth)
+        wrapped.forEach(wl => {
+          doc.text(wl, x, cy)
+          cy += 4.5
+        })
+      })
+    })
+    return cy
+  }"""
+content = content.replace(old_render, new_render)
 
 with open('src/lib/exportUtils.js', 'w') as f:
     f.write(content)
