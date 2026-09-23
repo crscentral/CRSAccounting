@@ -82,7 +82,7 @@ export default function ReceiptCurrencySummary({ receipts }) {
                   <input 
                     type="number" 
                     step="0.0001"
-                    value={rates[code] !== undefined ? Number(rates[code]).toFixed(4).replace(/\.?0+$/, '') : ''} 
+                    value={rates[code] !== undefined ? Number(rates[code]).toFixed(2).replace(/\.?0+$/, '') : ''} 
                     onChange={e => handleRateChange(code, e.target.value)}
                     className="w-24 px-2 py-1 text-sm border border-slate-200 rounded text-center focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                     disabled={code === 'USD'}
