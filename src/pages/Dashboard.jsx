@@ -529,7 +529,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col items-center">
           <h2 className="font-semibold text-slate-700 flex items-center gap-2 mb-4 self-start">
-            <DollarSign size={18} /> Expected Profit Breakdown
+            <DollarSign size={18} /> {['hotel', 'restaurant'].includes(activeProduct) ? 'Accrued Net Profit' : 'Expected Profit Breakdown'}
           </h2>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -579,7 +579,7 @@ export default function Dashboard() {
 
         <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col items-center">
           <h2 className="font-semibold text-slate-700 flex items-center gap-2 mb-4 self-start">
-            <Receipt size={18} /> Actual Profit Breakdown
+            <Receipt size={18} /> {['hotel', 'restaurant'].includes(activeProduct) ? 'Cash Net Profit' : 'Actual Profit Breakdown'}
           </h2>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
