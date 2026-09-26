@@ -1,14 +1,14 @@
-async function run() {
-  const res = await fetch(
-    `${process.env.VITE_SUPABASE_URL}/rest/v1/companies?select=*,members:company_members(role,user_id,profile:user_profiles(email,full_name))&approval_status=eq.pending&order=created_at.desc`,
-    {
-      headers: {
-        'apikey': process.env.VITE_SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${process.env.TEST_JWT}`
-      }
-    }
-  )
-  console.log(res.status)
-  console.log(await res.text())
-}
-run()
+import { createClient } from '@supabase/supabase-js'
+import fs from 'fs'
+
+const envStr = fs.readFileSync('.env', 'utf8')
+const env = {}
+envStr.split('\n').forEach(l => {
+  if (l.includes('=')) {
+    const [k,v] = l.split('=')
+    env[k] = v.trim()
+  }
+})
+
+const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY)
+supabase.from('ledger_entries').select('debit_usd, credit_usd, accounts!inner(type)').limit(1).then(r => console.log(JSON.stringify(r)))
