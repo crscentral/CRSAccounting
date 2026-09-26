@@ -1,3 +1,4 @@
+import { getLocalDate } from '../lib/dateUtils'
 import { useEffect, useState } from 'react'
 import { BedDouble, Percent, DollarSign, TrendingUp, AlertTriangle } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'

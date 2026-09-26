@@ -1,3 +1,4 @@
+import { getLocalDate } from '../lib/dateUtils'
 import { useEffect, useState } from 'react'
 import { TrendingUp, TrendingDown, DollarSign, Receipt, AlertCircle, Building2 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
