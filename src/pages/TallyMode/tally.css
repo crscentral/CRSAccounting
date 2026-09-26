@@ -1,0 +1,228 @@
+/* 
+  Tally Mode Scoped Styles 
+  We use a strict namespace .tally-app-container to avoid leaking into the main app.
+*/
+
+:root {
+  --tally-blue: #1C2D42;
+  --tally-header-blue: #142333;
+  --tally-white: #ffffff;
+  --tally-amber: #fdf5e6;
+  --tally-highlight: #f8c146;
+  --tally-text-light: #e0e0e0;
+  --tally-border: #445465;
+}
+
+body.tally-mode-active {
+  margin: 0;
+  padding: 0;
+  background-color: var(--tally-blue);
+  color: var(--tally-text-light);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.tally-app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--tally-blue);
+  color: var(--tally-white);
+  font-size: 14px;
+}
+
+.tally-header {
+  background-color: var(--tally-header-blue);
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--tally-border);
+}
+
+.tally-title {
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+
+.tally-exit-btn {
+  background-color: transparent;
+  border: 1px solid var(--tally-border);
+  color: var(--tally-highlight);
+  padding: 4px 12px;
+  text-decoration: none;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tally-exit-btn:hover {
+  background-color: var(--tally-highlight);
+  color: var(--tally-header-blue);
+}
+
+.tally-main-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.tally-footer {
+  background-color: var(--tally-header-blue);
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-top: 1px solid var(--tally-border);
+  font-size: 12px;
+  color: #8fa0b3;
+}
+
+/* Gateway Styles */
+.tally-gateway-container {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+}
+
+.tally-gateway-menu {
+  background-color: var(--tally-amber);
+  border: 1px solid #c0b3a0;
+  color: #333;
+  width: 400px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+}
+
+.tally-gateway-title {
+  background-color: #333;
+  color: white;
+  text-align: center;
+  padding: 8px;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.tally-gateway-section {
+  padding: 8px 0;
+  border-bottom: 1px solid #d4c8b7;
+}
+
+.tally-gateway-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #888;
+  padding: 4px 16px;
+  font-weight: bold;
+}
+
+.tally-menu-item {
+  padding: 6px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.tally-menu-item:hover, .tally-menu-item.active {
+  background-color: var(--tally-highlight);
+  color: black;
+}
+
+.tally-menu-item .hotkey {
+  font-weight: bold;
+  color: #d13030;
+}
+.tally-menu-item.active .hotkey {
+  color: black;
+}
+
+/* Voucher Form Styles */
+.tally-voucher-container {
+  display: flex;
+  flex: 1;
+  background-color: var(--tally-amber);
+  color: #333;
+}
+
+.tally-voucher-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+
+.tally-voucher-sidebar {
+  width: 300px;
+  background-color: #f0f0f0;
+  border-left: 2px solid #ccc;
+  display: flex;
+  flex-direction: column;
+}
+
+.tally-voucher-header {
+  display: flex;
+  justify-content: space-between;
+  background-color: #fff;
+  padding: 8px;
+  border: 1px solid #ccc;
+  margin-bottom: 16px;
+  font-weight: bold;
+  color: #800000;
+}
+
+.tally-grid {
+  flex: 1;
+  background: white;
+  border: 1px solid #ccc;
+}
+
+.tally-grid-row {
+  display: flex;
+  border-bottom: 1px solid #eee;
+}
+
+.tally-grid-col {
+  padding: 8px;
+  border-right: 1px solid #eee;
+}
+
+.tally-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.tally-input:focus {
+  background-color: #e6f2ff;
+}
+
+.tally-sidebar-header {
+  background-color: #333;
+  color: white;
+  padding: 8px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.tally-ledger-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tally-ledger-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.tally-ledger-item.selected {
+  background-color: var(--tally-highlight);
+  font-weight: bold;
+}

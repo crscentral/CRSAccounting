@@ -27,6 +27,9 @@ import HotelExpenseBudget from './pages/HotelExpenseBudget'
 import HotelRevenue from './pages/HotelRevenue'
 import HotelExpenses from './pages/HotelExpenses'
 import HotelGuestInvoices from './pages/HotelGuestInvoices'
+import TallyLayout from './pages/TallyMode/TallyLayout'
+import TallyGateway from './pages/TallyMode/TallyGateway'
+import TallyVouchers from './pages/TallyMode/TallyVouchers'
 
 function Gate({ children }) {
   const { session, loading, companies, activeCompany } = useAuth()
@@ -48,6 +51,11 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/tally-mode" element={<Gate><TallyLayout /></Gate>}>
+        <Route index element={<TallyGateway />} />
+        <Route path="vouchers" element={<TallyVouchers />} />
+        <Route path="*" element={<TallyGateway />} />
+      </Route>
       <Route element={<Gate><AppShell /></Gate>}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/overview" element={<PortfolioDashboard />} />

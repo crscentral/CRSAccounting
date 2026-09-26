@@ -3,24 +3,22 @@ import re
 with open('src/App.jsx', 'r') as f:
     content = f.read()
 
-content = content.replace(
-    "<Route path=\"/hotel-expense-budget\" element={<HotelExpenseBudget />} />",
-    "<Route path=\"/hotel-expense-budget\" element={<HotelExpenseBudget />} />\n        <Route path=\"/restaurant-budget\" element={<HotelBudget />} />\n        <Route path=\"/restaurant-expense-budget\" element={<HotelExpenseBudget />} />"
-)
+# Add imports
+imports = """import HotelGuestInvoices from './pages/HotelGuestInvoices'
+import TallyLayout from './pages/TallyMode/TallyLayout'
+import TallyGateway from './pages/TallyMode/TallyGateway'
+import TallyVouchers from './pages/TallyMode/TallyVouchers'"""
+content = content.replace("import HotelGuestInvoices from './pages/HotelGuestInvoices'", imports)
+
+# Add route
+route_old = """      <Route element={<Gate><AppShell /></Gate>}>"""
+route_new = """      <Route path="/tally-mode" element={<Gate><TallyLayout /></Gate>}>
+        <Route index element={<TallyGateway />} />
+        <Route path="vouchers" element={<TallyVouchers />} />
+        <Route path="*" element={<TallyGateway />} />
+      </Route>
+      <Route element={<Gate><AppShell /></Gate>}>"""
+content = content.replace(route_old, route_new)
 
 with open('src/App.jsx', 'w') as f:
-    f.write(content)
-
-with open('src/components/AppShell.jsx', 'r') as f:
-    content = f.read()
-
-# Add to NAV_ITEMS
-old_nav = "  { to: '/restaurant-revenue', label: 'Table Revenue', icon: UtensilsCrossed, products: ['restaurant'] },"
-new_nav = """  { to: '/restaurant-revenue', label: 'Table Revenue', icon: UtensilsCrossed, products: ['restaurant'] },
-  { to: '/restaurant-budget', label: 'F&B Revenue Budget', icon: Target, products: ['restaurant'] },
-  { to: '/restaurant-expense-budget', label: 'F&B Expense Budget', icon: PiggyBank, products: ['restaurant'] },"""
-
-content = content.replace(old_nav, new_nav)
-
-with open('src/components/AppShell.jsx', 'w') as f:
     f.write(content)
