@@ -448,14 +448,14 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <KpiCard label="Total Revenue" value={cp.fmt(totalBilled)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'total accrued revenue' : 'sales invoices'} icon={TrendingUp} tone="green" />
         <KpiCard label="Total Expenses" value={cp.fmt(totalExpenses)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'total accrued expenses' : 'purchase invoices'} icon={TrendingDown} tone="red" />
-        <KpiCard label="Expected Net Profit" value={cp.fmt(netProfit)} sublabel="revenue minus expenses" icon={DollarSign} tone={netProfit >= 0 ? 'green' : 'red'} />
+        <KpiCard label={['hotel', 'restaurant'].includes(activeProduct) ? 'Accrued Net Profit' : 'Expected Net Profit'} value={cp.fmt(netProfit)} sublabel="revenue minus expenses" icon={DollarSign} tone={netProfit >= 0 ? 'green' : 'red'} />
         <KpiCard label="Outstanding" value={cp.fmt(outstanding)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'unpaid invoices' : 'pending + overdue'} icon={AlertCircle} tone="slate" />
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
         <KpiCard label="Total Revenue Collected" value={cp.fmt(collected)} sublabel="actual paid revenue" icon={Receipt} tone="gold" />
         <KpiCard label="Total Expenses Paid" value={cp.fmt(expensesMade)} sublabel="actual paid expenses" icon={TrendingDown} tone="orange" />
-        <KpiCard label="Actual Profit" value={cp.fmt(actualProfit)} sublabel="collected minus paid" icon={DollarSign} tone={actualProfit >= 0 ? 'green' : 'red'} />
+        <KpiCard label={['hotel', 'restaurant'].includes(activeProduct) ? 'Cash Net Profit' : 'Actual Profit'} value={cp.fmt(actualProfit)} sublabel="collected minus paid" icon={DollarSign} tone={actualProfit >= 0 ? 'green' : 'red'} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
