@@ -31,6 +31,7 @@ import TallyLayout from './pages/TallyMode/TallyLayout'
 import TallyGateway from './pages/TallyMode/TallyGateway'
 import TallyVouchers from './pages/TallyMode/TallyVouchers'
 import TallyPlaceholder from './pages/TallyMode/TallyPlaceholder'
+import TallyMasterCreate from './pages/TallyMode/TallyMasterCreate'
 
 function Gate({ children }) {
   const { session, loading, companies, activeCompany } = useAuth()
@@ -55,7 +56,7 @@ function AppRoutes() {
       <Route path="/tally-mode" element={<Gate><TallyLayout /></Gate>}>
         <Route index element={<TallyGateway />} />
         <Route path="vouchers" element={<TallyVouchers />} />
-        <Route path="create" element={<TallyPlaceholder />} />
+        <Route path="create" element={<TallyMasterCreate />} />
         <Route path="alter" element={<TallyPlaceholder />} />
         <Route path="banking" element={<TallyPlaceholder />} />
         <Route path="balance-sheet" element={<TallyPlaceholder />} />

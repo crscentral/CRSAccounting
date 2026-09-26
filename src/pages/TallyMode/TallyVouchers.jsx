@@ -13,6 +13,7 @@ export default function TallyVouchers() {
   
   const [ledgers, setLedgers] = useState([])
   const [filteredLedgers, setFilteredLedgers] = useState([])
+  const [balances, setBalances] = useState({})
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [selectedLedgerIndex, setSelectedLedgerIndex] = useState(0)
   
@@ -22,9 +23,25 @@ export default function TallyVouchers() {
 
   useEffect(() => {
     if (activeCompany) {
-      supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).then(({ data }) => {
-        setLedgers(data || [])
-        setFilteredLedgers(data || [])
+      Promise.all([
+        supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('ledger_entries').select('account_id, debit_amount, credit_amount').eq('company_id', activeCompany.id).eq('product', activeProduct)
+      ]).then(([accRes, ledgRes]) => {
+        const accs = accRes.data || []
+        const entries = ledgRes.data || []
+        
+        const bals = {}
+        accs.forEach(a => bals[a.id] = 0)
+        
+        entries.forEach(e => {
+          if (bals[e.account_id] !== undefined) {
+            bals[e.account_id] += (Number(e.debit_amount) || 0) - (Number(e.credit_amount) || 0)
+          }
+        })
+        
+        setLedgers(accs)
+        setFilteredLedgers(accs)
+        setBalances(bals)
       })
     }
   }, [activeCompany, activeProduct])
@@ -134,7 +151,7 @@ export default function TallyVouchers() {
                   onFocus={() => { setActiveRowId(row.id); setActiveField('type'); setSidebarOpen(false) }}
                 />
               </div>
-              <div className="tally-grid-col flex-1">
+              <div className="tally-grid-col flex-1 relative">
                 <input 
                   autoFocus={activeRowId === row.id && activeField === 'ledgerName'}
                   className="tally-input font-bold" 
@@ -144,6 +161,11 @@ export default function TallyVouchers() {
                   onKeyDown={e => handleInputKeyDown(e, row.id, 'ledgerName')}
                   onFocus={() => handleLedgerFocus(row.id)}
                 />
+                {row.accountId && balances[row.accountId] !== undefined && (
+                  <div className="text-[11px] text-slate-500 italic mt-0.5">
+                    Cur Bal: {Math.abs(balances[row.accountId]).toLocaleString(undefined, {minimumFractionDigits: 2})} {balances[row.accountId] >= 0 ? 'Dr' : 'Cr'}
+                  </div>
+                )}
               </div>
               <div className="tally-grid-col w-32">
                 <input 
@@ -174,7 +196,12 @@ export default function TallyVouchers() {
                   setActiveField('amount')
                 }}
               >
-                {l.name}
+                <div className="flex justify-between w-full">
+                  <span>{l.name}</span>
+                  {balances[l.id] !== undefined && (
+                    <span className="text-xs text-slate-500">{Math.abs(balances[l.id]).toLocaleString(undefined, {minimumFractionDigits: 2})} {balances[l.id] >= 0 ? 'Dr' : 'Cr'}</span>
+                  )}
+                </div>
               </div>
             ))}
             {filteredLedgers.length === 0 && <div className="p-4 text-slate-500 text-center">No ledgers found</div>}
