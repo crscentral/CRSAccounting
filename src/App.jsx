@@ -32,6 +32,7 @@ import TallyGateway from './pages/TallyMode/TallyGateway'
 import TallyVouchers from './pages/TallyMode/TallyVouchers'
 import TallyMasterCreate from './pages/TallyMode/TallyMasterCreate'
 import TallyReports from './pages/TallyMode/TallyReports'
+import TallyDashboardEmbed from './pages/TallyMode/TallyDashboardEmbed'
 
 function Gate({ children }) {
   const { session, loading, companies, activeCompany } = useAuth()
@@ -63,6 +64,7 @@ function AppRoutes() {
         <Route path="pnl" element={<TallyReports />} />
         <Route path="ratios" element={<TallyReports />} />
         <Route path="display" element={<TallyReports />} />
+        <Route path="dashboard" element={<TallyDashboardEmbed />} />
         <Route path="*" element={<TallyGateway />} />
       </Route>
       <Route element={<Gate><AppShell /></Gate>}>

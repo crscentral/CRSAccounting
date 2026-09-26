@@ -1,20 +1,41 @@
-import { useState, useEffect } from 'react'
+
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../../lib/useCurrencyAndPeriod'
+import { supabase } from '../../lib/supabaseClient'
+import { useState, useEffect } from 'react'
 
 const MENU_ITEMS = [
   { section: 'Masters', items: [{ label: 'Create', hotkey: 'C', path: '/tally-mode/create' }, { label: 'Alter', hotkey: 'A', path: '/tally-mode/alter' }] },
   { section: 'Transactions', items: [{ label: 'Vouchers', hotkey: 'V', path: '/tally-mode/vouchers' }] },
   { section: 'Utilities', items: [{ label: 'Banking', hotkey: 'B', path: '/tally-mode/banking' }] },
-  { section: 'Reports', items: [{ label: 'Financial Dashboard', hotkey: 'F', path: '/' }, { label: 'Balance Sheet', hotkey: 'B', path: '/tally-mode/balance-sheet' }, { label: 'Profit & Loss A/c', hotkey: 'P', path: '/tally-mode/pnl' }, { label: 'Ratio Analysis', hotkey: 'R', path: '/tally-mode/ratios' }, { label: 'Display More Reports', hotkey: 'D', path: '/tally-mode/display' }] },
+  { section: 'Reports', items: [{ label: 'Financial Dashboard', hotkey: 'F', path: '/tally-mode/dashboard' }, { label: 'Balance Sheet', hotkey: 'B', path: '/tally-mode/balance-sheet' }, { label: 'Profit & Loss A/c', hotkey: 'P', path: '/tally-mode/pnl' }, { label: 'Ratio Analysis', hotkey: 'R', path: '/tally-mode/ratios' }, { label: 'Display More Reports', hotkey: 'D', path: '/tally-mode/display' }] },
 ]
 
 export default function TallyGateway() {
   const navigate = useNavigate()
-  const { activeCompany } = useAuth()
+  const { activeCompany, activeProduct } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [lastEntryDate, setLastEntryDate] = useState(null)
+  
+  useEffect(() => {
+    if (activeCompany) {
+      supabase.from('ledger_entries')
+        .select('entry_date')
+        .eq('company_id', activeCompany.id)
+        .eq('product', activeProduct)
+        .order('entry_date', { ascending: false })
+        .limit(1)
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            setLastEntryDate(data[0].entry_date)
+          } else {
+            setLastEntryDate(null)
+          }
+        })
+    }
+  }, [activeCompany, activeProduct])
 
   // Flatten menu for simple arrow navigation
   const flatMenu = MENU_ITEMS.reduce((acc, section) => [...acc, ...section.items], [])
@@ -67,7 +88,7 @@ export default function TallyGateway() {
         
         <div className="flex justify-between mt-2 font-bold text-[14px]">
           <div>{activeCompany?.name || 'Loading...'}</div>
-          <div className="font-normal text-[12px] italic">No Vouchers Entered</div>
+          <div className="font-normal text-[12px] font-bold text-slate-800">{lastEntryDate || <span className="italic font-normal">No Vouchers Entered</span>}</div>
         </div>
       </div>
 
