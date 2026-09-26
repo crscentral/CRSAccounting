@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../lib/AuthContext'
 
 export default function TallyVouchers() {
-  const { activeCompany } = useAuth()
+  const { activeCompany, activeProduct } = useAuth()
   const navigate = useNavigate()
   
   const [voucherType, setVoucherType] = useState('Payment')
@@ -22,12 +22,12 @@ export default function TallyVouchers() {
 
   useEffect(() => {
     if (activeCompany) {
-      supabase.from('accounts').select('*').eq('company_id', activeCompany.id).then(({ data }) => {
+      supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).then(({ data }) => {
         setLedgers(data || [])
         setFilteredLedgers(data || [])
       })
     }
-  }, [activeCompany])
+  }, [activeCompany, activeProduct])
 
   useEffect(() => {
     function handleKeyDown(e) {
