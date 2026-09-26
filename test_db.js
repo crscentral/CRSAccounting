@@ -1,2 +1,4 @@
-const { createClient } = require('@supabase/supabase-js')
-const supabase = createClient('http://localhost:54321', 'test', { auth: { persistSession: false } }) // Just need a stub, or actually I should use their env vars!
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY)
+supabase.from('hotel_guest_invoices').select('invoice_number').limit(1).then(r => console.log(r))

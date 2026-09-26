@@ -141,6 +141,7 @@ export default function HotelGuestInvoices() {
 
 function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
   const [invoiceDate, setInvoiceDate] = useState(row?.invoice_date || getLocalDate())
+  const [invoiceNumber, setInvoiceNumber] = useState(row?.invoice_number || '')
   const [roomNumber, setRoomNumber] = useState(row?.room_number || '')
   const [guestName, setGuestName] = useState(row?.guest_name || '')
   const [checkinDate, setCheckinDate] = useState(row?.checkin_date || '')
@@ -180,7 +181,7 @@ function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
     try {
       const fxRate = currency === 'USD' ? 1 : (await getLatestRate(currency)) || 1
       const payload = {
-        company_id: companyId, product, invoice_date: invoiceDate, room_number: roomNumber || null, guest_name: guestName.trim(),
+        company_id: companyId, product, invoice_date: invoiceDate, invoice_number: invoiceNumber || null, room_number: roomNumber || null, guest_name: guestName.trim(),
         checkin_date: checkinDate || null, checkout_date: checkoutDate || null,
         currency, fx_rate_locked: fxRate,
         room_rate: Number(roomRate) || 0, nights: Number(nights) || 0,
@@ -208,9 +209,12 @@ function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
   return (
     <Modal title={row ? 'Edit Guest Invoice' : 'New Guest Invoice'} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <Field label="Date *">
             <input type="date" required value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </Field>
+          <Field label="Invoice #">
+            <input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} placeholder="e.g. INV-101" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
           </Field>
           <Field label="Room Number">
             <input value={roomNumber} onChange={e => setRoomNumber(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />

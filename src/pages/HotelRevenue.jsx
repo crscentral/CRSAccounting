@@ -31,19 +31,26 @@ export default function HotelRevenue() {
   const [revenueAccounts, setRevenueAccounts] = useState([])
   const [totalRooms, setTotalRooms] = useState(0)
   const [restRevenue, setRestRevenue] = useState([])
+  const [invoicesMap, setInvoicesMap] = useState({})
 
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadAll() {
-    const [{ data: room }, { data: anc }, { data: accs }, { data: settings }, { data: restRev }] = await Promise.all([
+    const [{ data: room }, { data: anc }, { data: accs }, { data: settings }, { data: restRev }, { data: guestInvoices }] = await Promise.all([
       supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to).order('stat_date', { ascending: false }),
       supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to).order('entry_date', { ascending: false }),
       supabase.from('accounts').select('id, code, name, subtype').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').neq('code', '4010').order('code'),
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
-      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to).order('revenue_date', { ascending: false }) : Promise.resolve({ data: [] })
+      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to).order('revenue_date', { ascending: false }) : Promise.resolve({ data: [] }),
+      supabase.from('hotel_guest_invoices').select('id, invoice_number').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to)
     ])
     setRoomStats(room || [])
     setAncillary(anc || [])
+    const invMap = {};
+    (guestInvoices || []).forEach(i => {
+      if (i.invoice_number) invMap[i.id] = i.invoice_number;
+    });
+    setInvoicesMap(invMap);
     const aRoom = []; const aFB = []; const aOther = [];
     (anc || []).forEach(a => {
       const st = (a.account?.subtype || '').toLowerCase()
@@ -123,11 +130,19 @@ export default function HotelRevenue() {
     { key: 'amount_usd', label: 'Amount', render: r => cp.fmt(r.amount_usd) },
     { key: 'collected_usd', label: 'Collected', render: r => cp.fmt(r.collected_usd || 0) },
     { key: 'pending_usd', label: 'Pending Collection', render: r => <span className="text-red-500 font-medium">{cp.fmt((r.amount_usd || 0) - (r.collected_usd || 0))}</span> },
-    { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
+    { key: 'notes', label: 'Notes', render: r => {
+      if (r.notes && r.notes.startsWith('Invoice ')) {
+        const match = r.notes.match(/Invoice ([a-f0-9\-]+):/);
+        if (match && invoicesMap[match[1]]) {
+          return `Invoice ${invoicesMap[match[1]]}: ${r.notes.substring(match[0].length).trim()}`;
+        }
+      }
+      return r.notes || '—';
+    } },
     ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => (
       <div className="flex justify-end gap-1">
-        <button disabled={isLocked} onClick={() => { setEditingRow(r); setAncillaryModalOpen(true) }} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size={15} /></button>
-        <button disabled={isLocked} onClick={() => handleDeleteAncillary(r)} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30"><Trash2 size={15} /></button>
+        <button disabled={isLocked || (r.notes || '').startsWith('Invoice ')} onClick={() => { setEditingRow(r); setAncillaryModalOpen(true) }} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size={15} /></button>
+        <button disabled={isLocked || (r.notes || '').startsWith('Invoice ')} onClick={() => handleDeleteAncillary(r)} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30"><Trash2 size={15} /></button>
       </div>
     ) }] : []),
   ]
@@ -213,7 +228,7 @@ export default function HotelRevenue() {
           ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => (
             <div className="flex justify-end gap-1">
               <button disabled={isLocked} onClick={() => { setEditingRow(r); setRoomModalOpen(true) }} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size={15} /></button>
-              <button disabled={isLocked} onClick={() => handleDeleteRoom(r)} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30"><Trash2 size={15} /></button>
+              <button disabled={isLocked || (r.notes || '').startsWith('Invoice ')} onClick={() => handleDeleteRoom(r)} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30" title={(r.notes || '').startsWith('Invoice ') ? "Delete from Guest Invoices page" : "Delete"}><Trash2 size={15} /></button>
             </div>
           ) }] : []),
         ]}

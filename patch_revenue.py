@@ -1,76 +1,32 @@
-import re
-
 with open('src/pages/HotelRevenue.jsx', 'r') as f:
     content = f.read()
 
-# 1. State for restRevenue
-content = content.replace(
-    "const [totalRooms, setTotalRooms] = useState(0)",
-    "const [totalRooms, setTotalRooms] = useState(0)\n  const [restRevenue, setRestRevenue] = useState([])"
+# 1. Disable Edit/Delete for Invoice entries
+old_room_actions = """        <button disabled={isLocked} onClick={() => openEditRoom(r)} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size={15} /></button>
+        <button disabled={isLocked} onClick={() => handleDeleteRoom(r)} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30"><Trash2 size={15} /></button>"""
+
+new_room_actions = """        <button disabled={isLocked || (r.notes || '').startsWith('Invoice ')} onClick={() => openEditRoom(r)} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size={15} /></button>
+        <button disabled={isLocked || (r.notes || '').startsWith('Invoice ')} onClick={() => handleDeleteRoom(r)} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30"><Trash2 size={15} /></button>"""
+content = content.replace(old_room_actions, new_room_actions)
+
+old_ancillary_actions = """        <button disabled={isLocked} onClick={() => { setEditingRow(r); setAncillaryModalOpen(true) }} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size={15} /></button>
+        <button disabled={isLocked} onClick={() => handleDeleteAncillary(r)} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30"><Trash2 size={15} /></button>"""
+
+new_ancillary_actions = """        <button disabled={isLocked || (r.notes || '').startsWith('Invoice ')} onClick={() => { setEditingRow(r); setAncillaryModalOpen(true) }} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size={15} /></button>
+        <button disabled={isLocked || (r.notes || '').startsWith('Invoice ')} onClick={() => handleDeleteAncillary(r)} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30"><Trash2 size={15} /></button>"""
+content = content.replace(old_ancillary_actions, new_ancillary_actions)
+
+# Wait, there's another place: room actions might not exist in the same way, let's just do a regex replace
+import re
+content = re.sub(
+    r'<button disabled=\{isLocked\} onClick=\{([^}]+)\} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size=\{15\} \/><\/button>',
+    r'<button disabled={isLocked || (r.notes || \'\').startsWith(\'Invoice \')} onClick={\1} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30" title={(r.notes || \'\').startsWith(\'Invoice \') ? "Edit from Guest Invoices page" : "Edit"}><Pencil size={15} /></button>',
+    content
 )
-
-# 2. Update loadAll()
-old_promise = """    const [{ data: room }, { data: anc }, { data: accs }, { data: settings }] = await Promise.all([
-      supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to).order('stat_date', { ascending: false }),
-      supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to).order('entry_date', { ascending: false }),
-      supabase.from('accounts').select('id, code, name').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').neq('code', '4010').order('code'),
-      supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
-    ])"""
-
-new_promise = """    const [{ data: room }, { data: anc }, { data: accs }, { data: settings }, { data: restRev }] = await Promise.all([
-      supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to).order('stat_date', { ascending: false }),
-      supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to).order('entry_date', { ascending: false }),
-      supabase.from('accounts').select('id, code, name').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').neq('code', '4010').order('code'),
-      supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
-      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('food_amount_usd, beverage_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] })
-    ])"""
-
-content = content.replace(old_promise, new_promise)
-
-content = content.replace(
-    "setTotalRooms(settings?.total_rooms || 0)",
-    "setTotalRooms(settings?.total_rooms || 0)\n    setRestRevenue(restRev || [])"
-)
-
-# 3. KPI Calculations
-old_calcs = """  const totalRoomRevenue = roomStats.reduce((s, r) => s + Number(r.room_revenue_usd), 0)
-  const totalCollected = roomStats.reduce((s, r) => s + Number(r.room_revenue_collected_usd), 0)
-  const totalAncillary = ancillary.reduce((s, r) => s + Number(r.amount_usd), 0)"""
-
-new_calcs = """  const totalRoomRevenue = roomStats.reduce((s, r) => s + Number(r.room_revenue_usd), 0)
-  const totalCollected = roomStats.reduce((s, r) => s + Number(r.room_revenue_collected_usd), 0)
-  const totalAncillary = ancillary.reduce((s, r) => s + Number(r.amount_usd), 0)
-  const fbRev = restRevenue.reduce((s, r) => s + (Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0), 0)
-  
-  const totalRev = totalRoomRevenue + totalAncillary + fbRev
-  const totalRevCollected = totalCollected + totalAncillary + fbRev
-  const pendingCollection = totalRev - totalRevCollected"""
-
-content = content.replace(old_calcs, new_calcs)
-
-# 4. Grid Render
-old_grid = """      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
-        <KpiCard label="Total Daily Revenue" value={cp.fmt(totalRoomRevenue + totalAncillary)} tone="slate" />
-        <KpiCard label="Room Revenue" value={cp.fmt(totalRoomRevenue)} tone="green" />
-        <KpiCard label="Room Rev. Collected" value={cp.fmt(totalCollected)} tone="blue" />
-        <KpiCard label="Ancillary Revenue" value={cp.fmt(totalAncillary)} tone="gold" />
-      </div>"""
-
-new_grid = """      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
-        <KpiCard label="Total Revenue" value={cp.fmt(totalRev)} tone="slate" />
-        <KpiCard label="Room Revenue" value={cp.fmt(totalRoomRevenue)} tone="green" />
-        <KpiCard label="F&B Revenue" value={cp.fmt(fbRev)} tone="amber" />
-        <KpiCard label="Other Revenue" value={cp.fmt(totalAncillary)} tone="gold" />
-        <KpiCard label="Rev. Collected" value={cp.fmt(totalRevCollected)} tone="blue" />
-        <KpiCard label="Revenue Pending Collection" value={cp.fmt(pendingCollection)} tone="red" />
-      </div>"""
-
-content = content.replace(old_grid, new_grid)
-
-# 5. Fix Default Date via useCurrencyAndPeriod
-content = content.replace(
-    "const cp = useCurrencyAndPeriod()",
-    "const cp = useCurrencyAndPeriod('YESTERDAY')"
+content = re.sub(
+    r'<button disabled=\{isLocked\} onClick=\{([^}]+)\} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30"><Trash2 size=\{15\} \/><\/button>',
+    r'<button disabled={isLocked || (r.notes || \'\').startsWith(\'Invoice \')} onClick={\1} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30" title={(r.notes || \'\').startsWith(\'Invoice \') ? "Delete from Guest Invoices page" : "Delete"}><Trash2 size={15} /></button>',
+    content
 )
 
 with open('src/pages/HotelRevenue.jsx', 'w') as f:
