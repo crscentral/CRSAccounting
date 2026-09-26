@@ -7,7 +7,7 @@ const MENU_ITEMS = [
   { section: 'Masters', items: [{ label: 'Create', hotkey: 'C', path: '/tally-mode/create' }, { label: 'Alter', hotkey: 'A', path: '/tally-mode/alter' }] },
   { section: 'Transactions', items: [{ label: 'Vouchers', hotkey: 'V', path: '/tally-mode/vouchers' }] },
   { section: 'Utilities', items: [{ label: 'Banking', hotkey: 'B', path: '/tally-mode/banking' }] },
-  { section: 'Reports', items: [{ label: 'Balance Sheet', hotkey: 'B', path: '/tally-mode/balance-sheet' }, { label: 'Profit & Loss A/c', hotkey: 'P', path: '/tally-mode/pnl' }, { label: 'Ratio Analysis', hotkey: 'R', path: '/tally-mode/ratios' }, { label: 'Display More Reports', hotkey: 'D', path: '/tally-mode/display' }] },
+  { section: 'Reports', items: [{ label: 'Financial Dashboard', hotkey: 'F', path: '/' }, { label: 'Balance Sheet', hotkey: 'B', path: '/tally-mode/balance-sheet' }, { label: 'Profit & Loss A/c', hotkey: 'P', path: '/tally-mode/pnl' }, { label: 'Ratio Analysis', hotkey: 'R', path: '/tally-mode/ratios' }, { label: 'Display More Reports', hotkey: 'D', path: '/tally-mode/display' }] },
 ]
 
 export default function TallyGateway() {
