@@ -30,8 +30,8 @@ import HotelGuestInvoices from './pages/HotelGuestInvoices'
 import TallyLayout from './pages/TallyMode/TallyLayout'
 import TallyGateway from './pages/TallyMode/TallyGateway'
 import TallyVouchers from './pages/TallyMode/TallyVouchers'
-import TallyPlaceholder from './pages/TallyMode/TallyPlaceholder'
 import TallyMasterCreate from './pages/TallyMode/TallyMasterCreate'
+import TallyReports from './pages/TallyMode/TallyReports'
 
 function Gate({ children }) {
   const { session, loading, companies, activeCompany } = useAuth()
@@ -57,12 +57,12 @@ function AppRoutes() {
         <Route index element={<TallyGateway />} />
         <Route path="vouchers" element={<TallyVouchers />} />
         <Route path="create" element={<TallyMasterCreate />} />
-        <Route path="alter" element={<TallyPlaceholder />} />
-        <Route path="banking" element={<TallyPlaceholder />} />
-        <Route path="balance-sheet" element={<TallyPlaceholder />} />
-        <Route path="pnl" element={<TallyPlaceholder />} />
-        <Route path="ratios" element={<TallyPlaceholder />} />
-        <Route path="display" element={<TallyPlaceholder />} />
+        <Route path="alter" element={<TallyReports />} />
+        <Route path="banking" element={<TallyReports />} />
+        <Route path="balance-sheet" element={<TallyReports />} />
+        <Route path="pnl" element={<TallyReports />} />
+        <Route path="ratios" element={<TallyReports />} />
+        <Route path="display" element={<TallyReports />} />
         <Route path="*" element={<TallyGateway />} />
       </Route>
       <Route element={<Gate><AppShell /></Gate>}>
