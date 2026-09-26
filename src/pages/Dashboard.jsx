@@ -241,8 +241,8 @@ export default function Dashboard() {
 
     if (selections.sections.includes('Revenue, Expenses & Profit/Loss (Chart)')) {
       const monthlyMap = {}
-      sSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0 }; monthlyMap[k].rev += Number(i.amount_usd) })
-      pSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0 }; monthlyMap[k].exp += Number(i.amount_usd) })
+      sSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0 }; monthlyMap[k].rev += Number(i.amount_usd) })
+      pSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0 }; monthlyMap[k].exp += Number(i.amount_usd) })
       const monthly = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
       sections.push({
         heading: 'Revenue, Expenses & Profit/Loss',
@@ -260,8 +260,8 @@ export default function Dashboard() {
 
     if (selections.sections.includes('Billing & Outstanding Overview (Chart)')) {
       const monthlyMap = {}
-      sSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, out: 0 }; monthlyMap[k].rev += Number(i.amount_usd); monthlyMap[k].out += (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)) })
-      pSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, out: 0 }; monthlyMap[k].exp += Number(i.amount_usd) })
+      sSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, out: 0 }; monthlyMap[k].rev += Number(i.amount_usd); monthlyMap[k].out += (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)) })
+      pSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, out: 0 }; monthlyMap[k].exp += Number(i.amount_usd) })
       const monthly = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
       sections.push({
         heading: 'Billing & Outstanding Overview',
@@ -393,12 +393,14 @@ export default function Dashboard() {
   if (['hotel', 'restaurant'].includes(activeProduct)) {
     // Use monthlyMap to derive YTD for Hotel
     ytdRevenue = Object.values(monthlyMap).filter(m => {
+      if (!m.month) return false
       const [y, mo] = m.month.split('-')
       const d = new Date(Number(y), Number(mo)-1, 15).toISOString().split('T')[0]
       return d >= ytdRange.from && d <= ytdRange.to
     }).reduce((s, m) => s + m.Revenue, 0)
     
     ytdExpenses = Object.values(monthlyMap).filter(m => {
+      if (!m.month) return false
       const [y, mo] = m.month.split('-')
       const d = new Date(Number(y), Number(mo)-1, 15).toISOString().split('T')[0]
       return d >= ytdRange.from && d <= ytdRange.to
@@ -420,26 +422,30 @@ export default function Dashboard() {
     allTimeExpenses = totalExpenses
     
     hotelGuestInvoices.forEach(i => {
-      const key = i.invoice_date.slice(0, 7)
+      const key = (i.invoice_date || '').slice(0, 7)
+      if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
       monthlyMap[key].Outstanding += (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd))
       monthlyMap[key].Collected += Number(i.collected_amount_usd)
     })
     hotelRoomStats.forEach(r => {
-      const key = r.stat_date.slice(0, 7)
+      const key = (r.stat_date || '').slice(0, 7)
+      if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
       monthlyMap[key].Revenue += Number(r.room_revenue_usd)
       monthlyMap[key].Collected += Number(r.manual_room_revenue_collected_usd || 0)
     })
     hotelRevenueEntries.forEach(r => {
-      const key = r.entry_date.slice(0, 7)
+      const key = (r.entry_date || '').slice(0, 7)
+      if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
       monthlyMap[key].Revenue += Number(r.amount_usd)
       monthlyMap[key].Collected += Number(r.collected_usd || r.amount_usd || 0)
       monthlyMap[key].Outstanding += (Number(r.amount_usd) - Number(r.collected_usd || r.amount_usd || 0))
     })
     restaurantRevenue.forEach(r => {
-      const key = r.revenue_date.slice(0, 7)
+      const key = (r.revenue_date || '').slice(0, 7)
+      if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
       const total = Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))
       monthlyMap[key].Revenue += total
@@ -448,6 +454,7 @@ export default function Dashboard() {
     })
     hotelExpenseEntries.forEach(r => {
       const key = r.expense_date.slice(0, 7)
+      if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
       monthlyMap[key].Expenses += Number(r.amount_usd)
     })
@@ -457,6 +464,7 @@ export default function Dashboard() {
     let cur = new Date(start.getFullYear(), start.getMonth(), 1)
     while (cur <= end) {
       const key = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}`
+      if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
       monthlyMap[key].Expenses += amcMonthly
       cur.setMonth(cur.getMonth() + 1)
@@ -466,18 +474,21 @@ export default function Dashboard() {
     allTimeExpenses = allPurchases.reduce((s, i) => s + Number(i.amount_usd), 0)
     
     sales.forEach(i => {
-      const key = i.invoice_date.slice(0, 7)
+      const key = (i.invoice_date || '').slice(0, 7)
+      if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
       monthlyMap[key].Revenue += Number(i.amount_usd)
       monthlyMap[key].Outstanding += (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd))
     })
     purchases.forEach(i => {
-      const key = i.invoice_date.slice(0, 7)
+      const key = (i.invoice_date || '').slice(0, 7)
+      if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
       monthlyMap[key].Expenses += Number(i.amount_usd)
     })
     receipts.forEach(r => {
-      const key = r.receipt_date.slice(0, 7)
+      const key = (r.receipt_date || '').slice(0, 7)
+      if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
       monthlyMap[key].Collected += Number(r.amount_usd)
     })
