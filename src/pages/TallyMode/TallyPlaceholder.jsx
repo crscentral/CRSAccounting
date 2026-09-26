@@ -35,8 +35,11 @@ export default function TallyPlaceholder() {
           <p className="text-slate-600 mb-4">
             This module is currently a layout preview. Data wiring for this specific screen is pending.
           </p>
-          <div className="text-sm text-slate-500 font-bold">
-            Press ESC to return to Gateway
+          <div 
+            className="text-sm text-blue-600 font-bold cursor-pointer hover:underline"
+            onClick={() => navigate('/tally-mode')}
+          >
+            Press ESC or Click Here to return to Gateway
           </div>
         </div>
       </div>

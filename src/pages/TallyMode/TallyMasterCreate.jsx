@@ -71,8 +71,11 @@ export default function TallyMasterCreate() {
   return (
     <div className="tally-voucher-container">
       <div className="tally-voucher-main">
-        <div className="tally-voucher-header">
-          <span>Ledger Alteration / Creation</span>
+        <div className="tally-voucher-header items-center">
+          <div className="flex items-center gap-4">
+            <button onClick={() => navigate('/tally-mode')} className="bg-slate-200 text-slate-800 px-2 py-0.5 border border-slate-400 text-xs hover:bg-slate-300">ESC: Quit</button>
+            <span>Ledger Alteration / Creation</span>
+          </div>
           <span className="text-blue-900">Master</span>
         </div>
         
