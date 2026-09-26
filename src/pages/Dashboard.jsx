@@ -302,7 +302,7 @@ export default function Dashboard() {
     collected = roomCollected + ancillaryCollected + restRevCollected
     
     // Expenses Made = Actual cash out (hotel expense entries).
-    expensesMade = directExpenses
+    expensesMade = directExpenses + amcTotal
   } else {
     // For Basic, use standard invoices
     totalBilled = sales.reduce((sum, i) => sum + Number(i.amount_usd), 0)
