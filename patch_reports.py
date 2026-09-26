@@ -1,55 +1,165 @@
 import re
 
 with open('src/pages/Reports.jsx', 'r') as f:
-    code = f.read()
+    content = f.read()
 
-# 1. Patch Row component
-row_component = """function Row({ label, value, percent, bold, large }) {
-  return (
-    <div className={`flex items-center justify-between px-3 py-2 ${bold ? 'font-bold text-slate-800' : 'text-slate-600'} ${large ? 'text-lg py-3' : 'text-sm'}`}>
-      <span>{label}</span>
-      <div className="flex items-center justify-end">
-        {percent && <span className="text-slate-400 text-xs w-16 text-right mr-3 font-normal">{percent}</span>}
-        <span className="text-right min-w-[100px]">{value}</span>
-      </div>
-    </div>
-  )
-}"""
+old_load_data = """    const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date, accounts!inner(type)').eq('company_id', activeCompany.id).eq('product', activeProduct)
+    const bal = {}
+    ;(entries || []).forEach(e => {"""
 
-code = re.sub(
-    r"function Row\(\{ label, value, bold, large \}\) \{.*?  \)\n\}",
-    row_component,
-    code,
-    flags=re.DOTALL
-)
+new_load_data = """    const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date, accounts!inner(type)').eq('company_id', activeCompany.id).eq('product', activeProduct)
+    
+    let combined = entries || []
+    
+    if (['hotel', 'restaurant'].includes(activeProduct)) {
+      const roomRevAcc = accs.find(a => a.name.toLowerCase().includes('room revenue'))
+      const arAcc = accs.find(a => a.name.toLowerCase().includes('accounts receivable') || a.name.toLowerCase().includes('guest ledger'))
+      const cashAcc = accs.find(a => a.name.toLowerCase().includes('cash on hand') || a.name.toLowerCase().includes('cash'))
+      const mainAcc = accs.find(a => a.name.toLowerCase().includes('maintenance') || a.name.toLowerCase().includes('repairs') || a.type === 'Expenses')
+      const foodAcc = accs.find(a => a.name.toLowerCase().includes('food') && a.type === 'Revenue') || roomRevAcc
+      const bevAcc = accs.find(a => a.name.toLowerCase().includes('beverage') && a.type === 'Revenue') || roomRevAcc
+      const otherFbAcc = accs.find(a => a.name.toLowerCase().includes('other') && a.type === 'Revenue') || roomRevAcc
+      
+      const [{ data: hrs }, { data: hre }, { data: hee }, { data: amc }, { data: rdr }, { data: hgi }] = await Promise.all([
+        supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id),
+        supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id),
+        supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id),
+        supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id),
+        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id),
+        supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id)
+      ])
+      
+      if (roomRevAcc) {
+        ;(hrs || []).forEach(r => {
+          if (Number(r.room_revenue_usd) > 0) combined.push({ account_id: roomRevAcc.id, debit_usd: 0, credit_usd: r.room_revenue_usd, entry_date: r.stat_date, accounts: { type: roomRevAcc.type } })
+        })
+      }
+      
+      ;(hre || []).forEach(r => {
+        const a = accs.find(ac => ac.id === r.account_id)
+        if (a && Number(r.amount_usd) > 0) combined.push({ account_id: a.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.entry_date, accounts: { type: a.type } })
+      })
+      
+      ;(hee || []).forEach(r => {
+        const a = accs.find(ac => ac.id === r.account_id)
+        if (a && Number(r.amount_usd) > 0) combined.push({ account_id: a.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.expense_date, accounts: { type: a.type } })
+      })
+      
+      if (mainAcc && amc && amc.length > 0) {
+        const amcMonthly = amc.reduce((s, r) => s + (Number(r.annual_amount_usd)/12), 0)
+        if (amcMonthly > 0) {
+          const start = new Date(cp.range.from < '2020-01-01' ? '2020-01-01' : cp.range.from)
+          const end = new Date(cp.range.to)
+          let cur = new Date(start.getFullYear(), start.getMonth(), 1)
+          while (cur <= end) {
+            const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
+            combined.push({ account_id: mainAcc.id, debit_usd: amcMonthly, credit_usd: 0, entry_date: dStr, accounts: { type: mainAcc.type } })
+            cur.setMonth(cur.getMonth() + 1)
+          }
+        }
+      }
+      
+      ;(rdr || []).forEach(r => {
+        if (foodAcc && Number(r.food_amount_usd) > 0) combined.push({ account_id: foodAcc.id, debit_usd: 0, credit_usd: r.food_amount_usd, entry_date: r.revenue_date, accounts: { type: foodAcc.type } })
+        if (bevAcc && Number(r.beverage_amount_usd) > 0) combined.push({ account_id: bevAcc.id, debit_usd: 0, credit_usd: r.beverage_amount_usd, entry_date: r.revenue_date, accounts: { type: bevAcc.type } })
+        if (otherFbAcc && Number(r.other_amount_usd) > 0) combined.push({ account_id: otherFbAcc.id, debit_usd: 0, credit_usd: r.other_amount_usd, entry_date: r.revenue_date, accounts: { type: otherFbAcc.type } })
+      })
+      
+      if (arAcc) {
+        ;(hgi || []).forEach(r => {
+          const inv = Number(r.invoice_amount_usd) || 0
+          const col = Number(r.collected_amount_usd) || 0
+          if (inv > 0) combined.push({ account_id: arAcc.id, debit_usd: inv, credit_usd: 0, entry_date: r.invoice_date, accounts: { type: arAcc.type } })
+          if (col > 0) combined.push({ account_id: arAcc.id, debit_usd: 0, credit_usd: col, entry_date: r.invoice_date, accounts: { type: arAcc.type } })
+          if (cashAcc && col > 0) combined.push({ account_id: cashAcc.id, debit_usd: col, credit_usd: 0, entry_date: r.invoice_date, accounts: { type: cashAcc.type } })
+        })
+      }
+    }
+    
+    const bal = {}
+    ;(combined || []).forEach(e => {"""
 
-# 2. Patch Revenue mapping
-new_revenue = """                {byType('Revenue').map(a => {
-                  const val = -(balances[a.id] || 0)
-                  const pct = totalRevenue ? ((val / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'
-                  return <Row key={a.id} label={a.name} value={cp.fmt(val)} percent={pct} />
-                })}
-                <Row label="Total Revenue" value={cp.fmt(totalRevenue)} percent="100.0%" bold />"""
+content = content.replace(old_load_data, new_load_data)
 
-code = re.sub(
-    r"                \{byType\('Revenue'\)\.map\(a => \(\n                  <Row key=\{a\.id\} label=\{a\.name\} value=\{cp\.fmt\(-\(balances\[a\.id\] \|\| 0\)\)\} />\n                \)\)\}\n                <Row label=\"Total Revenue\" value=\{cp\.fmt\(totalRevenue\)\} bold />",
-    new_revenue,
-    code
-)
 
-# 3. Patch Expenses mapping
-new_expenses = """                {operatingAccounts.map(a => {
-                  const val = balances[a.id] || 0
-                  const pct = operatingExpenses ? ((val / operatingExpenses) * 100).toFixed(1) + '%' : '0.0%'
-                  return <Row key={a.id} label={a.name} value={cp.fmt(val)} percent={pct} />
-                })}
-                <Row label="Total Operating Expenses" value={cp.fmt(operatingExpenses)} percent="100.0%" bold />"""
+old_generate = """    const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date, accounts!inner(type)').eq('company_id', activeCompany.id).eq('product', activeProduct)
+    const bal = {}
+    ;(entries || []).forEach(e => {"""
 
-code = re.sub(
-    r"                \{operatingAccounts\.map\(a => \(\n                  <Row key=\{a\.id\} label=\{a\.name\} value=\{cp\.fmt\(balances\[a\.id\] \|\| 0\)\} />\n                \)\)\}\n                <Row label=\"Total Operating Expenses\" value=\{cp\.fmt\(operatingExpenses\)\} bold />",
-    new_expenses,
-    code
-)
+new_generate = """    const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date, accounts!inner(type)').eq('company_id', activeCompany.id).eq('product', activeProduct)
+    
+    let combined = entries || []
+    
+    if (['hotel', 'restaurant'].includes(activeProduct)) {
+      const roomRevAcc = accounts.find(a => a.name.toLowerCase().includes('room revenue'))
+      const arAcc = accounts.find(a => a.name.toLowerCase().includes('accounts receivable') || a.name.toLowerCase().includes('guest ledger'))
+      const cashAcc = accounts.find(a => a.name.toLowerCase().includes('cash on hand') || a.name.toLowerCase().includes('cash'))
+      const mainAcc = accounts.find(a => a.name.toLowerCase().includes('maintenance') || a.name.toLowerCase().includes('repairs') || a.type === 'Expenses')
+      const foodAcc = accounts.find(a => a.name.toLowerCase().includes('food') && a.type === 'Revenue') || roomRevAcc
+      const bevAcc = accounts.find(a => a.name.toLowerCase().includes('beverage') && a.type === 'Revenue') || roomRevAcc
+      const otherFbAcc = accounts.find(a => a.name.toLowerCase().includes('other') && a.type === 'Revenue') || roomRevAcc
+      
+      const [{ data: hrs }, { data: hre }, { data: hee }, { data: amc }, { data: rdr }, { data: hgi }] = await Promise.all([
+        supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id),
+        supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id),
+        supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id),
+        supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id),
+        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id),
+        supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id)
+      ])
+      
+      if (roomRevAcc) {
+        ;(hrs || []).forEach(r => {
+          if (Number(r.room_revenue_usd) > 0) combined.push({ account_id: roomRevAcc.id, debit_usd: 0, credit_usd: r.room_revenue_usd, entry_date: r.stat_date, accounts: { type: roomRevAcc.type } })
+        })
+      }
+      
+      ;(hre || []).forEach(r => {
+        const a = accounts.find(ac => ac.id === r.account_id)
+        if (a && Number(r.amount_usd) > 0) combined.push({ account_id: a.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.entry_date, accounts: { type: a.type } })
+      })
+      
+      ;(hee || []).forEach(r => {
+        const a = accounts.find(ac => ac.id === r.account_id)
+        if (a && Number(r.amount_usd) > 0) combined.push({ account_id: a.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.expense_date, accounts: { type: a.type } })
+      })
+      
+      if (mainAcc && amc && amc.length > 0) {
+        const amcMonthly = amc.reduce((s, r) => s + (Number(r.annual_amount_usd)/12), 0)
+        if (amcMonthly > 0) {
+          const start = new Date(range.from < '2020-01-01' ? '2020-01-01' : range.from)
+          const end = new Date(range.to)
+          let cur = new Date(start.getFullYear(), start.getMonth(), 1)
+          while (cur <= end) {
+            const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
+            combined.push({ account_id: mainAcc.id, debit_usd: amcMonthly, credit_usd: 0, entry_date: dStr, accounts: { type: mainAcc.type } })
+            cur.setMonth(cur.getMonth() + 1)
+          }
+        }
+      }
+      
+      ;(rdr || []).forEach(r => {
+        if (foodAcc && Number(r.food_amount_usd) > 0) combined.push({ account_id: foodAcc.id, debit_usd: 0, credit_usd: r.food_amount_usd, entry_date: r.revenue_date, accounts: { type: foodAcc.type } })
+        if (bevAcc && Number(r.beverage_amount_usd) > 0) combined.push({ account_id: bevAcc.id, debit_usd: 0, credit_usd: r.beverage_amount_usd, entry_date: r.revenue_date, accounts: { type: bevAcc.type } })
+        if (otherFbAcc && Number(r.other_amount_usd) > 0) combined.push({ account_id: otherFbAcc.id, debit_usd: 0, credit_usd: r.other_amount_usd, entry_date: r.revenue_date, accounts: { type: otherFbAcc.type } })
+      })
+      
+      if (arAcc) {
+        ;(hgi || []).forEach(r => {
+          const inv = Number(r.invoice_amount_usd) || 0
+          const col = Number(r.collected_amount_usd) || 0
+          if (inv > 0) combined.push({ account_id: arAcc.id, debit_usd: inv, credit_usd: 0, entry_date: r.invoice_date, accounts: { type: arAcc.type } })
+          if (col > 0) combined.push({ account_id: arAcc.id, debit_usd: 0, credit_usd: col, entry_date: r.invoice_date, accounts: { type: arAcc.type } })
+          if (cashAcc && col > 0) combined.push({ account_id: cashAcc.id, debit_usd: col, credit_usd: 0, entry_date: r.invoice_date, accounts: { type: cashAcc.type } })
+        })
+      }
+    }
+
+    const bal = {}
+    ;(combined || []).forEach(e => {"""
+
+content = content.replace(old_generate, new_generate)
 
 with open('src/pages/Reports.jsx', 'w') as f:
-    f.write(code)
+    f.write(content)
+
