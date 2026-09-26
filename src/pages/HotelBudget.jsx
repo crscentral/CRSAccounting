@@ -331,16 +331,17 @@ export default function HotelBudget() {
     const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
     
-    const p = selections.period || String(startYear)
+    const pYear = selections.reportYear || String(startYear)
+    const pMonth = selections.reportMonth || 'all'
     let periodKeys = []
     
-    if (p === 'all') {
+    if (pYear === 'all') {
       const allYears = Array.from({ length: 8 }, (_, i) => new Date().getFullYear() - 2 + i)
       allYears.forEach(y => MONTH_NAMES.forEach((_, i) => periodKeys.push(`${y}-${i + 1}`)))
-    } else if (p.includes('-')) {
-      periodKeys.push(p)
+    } else if (pMonth !== 'all') {
+      periodKeys.push(`${pYear}-${pMonth}`)
     } else {
-      MONTH_NAMES.forEach((_, i) => periodKeys.push(`${p}-${i + 1}`))
+      MONTH_NAMES.forEach((_, i) => periodKeys.push(`${pYear}-${i + 1}`))
     }
 
     const tableRows = []
@@ -367,7 +368,7 @@ export default function HotelBudget() {
     })
     const sections = [{ heading: 'Room Revenue Budget', columns: ['Month', 'Budgeted Occ %', 'Budgeted ADR', 'Budgeted Monthly Revenue', 'Actual Revenue', 'Variance'], rows: tableRows }]
     const title = 'Room Revenue Budget'
-    const subtitle = `${activeCompany.name} • ${startYear} • ${selections.currency}`
+    const subtitle = `${activeCompany.name} • ${pYear === 'all' ? 'All Years' : pYear + (pMonth !== 'all' ? ' ' + MONTH_NAMES[Number(pMonth)-1] : '')} • ${selections.currency}`
     if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'room_revenue_budget' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'room_revenue_budget' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'room_revenue_budget' })
@@ -668,15 +669,24 @@ export default function HotelBudget() {
           title={activeProduct === "restaurant" ? "F&B Revenue Budget" : "Room Revenue Budget"}
           fields={[
             { type: 'currency', key: 'currency', default: displayCurrency },
-            { 
+{ 
               type: 'select', 
-              key: 'period', 
-              label: 'Select Period', 
+              key: 'reportYear', 
+              label: 'Select Year', 
               default: String(startYear),
               options: [
                 { value: 'all', label: 'All Available Years' },
-                ...Array.from({ length: 8 }, (_, i) => { const y = new Date().getFullYear() - 2 + i; return { value: String(y), label: `${y} (Full Year)` } }),
-                ...Array.from({ length: 12 }, (_, i) => { return { value: `${startYear}-${i + 1}`, label: `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i]} ${startYear}` } })
+                ...Array.from({ length: 8 }, (_, i) => { const y = new Date().getFullYear() - 2 + i; return { value: String(y), label: String(y) } })
+              ]
+            },
+            {
+              type: 'select',
+              key: 'reportMonth',
+              label: 'Select Month',
+              default: 'all',
+              options: [
+                { value: 'all', label: 'Full Year' },
+                ...Array.from({ length: 12 }, (_, i) => { return { value: String(i + 1), label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i] } })
               ]
             }
           ]}

@@ -406,15 +406,24 @@ export default function HotelExpenseBudget() {
           title={activeProduct === "restaurant" ? "F&B Expense Budget" : "Expenses Budget"}
           fields={[
             { type: 'currency', key: 'currency', default: displayCurrency },
-            { 
+{ 
               type: 'select', 
-              key: 'period', 
-              label: 'Select Period', 
+              key: 'reportYear', 
+              label: 'Select Year', 
               default: String(selectedYear),
               options: [
                 { value: 'all', label: 'All Available Years' },
-                ...Array.from({ length: 8 }, (_, i) => { const y = new Date().getFullYear() - 2 + i; return { value: String(y), label: `${y} (Full Year)` } }),
-                ...Array.from({ length: 12 }, (_, i) => { return { value: `${selectedYear}-${i + 1}`, label: `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i]} ${selectedYear}` } })
+                ...Array.from({ length: 8 }, (_, i) => { const y = new Date().getFullYear() - 2 + i; return { value: String(y), label: String(y) } })
+              ]
+            },
+            {
+              type: 'select',
+              key: 'reportMonth',
+              label: 'Select Month',
+              default: 'all',
+              options: [
+                { value: 'all', label: 'Full Year' },
+                ...Array.from({ length: 12 }, (_, i) => { return { value: String(i + 1), label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i] } })
               ]
             }
           ]}
