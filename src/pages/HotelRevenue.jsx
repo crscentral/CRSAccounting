@@ -1,3 +1,4 @@
+import { getLocalDate } from '../lib/dateUtils'
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, Pencil, BedDouble, Lock, Unlock } from "lucide-react"
 import { supabase } from '../lib/supabaseClient'
@@ -283,7 +284,7 @@ columns={ancillaryCols}
 }
 
 function RoomRevenueFormModal({ companyId, product, totalRooms, editingRow, onClose, onSaved }) {
-  const [statDate, setStatDate] = useState(editingRow?.stat_date || new Date().toISOString().slice(0, 10))
+  const [statDate, setStatDate] = useState(editingRow?.stat_date || getLocalDate())
   const [roomsOccupied, setRoomsOccupied] = useState(editingRow?.manual_rooms_occupied ?? '')
   const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
   const [roomRevenue, setRoomRevenue] = useState(editingRow?.manual_room_revenue ?? '')
@@ -369,7 +370,7 @@ function RoomRevenueFormModal({ companyId, product, totalRooms, editingRow, onCl
 
 
 function AncillaryRevenueFormModal({ companyId, product, accounts, totalRooms, editingRow, roomStats, onClose, onSaved }) {
-  const [entryDate, setEntryDate] = useState(editingRow?.entry_date || new Date().toISOString().slice(0, 10))
+  const [entryDate, setEntryDate] = useState(editingRow?.entry_date || getLocalDate())
   const [accountId, setAccountId] = useState(editingRow?.account_id || accounts[0]?.id || '')
   const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
   const [amount, setAmount] = useState(editingRow?.amount ?? '')

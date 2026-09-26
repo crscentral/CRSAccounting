@@ -1,4 +1,5 @@
 
+import { getLocalDate } from '../../lib/dateUtils'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../../lib/useCurrencyAndPeriod'
@@ -77,7 +78,7 @@ export default function TallyGateway() {
           </div>
           <div className="text-right">
             <div className="text-[#800000]">Current Date</div>
-            <div>{new Date().toISOString().slice(0, 10)}</div>
+            <div>{getLocalDate()}</div>
           </div>
         </div>
         

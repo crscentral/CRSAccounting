@@ -1,3 +1,4 @@
+import { getLocalDate } from '../lib/dateUtils'
 import { useState, useEffect } from 'react'
 import { Calendar } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
@@ -34,7 +35,7 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
         setNotes(initialData.notes || '')
       } else {
         setReceiptNumber(`RCP-${Math.floor(Math.random() * 1000000)}`)
-        setReceiptDate(new Date().toISOString().slice(0, 10))
+        setReceiptDate(getLocalDate())
         setInvoiceId('')
         setCustomerName('')
         setAmount('')

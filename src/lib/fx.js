@@ -8,7 +8,7 @@ const FX_API_URL = 'https://open.er-api.com/v6/latest/USD'
  * Cheap no-op if today's rates already exist.
  */
 export async function ensureTodayRatesCached() {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()
   const { data: existing } = await supabase
     .from('fx_rates_cache')
     .select('currency_code')

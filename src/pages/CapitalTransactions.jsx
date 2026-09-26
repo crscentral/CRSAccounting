@@ -1,3 +1,4 @@
+import { getLocalDate } from '../lib/dateUtils'
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, Landmark, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
@@ -349,7 +350,7 @@ export default function CapitalTransactions() {
 }
 
 function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAccounts, initialData, onClose, onSaved }) {
-  const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || new Date().toISOString().slice(0, 10))
+  const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
   const [loanAccountId, setLoanAccountId] = useState(initialData?.loan_account_id || liabilityAccounts[0]?.id || '')
   const [cashAccountId, setCashAccountId] = useState(initialData?.cash_account_id || cashAccounts[0]?.id || '')
   const [currency, setCurrency] = useState(initialData?.currency || 'USD')
@@ -448,7 +449,7 @@ function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAcc
 
 function DividendFormModal({ companyId, product, initialData, onClose, onSaved }) {
   const [ownerName, setOwnerName] = useState(initialData?.owner_name || '')
-  const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || new Date().toISOString().slice(0, 10))
+  const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
   const [currency, setCurrency] = useState(initialData?.currency || 'USD')
   const [amount, setAmount] = useState(initialData?.amount || '')
   const [notes, setNotes] = useState(initialData?.notes || '')
@@ -535,7 +536,7 @@ function DividendFormModal({ companyId, product, initialData, onClose, onSaved }
 
 function OwnerEquityFormModal({ companyId, product, cashAccounts, initialData, onClose, onSaved }) {
   const [ownerName, setOwnerName] = useState(initialData?.owner_name || '')
-  const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || new Date().toISOString().slice(0, 10))
+  const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
   const [currency, setCurrency] = useState(initialData?.currency || 'USD')
   const [amount, setAmount] = useState(initialData?.amount || '')
   const [notes, setNotes] = useState(initialData?.notes || '')
@@ -622,7 +623,7 @@ function OwnerEquityFormModal({ companyId, product, cashAccounts, initialData, o
 }
 
 function LoanTakenFormModal({ companyId, product, liabilityAccounts, cashAccounts, initialData, onClose, onSaved }) {
-  const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || new Date().toISOString().slice(0, 10))
+  const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
   const [loanAccountId, setLoanAccountId] = useState(initialData?.loan_account_id || liabilityAccounts[0]?.id || '')
   const [cashAccountId, setCashAccountId] = useState(initialData?.cash_account_id || cashAccounts[0]?.id || '')
   const [currency, setCurrency] = useState(initialData?.currency || 'USD')

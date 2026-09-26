@@ -77,7 +77,7 @@ export default function Dashboard() {
     let totalBudgetUsd = 0
     
     while (currentDate <= endDate) {
-      const d = currentDate.toISOString().slice(0, 10)
+      const d = getLocalDate(currentDate)
       const y = currentDate.getUTCFullYear()
       const m = currentDate.getUTCMonth() + 1
       const dailyBudget = budgetByMonth[`${y}-${m}`] || 0

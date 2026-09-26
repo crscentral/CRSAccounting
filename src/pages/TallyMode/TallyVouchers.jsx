@@ -1,3 +1,4 @@
+import { getLocalDate } from '../../lib/dateUtils'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
@@ -9,7 +10,7 @@ export default function TallyVouchers() {
   
   const [voucherType, setVoucherType] = useState('Payment')
   const [voucherNumber, setVoucherNumber] = useState(1)
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(getLocalDate())
   const [narration, setNarration] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')

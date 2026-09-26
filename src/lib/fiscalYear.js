@@ -17,27 +17,30 @@ export const PERIOD_TYPES = [
 ]
 
 function ymd(d) {
-  return d.toISOString().slice(0, 10)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 
 /** Returns { from, to } for Today. */
 export function getTodayRange(today = new Date()) {
-  const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
+  const from = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   return { from: ymd(from), to: ymd(from) }
 }
 
 /** Returns { from, to } for Yesterday. */
 export function getYesterdayRange(today = new Date()) {
-  const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 1))
+  const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
   return { from: ymd(from), to: ymd(from) }
 }
 
 /** Returns { from, to } for one full calendar year. If it's the current year, `to` is
  * today; otherwise `to` is Dec 31 of that year. */
 export function getYearRange(year) {
-  const from = new Date(Date.UTC(year, 0, 1))
-  const to = new Date(Date.UTC(year, 11, 31))
+  const from = new Date(year, 0, 1)
+  const to = new Date(year, 11, 31)
   return { from: ymd(from), to: ymd(to) }
 }
 
@@ -45,14 +48,14 @@ export function getYearRange(year) {
  * month, `to` is today (same MTD behaviour as before); otherwise `to` is the last day
  * of that month. */
 export function getMonthRange(year, month) {
-  const from = new Date(Date.UTC(year, month - 1, 1))
-  const to = new Date(Date.UTC(year, month, 0))
+  const from = new Date(year, month - 1, 1)
+  const to = new Date(year, month, 0)
   return { from: ymd(from), to: ymd(to) }
 }
 
 /** Returns { from, to } for the current month-to-date. */
 export function getMTDRange(today = new Date()) {
-  const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1))
+  const from = new Date(today.getFullYear(), today.getMonth(), 1)
   return { from: ymd(from), to: ymd(today) }
 }
 
@@ -61,8 +64,8 @@ export function getMTDRange(today = new Date()) {
  * (1 = January/calendar year, 4 = April-start like India, 9 = Sept-start, etc).
  */
 export function getYTDRange(fiscalYearStartMonth = 1, today = new Date()) {
-  const y = today.getUTCFullYear()
-  const m = today.getUTCMonth() + 1 // 1-12
+  const y = today.getFullYear()
+  const m = today.getMonth() + 1 // 1-12
   let startYear = y
   let endYear = y
   if (m < fiscalYearStartMonth) {
@@ -70,29 +73,29 @@ export function getYTDRange(fiscalYearStartMonth = 1, today = new Date()) {
   } else {
     endYear = y + 1
   }
-  const from = new Date(Date.UTC(startYear, fiscalYearStartMonth - 1, 1))
-  const to = new Date(Date.UTC(endYear, fiscalYearStartMonth - 1, 0))
+  const from = new Date(startYear, fiscalYearStartMonth - 1, 1)
+  const to = new Date(endYear, fiscalYearStartMonth - 1, 0)
   return { from: ymd(from), to: ymd(to) }
 }
 
 /** Returns { from, to } for the last N full fiscal years plus current partial year. */
 export function getLastNYearsRange(n, fiscalYearStartMonth = 1, today = new Date()) {
-  const y = today.getUTCFullYear()
-  const m = today.getUTCMonth() + 1
+  const y = today.getFullYear()
+  const m = today.getMonth() + 1
   let currentFYStartYear = m < fiscalYearStartMonth ? y - 1 : y
   const fromYear = currentFYStartYear - (n - 1)
-  const from = new Date(Date.UTC(fromYear, fiscalYearStartMonth - 1, 1))
-  const to = new Date(Date.UTC(currentFYStartYear + 1, fiscalYearStartMonth - 1, 0))
+  const from = new Date(fromYear, fiscalYearStartMonth - 1, 1)
+  const to = new Date(currentFYStartYear + 1, fiscalYearStartMonth - 1, 0)
   return { from: ymd(from), to: ymd(to) }
 }
 
 /** Returns { from, to } for the next N fiscal years starting from today (for forecasts). */
 export function getNextNYearsRange(n, fiscalYearStartMonth = 1, today = new Date()) {
-  const y = today.getUTCFullYear()
-  const m = today.getUTCMonth() + 1
+  const y = today.getFullYear()
+  const m = today.getMonth() + 1
   let currentFYStartYear = m < fiscalYearStartMonth ? y - 1 : y
   const toYear = currentFYStartYear + n
-  const to = new Date(Date.UTC(toYear, fiscalYearStartMonth - 1, 0)) // day before next FY starts
+  const to = new Date(toYear, fiscalYearStartMonth - 1, 0) // day before next FY starts
   return { from: ymd(today), to: ymd(to) }
 }
 
@@ -101,7 +104,7 @@ export function resolvePeriodRange(periodType, opts = {}) {
   switch (periodType) {
     case 'TODAY': return getTodayRange(today)
     case 'YESTERDAY': return getYesterdayRange(today)
-    case 'MTD': return getMonthRange(year || today.getUTCFullYear(), month || (today.getUTCMonth() + 1), today)
+    case 'MTD': return getMonthRange(year || today.getFullYear(), month || (today.getMonth() + 1), today)
     case 'YTD': return getYTDRange(fiscalYearStartMonth, today)
     case 'LAST_N_YEARS': return getLastNYearsRange(n, fiscalYearStartMonth, today)
     case 'NEXT_N_YEARS': return getNextNYearsRange(n, fiscalYearStartMonth, today)

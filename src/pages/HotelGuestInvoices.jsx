@@ -1,3 +1,4 @@
+import { getLocalDate } from '../lib/dateUtils'
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, Pencil, FileCheck, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
@@ -20,7 +21,7 @@ export default function HotelGuestInvoices() {
   const [reportModalOpen, setReportModalOpen] = useState(false)
   const [rows, setRows] = useState([])
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = getLocalDate()
   const mtd = getMTDRange()
   const ytd = getYTDRange(1)
 
@@ -139,7 +140,7 @@ export default function HotelGuestInvoices() {
 }
 
 function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
-  const [invoiceDate, setInvoiceDate] = useState(row?.invoice_date || new Date().toISOString().slice(0, 10))
+  const [invoiceDate, setInvoiceDate] = useState(row?.invoice_date || getLocalDate())
   const [roomNumber, setRoomNumber] = useState(row?.room_number || '')
   const [guestName, setGuestName] = useState(row?.guest_name || '')
   const [checkinDate, setCheckinDate] = useState(row?.checkin_date || '')

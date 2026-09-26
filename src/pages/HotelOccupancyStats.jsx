@@ -38,8 +38,8 @@ export default function HotelOccupancyStats() {
 
   function rangeFor(v) {
     const today = new Date()
-    if (v === 'last_night') { const d = new Date(today); d.setDate(d.getDate() - 1); const s = d.toISOString().slice(0, 10); return { from: s, to: s } }
-    if (v === 'last_30') { const d = new Date(today); d.setDate(d.getDate() - 30); return { from: d.toISOString().slice(0, 10), to: today.toISOString().slice(0, 10) } }
+    if (v === 'last_night') { const d = new Date(today); d.setDate(d.getDate() - 1); const s = getLocalDate(d); return { from: s, to: s } }
+    if (v === 'last_30') { const d = new Date(today); d.setDate(d.getDate() - 30); return { from: getLocalDate(d), to: getLocalDate(today) } }
     if (v === 'last_year_daily') return getYearRange(today.getFullYear() - 1)
     if (v === 'mtd') return getMTDRange()
     return getYTDRange(1)

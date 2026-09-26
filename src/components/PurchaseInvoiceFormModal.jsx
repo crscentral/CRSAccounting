@@ -1,3 +1,4 @@
+import { getLocalDate } from '../lib/dateUtils'
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, Upload } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
@@ -19,7 +20,7 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
   const [supplierPhone, setSupplierPhone] = useState(invoice?.supplier_phone || '')
   const [supplierGstin, setSupplierGstin] = useState(invoice?.supplier_gstin || '')
   const [supplierAddress, setSupplierAddress] = useState(invoice?.supplier_address || '')
-  const [invoiceDate, setInvoiceDate] = useState(invoice?.invoice_date || new Date().toISOString().slice(0, 10))
+  const [invoiceDate, setInvoiceDate] = useState(invoice?.invoice_date || getLocalDate())
   const [dueDate, setDueDate] = useState(invoice?.due_date || '')
   const [currency, setCurrency] = useState(invoice?.currency || 'USD')
   const [fxRate, setFxRate] = useState(invoice?.fx_rate_locked || '')

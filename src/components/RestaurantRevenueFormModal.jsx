@@ -1,3 +1,4 @@
+import { getLocalDate } from '../lib/dateUtils'
 import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getLatestRate } from '../lib/fx'
@@ -7,7 +8,7 @@ import { CURRENCY_LIST } from '../lib/currencies'
 const MEAL_PERIODS = ['Breakfast', 'Lunch', 'Dinner', 'All Day']
 
 export default function RestaurantRevenueFormModal({ companyId, product, company, entry, onClose, onSaved }) {
-  const [revenueDate, setRevenueDate] = useState(entry?.revenue_date || new Date().toISOString().slice(0, 10))
+  const [revenueDate, setRevenueDate] = useState(entry?.revenue_date || getLocalDate())
   const [mealPeriod, setMealPeriod] = useState(entry?.meal_period || 'Dinner')
   const [tableOrSection, setTableOrSection] = useState(entry?.table_or_section || '')
   const [covers, setCovers] = useState(entry?.covers ?? 1)

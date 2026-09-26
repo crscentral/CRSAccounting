@@ -1,3 +1,4 @@
+import { getLocalDate } from '../lib/dateUtils'
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, Repeat, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
@@ -274,7 +275,7 @@ export default function HotelExpenses() {
 }
 
 function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClose, onSaved }) {
-  const [expenseDate, setExpenseDate] = useState(editingRow?.expense_date || new Date().toISOString().slice(0, 10))
+  const [expenseDate, setExpenseDate] = useState(editingRow?.expense_date || getLocalDate())
   const [accountId, setAccountId] = useState(editingRow?.account_id || '')
   const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
   const [amount, setAmount] = useState(editingRow?.amount ?? '')
