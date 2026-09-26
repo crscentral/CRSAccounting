@@ -16,6 +16,7 @@ export default function HotelBudget() {
   const [totalRooms, setTotalRooms] = useState(0)
   const [savingRooms, setSavingRooms] = useState(false)
   const [startYear, setStartYear] = useState(new Date().getFullYear())
+  const [startMonth, setStartMonth] = useState('all')
   const [rows, setRows] = useState({}) // key: "year-month" -> { occ, adr, revenue, currency }
   const [actuals, setActuals] = useState({}) // key: "year-month" -> revenue_usd actual
   const [saving, setSaving] = useState({})
@@ -377,11 +378,15 @@ export default function HotelBudget() {
   if (!activeCompany) return null
 
   const now = new Date()
-  const thisMonthKey = `${now.getFullYear()}-${now.getMonth() + 1}`
+  const activeMonth = startMonth === 'all' ? (now.getFullYear() === startYear ? now.getMonth() + 1 : 12) : Number(startMonth)
+  const isCurrentMonth = startYear === now.getFullYear() && activeMonth === now.getMonth() + 1
+  const thisMonthKey = `${startYear}-${activeMonth}`
   const thisMonthRow = rows[thisMonthKey]
-  const daysElapsed = now.getDate()
-  const daysInCurrentMonth = daysInMonth(now.getFullYear(), now.getMonth() + 1)
-  const paceExpected = thisMonthRow ? (Number(thisMonthRow.revenue) || 0) * (daysElapsed / daysInCurrentMonth) : 0
+  
+  const daysElapsed = isCurrentMonth ? now.getDate() : daysInMonth(startYear, activeMonth)
+  const daysInActiveMonth = daysInMonth(startYear, activeMonth)
+  
+  const paceExpected = thisMonthRow ? (Number(thisMonthRow.revenue) || 0) * (daysElapsed / daysInActiveMonth) : 0
   const mtdActual = actuals[thisMonthKey] || 0
   const mtdPaceVariance = mtdActual - paceExpected
 
@@ -396,8 +401,13 @@ export default function HotelBudget() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 py-1">
               <span className="text-sm text-slate-500 ml-1">Period:</span>
-              <select value={startYear} onChange={e => setStartYear(Number(e.target.value))} className="bg-transparent text-sm font-medium focus:outline-none">
-                {Array.from({ length: 8 }, (_, i) => now.getFullYear() - 2 + i).map(y => <option key={y} value={y}>{y}</option>)}
+              <select value={startYear} onChange={e => setStartYear(Number(e.target.value))} className="bg-transparent text-sm font-medium focus:outline-none pr-1">
+                {Array.from({ length: 8 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <span className="text-slate-300">/</span>
+              <select value={startMonth} onChange={e => setStartMonth(e.target.value)} className="bg-transparent text-sm font-medium focus:outline-none pl-1">
+                <option value="all">Full Year</option>
+                {MONTH_NAMES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
               </select>
             </div>
             <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400">
@@ -425,14 +435,14 @@ export default function HotelBudget() {
 
       {thisMonthRow && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
-          <KpiCard label="This Month Budget" value={fmt(Number(thisMonthRow.revenue) || 0)} icon={TrendingUp} tone="gold" />
-          <KpiCard label="MTD Actual" value={fmt(mtdActual)} icon={TrendingUp} tone="green" />
+          <KpiCard label={`${MONTH_NAMES[activeMonth - 1]} Budget`} value={fmt((Number(thisMonthRow.revenue) || 0) * daysInActiveMonth)} icon={TrendingUp} tone="gold" />
+          <KpiCard label={`${MONTH_NAMES[activeMonth - 1]} ${isCurrentMonth ? 'MTD ' : ''}Actual`} value={fmt(mtdActual)} icon={TrendingUp} tone="green" />
           <KpiCard
-            label={`Pace Variance (Day ${daysElapsed}/${daysInCurrentMonth})`}
+            label={isCurrentMonth ? `Pace Variance (Day ${daysElapsed}/${daysInActiveMonth})` : `${MONTH_NAMES[activeMonth - 1]} Variance`}
             value={fmtRoundedAbs(mtdPaceVariance)}
             icon={mtdPaceVariance >= 0 ? TrendingUp : AlertTriangle}
             tone={mtdPaceVariance >= 0 ? 'green' : 'red'}
-            sublabel="Actual vs. where you should be by today"
+            sublabel={isCurrentMonth ? "Actual vs. where you should be by today" : "Actual vs. Full Month Budget"}
           />
         </div>
       )}
@@ -440,10 +450,10 @@ export default function HotelBudget() {
       
       
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <KpiCard label={`${startYear} ${activeProduct === "restaurant" ? "Food Sales Budget" : "Front Office Revenue Budget"}`} value={fmt(revenueSummary.frontOffice)} icon={TrendingUp} tone="gold" sublabel={activeProduct === "restaurant" ? "Food Sales Account" : "Room Revenue + Front Office"} />
-        <KpiCard label={`${startYear} ${activeProduct === "restaurant" ? "Beverage Sales Budget" : "F&B Service Budget"}`} value={fmt(revenueSummary.fbService)} icon={TrendingUp} tone="blue" sublabel={activeProduct === "restaurant" ? "Beverage Sales Account" : "F&B Service Accounts"} />
-        <KpiCard label={`${startYear} Other Revenue Budget`} value={fmt(revenueSummary.otherRev)} icon={TrendingUp} tone="emerald" sublabel="Other Operating Income" />
-        <KpiCard label={`Total ${startYear} Budget`} value={fmt(revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev)} icon={TrendingUp} tone="indigo" sublabel="Combined Total Budget" />
+        <KpiCard label={`${startMonth === 'all' ? startYear : MONTH_NAMES[Number(startMonth)-1] + ' ' + startYear} ${activeProduct === "restaurant" ? "Food Sales Budget" : "FO Revenue Budget"}`} value={fmt(revenueSummary.frontOffice)} icon={TrendingUp} tone="gold" sublabel={activeProduct === "restaurant" ? "Food Sales Account" : "Room Revenue + FO Accounts"} />
+        <KpiCard label={`${startMonth === 'all' ? startYear : MONTH_NAMES[Number(startMonth)-1] + ' ' + startYear} ${activeProduct === "restaurant" ? "Beverage Sales Budget" : "F&B Service Budget"}`} value={fmt(revenueSummary.fbService)} icon={TrendingUp} tone="blue" sublabel={activeProduct === "restaurant" ? "Beverage Sales Account" : "F&B Service Accounts"} />
+        <KpiCard label={`${startMonth === 'all' ? startYear : MONTH_NAMES[Number(startMonth)-1] + ' ' + startYear} Other Revenue Budget`} value={fmt(revenueSummary.otherRev)} icon={TrendingUp} tone="emerald" sublabel="Other Operating Income" />
+        <KpiCard label={`${startMonth === 'all' ? startYear : MONTH_NAMES[Number(startMonth)-1] + ' ' + startYear} Total Budget`} value={fmt(revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev)} icon={TrendingUp} tone="indigo" sublabel="Combined Total Budget" />
       </div>
 
       {activeProduct === 'hotel' && years.map(year => (

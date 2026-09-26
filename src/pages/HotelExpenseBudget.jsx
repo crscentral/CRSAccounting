@@ -13,7 +13,7 @@ export default function HotelExpenseBudget() {
   const { activeCompany, activeProduct, can } = useAuth()
   
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
+  const [selectedMonth, setSelectedMonth] = useState('all')
   
   const [accounts, setAccounts] = useState([])
   const [budgets, setBudgets] = useState({}) // key: "accountCode-month" -> { amount, currency, amount_usd }
@@ -145,7 +145,10 @@ export default function HotelExpenseBudget() {
     let fbBudget = 0
     let otherBudget = 0
     
-    for (let m = 1; m <= 12; m++) {
+    const mStart = selectedMonth === 'all' ? 1 : Number(selectedMonth)
+    const mEnd = selectedMonth === 'all' ? 12 : Number(selectedMonth)
+    
+    for (let m = mStart; m <= mEnd; m++) {
       let mBudget = 0
       let mActual = 0
       for (const a of accounts) {
@@ -161,10 +164,25 @@ export default function HotelExpenseBudget() {
       }
       totalBudget += mBudget
       totalActual += mActual
+    }
+    
+    // Always build the full months array so the Annual table can use it if needed, or we can filter later.
+    // Wait, the table maps over monthlySummary.months. So we should ONLY include the requested months in the array!
+    for (let m = 1; m <= 12; m++) {
+      if (selectedMonth !== 'all' && m !== Number(selectedMonth)) continue;
+      
+      let mBudget = 0
+      let mActual = 0
+      for (const a of accounts) {
+        const k = `${a.code}-${m}`
+        if (budgets[k]) mBudget += Number(budgets[k].amount_usd) || 0
+        if (actuals[k]) mActual += Number(actuals[k]) || 0
+      }
       summary.push({ month: m, name: MONTH_NAMES[m - 1], budget: mBudget, actual: mActual, variance: mActual - mBudget })
     }
+    
     return { months: summary, totalBudget, totalActual, totalVariance: totalActual - totalBudget, foBudget, fbBudget, otherBudget }
-  }, [budgets, actuals, accounts])
+  }, [budgets, actuals, accounts, selectedMonth])
   
   if (!activeCompany) return null
   
@@ -250,8 +268,13 @@ export default function HotelExpenseBudget() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 py-1">
               <span className="text-sm text-slate-500 ml-1">Period:</span>
-              <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))} className="bg-transparent text-sm font-medium focus:outline-none">
+              <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))} className="bg-transparent text-sm font-medium focus:outline-none pr-1">
                 {Array.from({ length: 8 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <span className="text-slate-300">/</span>
+              <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="bg-transparent text-sm font-medium focus:outline-none pl-1">
+                <option value="all">Full Year</option>
+                {MONTH_NAMES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
               </select>
             </div>
             <button onClick={() => setReportModalOpen(true)} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm">
@@ -265,10 +288,10 @@ export default function HotelExpenseBudget() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <KpiCard label={`${selectedYear} Front Office Budget`} value={fmt(monthlySummary.foBudget)} icon={TrendingUp} tone="gold" sublabel="Front Office Accounts" />
-        <KpiCard label={`${selectedYear} F&B Expenses Budget`} value={fmt(monthlySummary.fbBudget)} icon={TrendingUp} tone="blue" sublabel="F&B Accounts" />
-        <KpiCard label={`${selectedYear} Other Expenses Budget`} value={fmt(monthlySummary.otherBudget)} icon={TrendingUp} tone="emerald" sublabel="Other Expenses" />
-        <KpiCard label={`Total ${selectedYear} Budget`} value={fmt(monthlySummary.totalBudget)} icon={TrendingUp} tone="indigo" sublabel="Combined Expenses" />
+        <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} FO Expenses Budget`} value={fmt(monthlySummary.foBudget)} icon={TrendingUp} tone="gold" sublabel="FO Accounts" />
+        <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} F&B Expenses Budget`} value={fmt(monthlySummary.fbBudget)} icon={TrendingUp} tone="blue" sublabel="F&B Accounts" />
+        <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} Other Expenses Budget`} value={fmt(monthlySummary.otherBudget)} icon={TrendingUp} tone="emerald" sublabel="Other Expenses" />
+        <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} Total Budget`} value={fmt(monthlySummary.totalBudget)} icon={TrendingUp} tone="indigo" sublabel="Combined Expenses" />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-10">
@@ -353,11 +376,11 @@ export default function HotelExpenseBudget() {
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-1 min-w-[180px]">
                         <select value={row.currency || displayCurrency} onChange={e => handleRowChange(a.code, 'currency', e.target.value)}
-                          className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white" disabled={!can(['owner','admin','accountant'])}>
+                          className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white" disabled={!can(['owner','admin','accountant']) || selectedMonth === 'all'}>
                           {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
                         </select>
                         <input type="number" value={row.amount || ''} onChange={e => handleRowChange(a.code, 'amount', e.target.value)}
-                          placeholder="Amount" className="w-24 border border-slate-300 rounded-lg px-2 py-1.5 text-sm" disabled={!can(['owner','admin','accountant'])} />
+                          placeholder={selectedMonth === 'all' ? "Select Month to Edit" : "Amount"} className="w-24 border border-slate-300 rounded-lg px-2 py-1.5 text-sm" disabled={!can(['owner','admin','accountant']) || selectedMonth === 'all'} />
                       </div>
                     </td>
                     
