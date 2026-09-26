@@ -39,11 +39,11 @@ export default function Comparison() {
     let combined = entries || []
     
     if (['hotel', 'restaurant'].includes(activeProduct)) {
-      const roomRevAcc = accounts.find(a => a.name.toLowerCase().includes('room revenue'))
-      const mainAcc = accounts.find(a => a.name.toLowerCase().includes('maintenance') || a.name.toLowerCase().includes('repairs') || a.type === 'Expenses')
-      const foodAcc = accounts.find(a => a.name.toLowerCase().includes('food') && a.type === 'Revenue') || roomRevAcc
-      const bevAcc = accounts.find(a => a.name.toLowerCase().includes('beverage') && a.type === 'Revenue') || roomRevAcc
-      const otherFbAcc = accounts.find(a => a.name.toLowerCase().includes('other') && a.type === 'Revenue') || roomRevAcc
+      const roomRevAcc = (accounts || []).find(a => (a.name || '').toLowerCase().includes('room revenue'))
+      const mainAcc = (accounts || []).find(a => (a.name || '').toLowerCase().includes('maintenance') || (a.name || '').toLowerCase().includes('repairs') || a.type === 'Expenses')
+      const foodAcc = (accounts || []).find(a => (a.name || '').toLowerCase().includes('food') && a.type === 'Revenue') || roomRevAcc
+      const bevAcc = (accounts || []).find(a => (a.name || '').toLowerCase().includes('beverage') && a.type === 'Revenue') || roomRevAcc
+      const otherFbAcc = (accounts || []).find(a => (a.name || '').toLowerCase().includes('other') && a.type === 'Revenue') || roomRevAcc
       
       const [{ data: hrs }, { data: hre }, { data: hee }, { data: amc }, { data: rdr }] = await Promise.all([
         supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).gte('stat_date', range.from).lte('stat_date', range.to),

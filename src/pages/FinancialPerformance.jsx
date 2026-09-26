@@ -13,7 +13,7 @@ import { DollarSign, TrendingDown, TrendingUp } from 'lucide-react'
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 export default function FinancialPerformance() {
-  const { activeCompany, can, activeProduct } = useAuth()
+  const { activeCompany, activeProduct, can } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [tab, setTab] = useState('profit')
   const [reportModalOpen, setReportModalOpen] = useState(false)
@@ -25,102 +25,101 @@ export default function FinancialPerformance() {
   const [forecast, setForecast] = useState([])
   const [forecastYear, setForecastYear] = useState(new Date().getFullYear() + 1)
 
-  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, cp.range.from, cp.range.to])
-  useEffect(() => { if (activeCompany) loadForecast() }, [activeCompany, forecastYear])
+  useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
+  useEffect(() => { if (activeCompany) loadForecast() }, [activeCompany, activeProduct, forecastYear])
 
   async function loadData() {
-    if (activeProduct === 'hotel' || activeProduct === 'restaurant') {
-      const [{ data: hr }, { data: he }, { data: rr }, { data: amc }] = await Promise.all([
-        supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
-        supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
-        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('date', cp.range.from).lte('date', cp.range.to),
-        supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id)
-      ])
-      
-      const revMap = {}
-      const expMap = {}
-      let totalRev = 0
-      let totalExp = 0
-      
-      ;(hr || []).forEach(r => {
-         const name = r.category || 'Hotel Revenue'
-         revMap[name] = revMap[name] || { code: 'REV', name, amount: 0 }
-         revMap[name].amount += Number(r.amount_usd)
-         totalRev += Number(r.amount_usd)
+    const [{ data: s }, { data: p }, { data: entries }, { data: accs }, { data: restRev }] = await Promise.all([
+      supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
+      supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
+      supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
+      supabase.from('accounts').select('id, code, name, type').eq('company_id', activeCompany.id).eq('product', activeProduct),
+      supabase.from('restaurant_daily_revenue').select('meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
+    ])
+    
+    let salesData = s || []
+    if (restRev) {
+      restRev.forEach(r => {
+        const total = Number(r.total_amount_usd) || ((Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0) + (Number(r.other_amount_usd) || 0))
+        if (total > 0) salesData.push({ amount_usd: total })
       })
-      ;(rr || []).forEach(r => {
-         const name = 'Restaurant Revenue'
-         revMap[name] = revMap[name] || { code: 'REV-REST', name, amount: 0 }
-         revMap[name].amount += Number(r.revenue_usd)
-         totalRev += Number(r.revenue_usd)
-      })
-      
-      ;(he || []).forEach(e => {
-         const name = e.category || 'Hotel Expenses'
-         expMap[name] = expMap[name] || { code: 'EXP', name, amount: 0 }
-         expMap[name].amount += Number(e.amount_usd)
-         totalExp += Number(e.amount_usd)
-      })
-      
-      const fromD = new Date(cp.range.from).getTime()
-      const toD = new Date(cp.range.to).getTime()
-      ;(amc || []).forEach(c => {
-         const cstart = new Date(c.start_date).getTime()
-         const cend = new Date(c.end_date).getTime()
-         if (cstart <= toD && cend >= fromD) {
-            const overlapStart = Math.max(fromD, cstart)
-            const overlapEnd = Math.min(toD, cend)
-            const overlapDays = (overlapEnd - overlapStart) / (1000 * 60 * 60 * 24) + 1
-            const totalDays = (cend - cstart) / (1000 * 60 * 60 * 24) + 1
-            if (overlapDays > 0 && totalDays > 0) {
-              const amortized = (Number(c.amount_usd || c.total_usd || 0) / totalDays) * overlapDays
-              expMap['AMC Contracts'] = expMap['AMC Contracts'] || { code: 'EXP-AMC', name: 'Amortized AMC Contracts', amount: 0 }
-              expMap['AMC Contracts'].amount += amortized
-              totalExp += amortized
-            }
-         }
-      })
-      
-      setSales([{ amount_usd: totalRev }])
-      setPurchases([{ amount_usd: totalExp }])
-      setRevenueByAccount(Object.values(revMap).sort((a, b) => b.amount - a.amount))
-      setExpensesByAccount(Object.values(expMap).sort((a, b) => b.amount - a.amount))
-    } else {
-      const [{ data: s }, { data: p }, { data: entries }] = await Promise.all([
-        supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
-        supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
-        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
-      ])
-      setSales(s || []); setPurchases(p || [])
-
-      const revMap = {}, expMap = {}
-      ;(entries || []).forEach(e => {
-        const acc = e.accounts
-        if (!acc) return
-        const net = Number(e.debit_usd) - Number(e.credit_usd)
-        if (acc.type === 'Revenue') {
-          revMap[acc.id] = revMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }
-          revMap[acc.id].amount += -net
-        } else if (acc.type === 'Expenses') {
-          expMap[acc.id] = expMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }
-          expMap[acc.id].amount += net
-        }
-      })
-      setRevenueByAccount(Object.values(revMap).sort((a, b) => b.amount - a.amount))
-      setExpensesByAccount(Object.values(expMap).sort((a, b) => b.amount - a.amount))
     }
+    setSales(salesData); setPurchases(p || [])
+
+    // Breakdown by account, for the Revenue and Expenses tabs
+    const revMap = {}, expMap = {}
+    ;(entries || []).forEach(e => {
+      const acc = e.accounts
+      if (!acc) return
+      const net = Number(e.debit_usd) - Number(e.credit_usd)
+      if (acc.type === 'Revenue') {
+        revMap[acc.id] = revMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }
+        revMap[acc.id].amount += -net // revenue is credit-normal
+      } else if (acc.type === 'Expenses') {
+        expMap[acc.id] = expMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }
+        expMap[acc.id].amount += net
+      }
+    })
+    setRevenueByAccount(Object.values(revMap).sort((a, b) => b.amount - a.amount))
+    setExpensesByAccount(Object.values(expMap).sort((a, b) => b.amount - a.amount))
   }
 
   async function loadForecast() {
-    const { data } = await supabase.from('forecast_entries').select('*').eq('company_id', activeCompany.id).eq('forecast_year', forecastYear).order('forecast_month')
-    setForecast(data || [])
+    const [{ data }, { data: budget }, { data: expBudget }, { data: accountsData }] = await Promise.all([
+      supabase.from('forecast_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('forecast_year', forecastYear).order('forecast_month'),
+      supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', forecastYear),
+      supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', forecastYear),
+      supabase.from('accounts').select('code, type').eq('company_id', activeCompany.id).eq('product', activeProduct)
+    ])
+    
+    const combined = data ? [...data] : []
+    if (['hotel', 'restaurant'].includes(activeProduct)) {
+      const revMap = {}
+      if (budget) budget.forEach(b => { 
+        if (activeProduct === 'hotel') {
+          const days = new Date(forecastYear, b.budget_month, 0).getDate(); 
+          revMap[b.budget_month] = (revMap[b.budget_month] || 0) + ((b.budgeted_room_revenue_usd || 0) * days) 
+        }
+      })
+      
+      const expMap = {}
+      
+      // Separate Ancillary Revenue from Expenses based on account type
+      if (expBudget && accountsData) {
+        const accountTypeMap = {}
+        accountsData.forEach(a => accountTypeMap[a.code] = a.type)
+        
+        expBudget.forEach(b => {
+          const type = accountTypeMap[b.account_code]
+          if (type === 'Revenue') {
+            revMap[b.budget_month] = (revMap[b.budget_month] || 0) + (Number(b.amount_usd) || 0)
+          } else {
+            expMap[b.budget_month] = (expMap[b.budget_month] || 0) + (Number(b.amount_usd) || 0)
+          }
+        })
+      }
+      
+      for (let i=1; i<=12; i++) {
+        if (revMap[i] || expMap[i]) {
+          let f = combined.find(x => x.forecast_month === i)
+          if (!f) {
+             f = { forecast_month: i, revenue_usd: 0, expenses_usd: 0 }
+             combined.push(f)
+          }
+          if (revMap[i] !== undefined) f.revenue_usd = Math.round(revMap[i])
+          if (expMap[i] !== undefined) f.expenses_usd = Math.round(expMap[i])
+        }
+      }
+    }
+    combined.sort((a, b) => a.forecast_month - b.forecast_month)
+    setForecast(combined)
   }
 
   async function saveForecastRow(month, revenue, expenses) {
     await supabase.from('forecast_entries').upsert({
-      company_id: activeCompany.id, forecast_year: forecastYear, forecast_month: month,
+      company_id: activeCompany.id, product: activeProduct, forecast_year: forecastYear, forecast_month: month,
       revenue_usd: revenue, expenses_usd: expenses,
-    }, { onConflict: 'company_id,forecast_year,forecast_month' })
+    }, { onConflict: 'company_id,product,forecast_year,forecast_month' })
     loadForecast()
   }
 
@@ -129,70 +128,51 @@ export default function FinancialPerformance() {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
 
-    let rev = 0, exp = 0
-    const revMap = {}, expMap = {}
-    if (activeProduct === 'hotel' || activeProduct === 'restaurant') {
-      const [{ data: hr }, { data: he }, { data: rr }, { data: amc }] = await Promise.all([
-        supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).gte('entry_date', range.from).lte('entry_date', range.to),
-        supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).gte('entry_date', range.from).lte('entry_date', range.to),
-        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('date', range.from).lte('date', range.to),
-        supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id)
-      ])
-      
-      ;(hr || []).forEach(r => {
-         const name = r.category || 'Hotel Revenue'
-         revMap[name] = revMap[name] || { code: 'REV', name, amount: 0 }
-         revMap[name].amount += Number(r.amount_usd)
-         rev += Number(r.amount_usd)
-      })
-      ;(rr || []).forEach(r => {
-         const name = 'Restaurant Revenue'
-         revMap[name] = revMap[name] || { code: 'REV-REST', name, amount: 0 }
-         revMap[name].amount += Number(r.revenue_usd)
-         rev += Number(r.revenue_usd)
-      })
-      ;(he || []).forEach(e => {
-         const name = e.category || 'Hotel Expenses'
-         expMap[name] = expMap[name] || { code: 'EXP', name, amount: 0 }
-         expMap[name].amount += Number(e.amount_usd)
-         exp += Number(e.amount_usd)
-      })
-      const fromD = new Date(range.from).getTime()
-      const toD = new Date(range.to).getTime()
-      ;(amc || []).forEach(c => {
-         const cstart = new Date(c.start_date).getTime()
-         const cend = new Date(c.end_date).getTime()
-         if (cstart <= toD && cend >= fromD) {
-            const overlapStart = Math.max(fromD, cstart)
-            const overlapEnd = Math.min(toD, cend)
-            const overlapDays = (overlapEnd - overlapStart) / (1000 * 60 * 60 * 24) + 1
-            const totalDays = (cend - cstart) / (1000 * 60 * 60 * 24) + 1
-            if (overlapDays > 0 && totalDays > 0) {
-              const amortized = (Number(c.amount_usd || c.total_usd || 0) / totalDays) * overlapDays
-              expMap['AMC Contracts'] = expMap['AMC Contracts'] || { code: 'EXP-AMC', name: 'Amortized AMC Contracts', amount: 0 }
-              expMap['AMC Contracts'].amount += amortized
-              exp += amortized
-            }
-         }
-      })
-    } else {
-      const [{ data: s }, { data: p }, { data: entries }] = await Promise.all([
-        supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).gte('invoice_date', range.from).lte('invoice_date', range.to),
-        supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).gte('invoice_date', range.from).lte('invoice_date', range.to),
-        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).gte('entry_date', range.from).lte('entry_date', range.to),
-      ])
-      rev = (s || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
-      exp = (p || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
-      ;(entries || []).forEach(e => {
-        const acc = e.accounts
-        if (!acc) return
-        const net = Number(e.debit_usd) - Number(e.credit_usd)
-        if (acc.type === 'Revenue') { revMap[acc.id] = revMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; revMap[acc.id].amount += -net }
-        else if (acc.type === 'Expenses') { expMap[acc.id] = expMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; expMap[acc.id].amount += net }
+    const [{ data: s }, { data: p }, { data: entries }, { data: accs }, { data: restRev }] = await Promise.all([
+      supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
+      supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
+      supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to),
+      supabase.from('accounts').select('id, code, name, type').eq('company_id', activeCompany.id).eq('product', activeProduct),
+      supabase.from('restaurant_daily_revenue').select('meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to)
+    ])
+    
+    let salesData = s || []
+    if (restRev) {
+      restRev.forEach(r => {
+        const total = Number(r.total_amount_usd) || ((Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0) + (Number(r.other_amount_usd) || 0))
+        if (total > 0) salesData.push({ amount_usd: total })
       })
     }
+    const rev = salesData.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
+    const exp = (p || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
     const gop = rev - exp
     const marginPct = rev ? (gop / rev) * 100 : 0
+
+    const revMap = {}, expMap = {}
+    ;(entries || []).forEach(e => {
+      const acc = e.accounts
+      if (!acc) return
+      const net = Number(e.debit_usd) - Number(e.credit_usd)
+      if (acc.type === 'Revenue') { revMap[acc.id] = revMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; revMap[acc.id].amount += -net }
+      else if (acc.type === 'Expenses') { expMap[acc.id] = expMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; expMap[acc.id].amount += net }
+    })
+    
+    if (restRev && accs) {
+      restRev.forEach(r => {
+        const f = Number(r.food_amount_usd) || 0
+        const b = Number(r.beverage_amount_usd) || 0
+        const o = Number(r.other_amount_usd) || 0
+        
+        if (activeProduct === 'hotel') {
+          const acc4016 = (accs || []).find(a => a.code === '4016'); const acc4011 = (accs || []).find(a => a.code === '4011');
+          const acc4020 = (accs || []).find(a => a.code === '4020'); const acc4021 = (accs || []).find(a => a.code === '4021');
+          if (f > 0) { const acc = r.meal_period === 'Breakfast' ? acc4016 : acc4011; if (acc) { revMap[acc.id] = revMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; revMap[acc.id].amount += f } }
+          if (b > 0 && acc4020) { revMap[acc4020.id] = revMap[acc4020.id] || { code: acc4020.code, name: acc4020.name, amount: 0 }; revMap[acc4020.id].amount += b }
+          if (o > 0 && acc4021) { revMap[acc4021.id] = revMap[acc4021.id] || { code: acc4021.code, name: acc4021.name, amount: 0 }; revMap[acc4021.id].amount += o }
+        }
+        // Do not inject for restaurant because Table Revenue is already in ledger_entries.
+      })
+    }
 
     const sections = [
       {
@@ -210,7 +190,7 @@ export default function FinancialPerformance() {
 
     const title = 'Financial Performance'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'financial_performance_report' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'financial_performance_report' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'financial_performance_report' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'financial_performance_report' })
   }
@@ -220,7 +200,7 @@ export default function FinancialPerformance() {
     const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
 
     const years = selections.forecastYears === 'Selected Year Only' ? [forecastYear] : Array.from({ length: 5 }, (_, i) => new Date().getFullYear() + i)
-    const { data } = await supabase.from('forecast_entries').select('*').eq('company_id', activeCompany.id).in('forecast_year', years).order('forecast_year').order('forecast_month')
+    const { data } = await supabase.from('forecast_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).in('forecast_year', years).order('forecast_year').order('forecast_month')
 
     const rows = (data || []).map(f => {
       const profit = Number(f.revenue_usd) - Number(f.expenses_usd)
@@ -237,15 +217,15 @@ export default function FinancialPerformance() {
     const sections = [{ heading: `Forecast — ${years.join(', ')}`, columns, rows }]
     const title = 'Financial Performance — Forecast'
     const subtitle = `${activeCompany.name} • ${selections.currency}`
-    if (format === 'pdf') exportMultiSectionPDF({ title, subtitle, sections, filename: 'forecast_report' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'forecast_report' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'forecast_report' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'forecast_report' })
   }
 
   if (!activeCompany) return null
 
-  const revenue = sales.reduce((s, i) => s + Number(i.amount_usd), 0)
-  const expenses = purchases.reduce((s, i) => s + Number(i.amount_usd), 0)
+  const revenue = activeProduct === 'hotel' ? revenueByAccount.reduce((s, a) => s + a.amount, 0) : sales.reduce((s, i) => s + Number(i.amount_usd), 0)
+  const expenses = activeProduct === 'hotel' ? expensesByAccount.reduce((s, a) => s + a.amount, 0) : purchases.reduce((s, i) => s + Number(i.amount_usd), 0)
   const profit = revenue - expenses
   const margin = revenue ? (profit / revenue) * 100 : 0
 
@@ -289,33 +269,33 @@ export default function FinancialPerformance() {
       {tab === 'profit' && (
         <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
           <h3 className="font-semibold text-slate-700 mb-4">Profit & Loss Summary</h3>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="text-left border-b border-slate-100 text-slate-400">
-                <th className="py-2 font-medium">Item</th>
-                <th className="py-2 font-medium">Current Period</th>
-                <th className="py-2 font-medium">Amount %</th>
+                <th className="py-2 pr-4 font-medium whitespace-nowrap">Item</th>
+                <th className="py-2 px-4 font-medium whitespace-nowrap">Current Period</th>
+                <th className="py-2 pl-4 font-medium whitespace-nowrap">Amount %</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-slate-50"><td className="py-2.5 font-semibold">Total Revenue</td><td className="py-2.5">{cp.fmt(revenue)}</td><td className="py-2.5 text-slate-400">100.0%</td></tr>
-              <tr className="border-b border-slate-50"><td className="py-2.5">Total Expenses</td><td className="py-2.5">−{cp.fmt(expenses)}</td><td className="py-2.5 text-slate-400">{revenue ? ((expenses / revenue) * 100).toFixed(1) : 0}%</td></tr>
-              <tr className="bg-emerald-50"><td className="py-2.5 font-bold text-emerald-700">Gross Operating Profit (GOP)</td><td className="py-2.5 font-bold text-emerald-700">{cp.fmt(profit)}</td><td className="py-2.5 font-bold text-emerald-700">{margin.toFixed(1)}%</td></tr>
+              <tr className="border-b border-slate-50"><td className="py-2.5 pr-4 font-semibold whitespace-nowrap">Total Revenue</td><td className="py-2.5 px-4">{cp.fmt(revenue)}</td><td className="py-2.5 pl-4 text-slate-400">100.0%</td></tr>
+              <tr className="border-b border-slate-50"><td className="py-2.5 pr-4 whitespace-nowrap">Total Expenses</td><td className="py-2.5 px-4">−{cp.fmt(expenses)}</td><td className="py-2.5 pl-4 text-slate-400">{revenue ? ((expenses / revenue) * 100).toFixed(1) : 0}%</td></tr>
+              <tr className="bg-emerald-50"><td className="py-2.5 pr-4 font-bold text-emerald-700 whitespace-nowrap">Gross Operating Profit (GOP)</td><td className="py-2.5 px-4 font-bold text-emerald-700">{cp.fmt(profit)}</td><td className="py-2.5 pl-4 font-bold text-emerald-700">{margin.toFixed(1)}%</td></tr>
             </tbody>
           </table>
         </div>
       )}
 
       {(tab === 'revenue' || tab === 'expenses') && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 overflow-x-auto">
           <h3 className="font-semibold text-slate-700 mb-4">{tab === 'revenue' ? 'Revenue' : 'Expenses'} by Account</h3>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="text-left border-b border-slate-100 text-slate-400">
-                <th className="py-2 font-medium">Code</th>
-                <th className="py-2 font-medium">Account</th>
-                <th className="py-2 font-medium text-right">Amount</th>
-                <th className="py-2 font-medium text-right">% of Total</th>
+                <th className="py-2 pr-4 font-medium whitespace-nowrap w-24">Code</th>
+                <th className="py-2 px-4 font-medium whitespace-nowrap">Account</th>
+                <th className="py-2 px-4 font-medium text-right whitespace-nowrap">Amount</th>
+                <th className="py-2 pl-4 font-medium text-right whitespace-nowrap">% of Total</th>
               </tr>
             </thead>
             <tbody>
@@ -326,10 +306,10 @@ export default function FinancialPerformance() {
                 const total = tab === 'revenue' ? revenue : expenses
                 return (
                   <tr key={a.code} className="border-b border-slate-50">
-                    <td className="py-2.5">{a.code}</td>
-                    <td className="py-2.5">{a.name}</td>
-                    <td className="py-2.5 text-right">{cp.fmt(a.amount)}</td>
-                    <td className="py-2.5 text-right text-slate-400">{total ? ((a.amount / total) * 100).toFixed(1) : 0}%</td>
+                    <td className="py-2.5 pr-4 text-slate-500">{a.code}</td>
+                    <td className="py-2.5 px-4 font-medium whitespace-nowrap">{a.name}</td>
+                    <td className="py-2.5 px-4 text-right">{cp.fmt(a.amount)}</td>
+                    <td className="py-2.5 pl-4 text-right text-slate-400">{total ? ((a.amount / total) * 100).toFixed(1) : 0}%</td>
                   </tr>
                 )
               })}
@@ -357,23 +337,27 @@ export default function FinancialPerformance() {
             </div>
           </div>
 
-          <div className="grid grid-cols-5 gap-2 px-1 pb-2 text-[11px] font-semibold text-slate-400 uppercase">
-            <span>Month</span>
-            <span>Forecast Revenue</span>
-            <span>Forecast Expenses</span>
-            <span>Projected Profit</span>
-            <span>Profit Margin %</span>
-          </div>
-          <div className="space-y-2">
-            {MONTHS.map((m, i) => {
-              const month = i + 1
-              const row = monthMap[month] || { revenue_usd: 0, expenses_usd: 0 }
-              return (
-                <ForecastRow key={month} label={`${m} ${forecastYear}`} row={row}
-                  canEdit={can(['owner', 'admin', 'accountant'])}
-                  onSave={(rev, exp) => saveForecastRow(month, rev, exp)} fmt={cp.fmt} />
-              )
-            })}
+          <div className="overflow-x-auto">
+            <div className="min-w-[650px]">
+              <div className="grid grid-cols-5 gap-4 items-center pb-2 border-b border-slate-100 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <span>Month</span>
+                <span>Forecast Revenue</span>
+                <span>Forecast Expenses</span>
+                <span>Projected Profit</span>
+                <span>Profit Margin %</span>
+              </div>
+              <div className="space-y-2">
+                {MONTHS.map((m, i) => {
+                  const month = i + 1
+                  const row = monthMap[month] || { revenue_usd: 0, expenses_usd: 0 }
+                  return (
+                    <ForecastRow key={month} label={`${m} ${forecastYear}`} row={row}
+                      canEdit={can(['owner', 'admin', 'accountant'])}
+                      onSave={(rev, exp) => saveForecastRow(month, rev, exp)} fmt={cp.fmt} />
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -407,14 +391,14 @@ export default function FinancialPerformance() {
 }
 
 function ForecastRow({ label, row, canEdit, onSave, fmt }) {
-  const [revenue, setRevenue] = useState(row.revenue_usd)
-  const [exp, setExp] = useState(row.expenses_usd)
-  useEffect(() => { setRevenue(row.revenue_usd); setExp(row.expenses_usd) }, [row])
+  const [revenue, setRevenue] = useState(Math.round(row.revenue_usd || 0))
+  const [exp, setExp] = useState(Math.round(row.expenses_usd || 0))
+  useEffect(() => { setRevenue(Math.round(row.revenue_usd || 0)); setExp(Math.round(row.expenses_usd || 0)) }, [row])
   const profit = revenue - exp
   const marginPct = revenue ? (profit / revenue) * 100 : 0
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-center py-2 border-b border-slate-50 last:border-0">
-      <span className="text-sm text-slate-600 font-medium">{label}</span>
+    <div className="grid grid-cols-5 gap-4 items-center py-2 border-b border-slate-50 last:border-0">
+      <span className="text-sm text-slate-600 font-medium whitespace-nowrap">{label}</span>
       <input type="number" disabled={!canEdit} value={revenue} onChange={e => setRevenue(Number(e.target.value))}
         className="border border-slate-200 rounded-md px-2 py-1 text-sm disabled:bg-slate-50" />
       <input type="number" disabled={!canEdit} value={exp} onChange={e => setExp(Number(e.target.value))}

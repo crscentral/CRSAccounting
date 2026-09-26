@@ -28,9 +28,9 @@ export default function Reports() {
     let combined = entries || []
     
     // CAPITAL & LOANS (Applies to all products)
-    const eqContAcc = accs.find(a => (a.name.toLowerCase().includes('contribution') || a.name.toLowerCase().includes('equity')) && a.type === 'Equity')
-    const eqDivAcc = accs.find(a => (a.name.toLowerCase().includes('dividend') || a.name.toLowerCase().includes('draw') || a.name.toLowerCase().includes('retained')) && a.type === 'Equity')
-    const capCashAcc = accs.find(a => a.name.toLowerCase().includes('cash on hand') || a.name.toLowerCase().includes('cash'))
+    const eqContAcc = (accs || []).find(a => ((a.name || '').toLowerCase().includes('contribution') || (a.name || '').toLowerCase().includes('equity')) && a.type === 'Equity')
+    const eqDivAcc = (accs || []).find(a => ((a.name || '').toLowerCase().includes('dividend') || (a.name || '').toLowerCase().includes('draw') || (a.name || '').toLowerCase().includes('retained')) && a.type === 'Equity')
+    const capCashAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('cash on hand') || (a.name || '').toLowerCase().includes('cash'))
     
     const [{ data: oCont }, { data: oDiv }, { data: lTake }, { data: lRepay }] = await Promise.all([
       supabase.from('owner_contributions').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
@@ -55,30 +55,30 @@ export default function Reports() {
     
     ;(lTake || []).forEach(r => {
       if (Number(r.amount_usd) > 0) {
-        const liabAcc = accs.find(a => a.id === r.loan_account_id)
+        const liabAcc = (accs || []).find(a => a.id === r.loan_account_id)
         if (liabAcc) combined.push({ account_id: liabAcc.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.payment_date, accounts: { type: liabAcc.type } })
-        const cashA = accs.find(a => a.id === r.cash_account_id) || capCashAcc
+        const cashA = (accs || []).find(a => a.id === r.cash_account_id) || capCashAcc
         if (cashA) combined.push({ account_id: cashA.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.payment_date, accounts: { type: cashA.type } })
       }
     })
     
     ;(lRepay || []).forEach(r => {
       if (Number(r.amount_usd) > 0) {
-        const liabAcc = accs.find(a => a.id === r.loan_account_id)
+        const liabAcc = (accs || []).find(a => a.id === r.loan_account_id)
         if (liabAcc) combined.push({ account_id: liabAcc.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.payment_date, accounts: { type: liabAcc.type } })
-        const cashA = accs.find(a => a.id === r.cash_account_id) || capCashAcc
+        const cashA = (accs || []).find(a => a.id === r.cash_account_id) || capCashAcc
         if (cashA) combined.push({ account_id: cashA.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.payment_date, accounts: { type: cashA.type } })
       }
     })
     
     if (['hotel', 'restaurant'].includes(activeProduct)) {
-      const roomRevAcc = accs.find(a => a.name.toLowerCase().includes('room revenue'))
-      const arAcc = accs.find(a => a.name.toLowerCase().includes('accounts receivable') || a.name.toLowerCase().includes('guest ledger'))
-      const cashAcc = accs.find(a => a.name.toLowerCase().includes('cash on hand') || a.name.toLowerCase().includes('cash'))
-      const mainAcc = accs.find(a => a.name.toLowerCase().includes('maintenance') || a.name.toLowerCase().includes('repairs') || a.type === 'Expenses')
-      const foodAcc = accs.find(a => a.name.toLowerCase().includes('food') && a.type === 'Revenue') || roomRevAcc
-      const bevAcc = accs.find(a => a.name.toLowerCase().includes('beverage') && a.type === 'Revenue') || roomRevAcc
-      const otherFbAcc = accs.find(a => a.name.toLowerCase().includes('other') && a.type === 'Revenue') || roomRevAcc
+      const roomRevAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('room revenue'))
+      const arAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('accounts receivable') || (a.name || '').toLowerCase().includes('guest ledger'))
+      const cashAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('cash on hand') || (a.name || '').toLowerCase().includes('cash'))
+      const mainAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('maintenance') || (a.name || '').toLowerCase().includes('repairs') || a.type === 'Expenses')
+      const foodAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('food') && a.type === 'Revenue') || roomRevAcc
+      const bevAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('beverage') && a.type === 'Revenue') || roomRevAcc
+      const otherFbAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('other') && a.type === 'Revenue') || roomRevAcc
       
       const [{ data: hrs }, { data: hre }, { data: hee }, { data: amc }, { data: rdr }, { data: hgi }] = await Promise.all([
         supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id),
@@ -96,12 +96,12 @@ export default function Reports() {
       }
       
       ;(hre || []).forEach(r => {
-        const a = accs.find(ac => ac.id === r.account_id)
+        const a = (accs || []).find(ac => ac.id === r.account_id)
         if (a && Number(r.amount_usd) > 0) combined.push({ account_id: a.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.entry_date, accounts: { type: a.type } })
       })
       
       ;(hee || []).forEach(r => {
-        const a = accs.find(ac => ac.id === r.account_id)
+        const a = (accs || []).find(ac => ac.id === r.account_id)
         if (a && Number(r.amount_usd) > 0) combined.push({ account_id: a.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.expense_date, accounts: { type: a.type } })
       })
       
@@ -189,9 +189,9 @@ export default function Reports() {
     let combined = entries || []
     
     // CAPITAL & LOANS
-    const eqContAcc = accounts.find(a => (a.name.toLowerCase().includes('contribution') || a.name.toLowerCase().includes('equity')) && a.type === 'Equity')
-    const eqDivAcc = accounts.find(a => (a.name.toLowerCase().includes('dividend') || a.name.toLowerCase().includes('draw') || a.name.toLowerCase().includes('retained')) && a.type === 'Equity')
-    const capCashAcc = accounts.find(a => a.name.toLowerCase().includes('cash on hand') || a.name.toLowerCase().includes('cash'))
+    const eqContAcc = (accounts || []).find(a => ((a.name || '').toLowerCase().includes('contribution') || (a.name || '').toLowerCase().includes('equity')) && a.type === 'Equity')
+    const eqDivAcc = (accounts || []).find(a => ((a.name || '').toLowerCase().includes('dividend') || (a.name || '').toLowerCase().includes('draw') || (a.name || '').toLowerCase().includes('retained')) && a.type === 'Equity')
+    const capCashAcc = (accounts || []).find(a => (a.name || '').toLowerCase().includes('cash on hand') || (a.name || '').toLowerCase().includes('cash'))
     
     const [{ data: oCont }, { data: oDiv }, { data: lTake }, { data: lRepay }] = await Promise.all([
       supabase.from('owner_contributions').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
@@ -216,30 +216,30 @@ export default function Reports() {
     
     ;(lTake || []).forEach(r => {
       if (Number(r.amount_usd) > 0) {
-        const liabAcc = accounts.find(a => a.id === r.loan_account_id)
+        const liabAcc = (accounts || []).find(a => a.id === r.loan_account_id)
         if (liabAcc) combined.push({ account_id: liabAcc.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.payment_date, accounts: { type: liabAcc.type } })
-        const cashA = accounts.find(a => a.id === r.cash_account_id) || capCashAcc
+        const cashA = (accounts || []).find(a => a.id === r.cash_account_id) || capCashAcc
         if (cashA) combined.push({ account_id: cashA.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.payment_date, accounts: { type: cashA.type } })
       }
     })
     
     ;(lRepay || []).forEach(r => {
       if (Number(r.amount_usd) > 0) {
-        const liabAcc = accounts.find(a => a.id === r.loan_account_id)
+        const liabAcc = (accounts || []).find(a => a.id === r.loan_account_id)
         if (liabAcc) combined.push({ account_id: liabAcc.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.payment_date, accounts: { type: liabAcc.type } })
-        const cashA = accounts.find(a => a.id === r.cash_account_id) || capCashAcc
+        const cashA = (accounts || []).find(a => a.id === r.cash_account_id) || capCashAcc
         if (cashA) combined.push({ account_id: cashA.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.payment_date, accounts: { type: cashA.type } })
       }
     })
     
     if (['hotel', 'restaurant'].includes(activeProduct)) {
-      const roomRevAcc = accs.find(a => a.name.toLowerCase().includes('room revenue'))
-      const arAcc = accs.find(a => a.name.toLowerCase().includes('accounts receivable') || a.name.toLowerCase().includes('guest ledger'))
-      const cashAcc = accs.find(a => a.name.toLowerCase().includes('cash on hand') || a.name.toLowerCase().includes('cash'))
-      const mainAcc = accs.find(a => a.name.toLowerCase().includes('maintenance') || a.name.toLowerCase().includes('repairs') || a.type === 'Expenses')
-      const foodAcc = accs.find(a => a.name.toLowerCase().includes('food') && a.type === 'Revenue') || roomRevAcc
-      const bevAcc = accs.find(a => a.name.toLowerCase().includes('beverage') && a.type === 'Revenue') || roomRevAcc
-      const otherFbAcc = accs.find(a => a.name.toLowerCase().includes('other') && a.type === 'Revenue') || roomRevAcc
+      const roomRevAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('room revenue'))
+      const arAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('accounts receivable') || (a.name || '').toLowerCase().includes('guest ledger'))
+      const cashAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('cash on hand') || (a.name || '').toLowerCase().includes('cash'))
+      const mainAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('maintenance') || (a.name || '').toLowerCase().includes('repairs') || a.type === 'Expenses')
+      const foodAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('food') && a.type === 'Revenue') || roomRevAcc
+      const bevAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('beverage') && a.type === 'Revenue') || roomRevAcc
+      const otherFbAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('other') && a.type === 'Revenue') || roomRevAcc
       
       const [{ data: hrs }, { data: hre }, { data: hee }, { data: amc }, { data: rdr }, { data: hgi }] = await Promise.all([
         supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id),
@@ -257,12 +257,12 @@ export default function Reports() {
       }
       
       ;(hre || []).forEach(r => {
-        const a = accs.find(ac => ac.id === r.account_id)
+        const a = (accs || []).find(ac => ac.id === r.account_id)
         if (a && Number(r.amount_usd) > 0) combined.push({ account_id: a.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.entry_date, accounts: { type: a.type } })
       })
       
       ;(hee || []).forEach(r => {
-        const a = accs.find(ac => ac.id === r.account_id)
+        const a = (accs || []).find(ac => ac.id === r.account_id)
         if (a && Number(r.amount_usd) > 0) combined.push({ account_id: a.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.expense_date, accounts: { type: a.type } })
       })
       

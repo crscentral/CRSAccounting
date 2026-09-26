@@ -39,11 +39,11 @@ export default function Ledger() {
     let combined = data || []
     
     // CAPITAL & LOANS (Applies to all modes)
-    const selectedAccount = accounts.find(a => a.id === accountId)
+    const selectedAccount = (accounts || []).find(a => a.id === accountId)
     if (selectedAccount) {
-      const isEqCont = (selectedAccount.name.toLowerCase().includes('contribution') || selectedAccount.name.toLowerCase().includes('equity')) && selectedAccount.type === 'Equity'
-      const isEqDiv = (selectedAccount.name.toLowerCase().includes('dividend') || selectedAccount.name.toLowerCase().includes('draw') || selectedAccount.name.toLowerCase().includes('retained')) && selectedAccount.type === 'Equity'
-      const isCash = selectedAccount.name.toLowerCase().includes('cash on hand') || selectedAccount.name.toLowerCase().includes('cash')
+      const isEqCont = ((selectedAccount.name || '').toLowerCase().includes('contribution') || (selectedAccount.name || '').toLowerCase().includes('equity')) && selectedAccount.type === 'Equity'
+      const isEqDiv = ((selectedAccount.name || '').toLowerCase().includes('dividend') || (selectedAccount.name || '').toLowerCase().includes('draw') || (selectedAccount.name || '').toLowerCase().includes('retained')) && selectedAccount.type === 'Equity'
+      const isCash = (selectedAccount.name || '').toLowerCase().includes('cash on hand') || (selectedAccount.name || '').toLowerCase().includes('cash')
       
       const [{ data: oCont }, { data: oDiv }, { data: lTake }, { data: lRepay }] = await Promise.all([
         supabase.from('owner_contributions').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', cp.range.from).lte('payment_date', cp.range.to),
@@ -84,9 +84,9 @@ export default function Ledger() {
     }
     
     if (['hotel', 'restaurant'].includes(activeProduct)) {
-      const selectedAccount = accounts.find(a => a.id === accountId)
+      const selectedAccount = (accounts || []).find(a => a.id === accountId)
       if (selectedAccount) {
-        const isRoomRev = selectedAccount.name.toLowerCase().includes('room revenue')
+        const isRoomRev = (selectedAccount.name || '').toLowerCase().includes('room revenue')
         const isExpense = selectedAccount.type === 'Expenses'
         const isRevenue = selectedAccount.type === 'Revenue'
         
@@ -118,9 +118,9 @@ export default function Ledger() {
           const { data: rdr } = await supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
           ;(rdr || []).forEach(r => {
             let amount = 0
-            if (selectedAccount.name.toLowerCase().includes('food')) amount = Number(r.food_amount_usd) || 0
-            else if (selectedAccount.name.toLowerCase().includes('beverage')) amount = Number(r.beverage_amount_usd) || 0
-            else if (selectedAccount.name.toLowerCase().includes('other')) amount = Number(r.other_amount_usd) || 0
+            if ((selectedAccount.name || '').toLowerCase().includes('food')) amount = Number(r.food_amount_usd) || 0
+            else if ((selectedAccount.name || '').toLowerCase().includes('beverage')) amount = Number(r.beverage_amount_usd) || 0
+            else if ((selectedAccount.name || '').toLowerCase().includes('other')) amount = Number(r.other_amount_usd) || 0
             else amount = Number(r.total_amount_usd) || 0
             
             if (amount > 0) {
@@ -130,7 +130,7 @@ export default function Ledger() {
         }
         
         // Guest Invoices (Accounts Receivable) - AR is typically an Asset account. 
-        if (selectedAccount.name.toLowerCase().includes('accounts receivable') || selectedAccount.name.toLowerCase().includes('guest ledger')) {
+        if ((selectedAccount.name || '').toLowerCase().includes('accounts receivable') || (selectedAccount.name || '').toLowerCase().includes('guest ledger')) {
           const { data: hgi } = await supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to)
           ;(hgi || []).forEach(i => {
             if (Number(i.invoice_amount_usd) > 0) {
@@ -161,7 +161,7 @@ export default function Ledger() {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
 
-    const account = accounts.find(a => a.id === selections.account)
+    const account = (accounts || []).find(a => a.id === selections.account)
     const { data } = await supabase.from('ledger_entries').select('*').eq('company_id', activeCompany.id).eq('account_id', selections.account)
       .gte('entry_date', range.from).lte('entry_date', range.to).order('entry_date')
 
@@ -169,9 +169,9 @@ export default function Ledger() {
     
     // CAPITAL & LOANS
     if (account) {
-      const isEqCont = (account.name.toLowerCase().includes('contribution') || account.name.toLowerCase().includes('equity')) && account.type === 'Equity'
-      const isEqDiv = (account.name.toLowerCase().includes('dividend') || account.name.toLowerCase().includes('draw') || account.name.toLowerCase().includes('retained')) && account.type === 'Equity'
-      const isCash = account.name.toLowerCase().includes('cash on hand') || account.name.toLowerCase().includes('cash')
+      const isEqCont = ((account.name || '').toLowerCase().includes('contribution') || (account.name || '').toLowerCase().includes('equity')) && account.type === 'Equity'
+      const isEqDiv = ((account.name || '').toLowerCase().includes('dividend') || (account.name || '').toLowerCase().includes('draw') || (account.name || '').toLowerCase().includes('retained')) && account.type === 'Equity'
+      const isCash = (account.name || '').toLowerCase().includes('cash on hand') || (account.name || '').toLowerCase().includes('cash')
       
       const [{ data: oCont }, { data: oDiv }, { data: lTake }, { data: lRepay }] = await Promise.all([
         supabase.from('owner_contributions').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to),
@@ -212,7 +212,7 @@ export default function Ledger() {
     }
     
     if (['hotel', 'restaurant'].includes(activeProduct) && account) {
-      const isRoomRev = account.name.toLowerCase().includes('room revenue')
+      const isRoomRev = (account.name || '').toLowerCase().includes('room revenue')
       const isExpense = account.type === 'Expenses'
       const isRevenue = account.type === 'Revenue'
       
@@ -243,9 +243,9 @@ export default function Ledger() {
         const { data: rdr } = await supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to)
         ;(rdr || []).forEach(r => {
           let amount = 0
-          if (account.name.toLowerCase().includes('food')) amount = Number(r.food_amount_usd) || 0
-          else if (account.name.toLowerCase().includes('beverage')) amount = Number(r.beverage_amount_usd) || 0
-          else if (account.name.toLowerCase().includes('other')) amount = Number(r.other_amount_usd) || 0
+          if ((account.name || '').toLowerCase().includes('food')) amount = Number(r.food_amount_usd) || 0
+          else if ((account.name || '').toLowerCase().includes('beverage')) amount = Number(r.beverage_amount_usd) || 0
+          else if ((account.name || '').toLowerCase().includes('other')) amount = Number(r.other_amount_usd) || 0
           else amount = Number(r.total_amount_usd) || 0
           
           if (amount > 0) {
@@ -254,7 +254,7 @@ export default function Ledger() {
         })
       }
       
-      if (account.name.toLowerCase().includes('accounts receivable') || account.name.toLowerCase().includes('guest ledger')) {
+      if ((account.name || '').toLowerCase().includes('accounts receivable') || (account.name || '').toLowerCase().includes('guest ledger')) {
         const { data: hgi } = await supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to)
         ;(hgi || []).forEach(i => {
           if (Number(i.invoice_amount_usd) > 0) {
