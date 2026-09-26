@@ -13,7 +13,7 @@ export default function KpiCard({ label, value, sublabel, icon: Icon, tone = 'sl
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-col gap-2 min-w-0">
       <div className="flex items-center justify-between">
-        <span className="text-sm text-slate-500 truncate">{label}</span>
+        <span className="text-sm text-slate-500 line-clamp-2 leading-snug break-words">{label}</span>
         {Icon && (
           <span className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${tones[tone]}`}>
             <Icon size={16} />
