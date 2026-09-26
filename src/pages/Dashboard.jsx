@@ -284,21 +284,24 @@ export default function Dashboard() {
     // Outstanding = Unpaid Guest Invoices
     outstanding = hotelGuestInvoices.reduce((s, i) => s + (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd)), 0)
     
-    // Collected = Guest Invoices Paid + Daily Room Revenue Collected
-    const manualRoomCollected = hotelRoomStats.reduce((s, r) => s + Number(r.manual_room_revenue_collected_usd || 0), 0)
-    const guestInvoiceCollected = hotelGuestInvoices.reduce((s, i) => s + Number(i.collected_amount_usd || 0), 0)
-    const ancillaryCollected = hotelRevenueEntries.reduce((s, r) => s + Number(r.collected_usd || r.amount_usd || 0), 0)
+    // Collected = Room Revenue Collected + Ancillary Collected + Restaurant Collected
+    const roomCollected = hotelRoomStats.reduce((s, r) => s + Number(r.room_revenue_collected_usd || 0), 0)
+    const ancillaryCollected = hotelRevenueEntries.reduce((s, r) => s + Number(r.collected_usd || 0), 0)
     const restRevCollected = restaurantRevenue.reduce((s, r) => s + Number(r.collected_usd || 0), 0)
-    collected = manualRoomCollected + guestInvoiceCollected + ancillaryCollected + restRevCollected
+    collected = roomCollected + ancillaryCollected + restRevCollected
     
 
                 
-    // Expenses Made = Expense entries + amortized AMC (assuming paid for simplicity)
     const start = new Date(cp.range.from)
     const end = new Date(cp.range.to)
     const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
     const amcTotal = hotelAmc.reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0) * monthsInView
-    expensesMade = hotelExpenseEntries.reduce((s, e) => s + Number(e.amount_usd), 0) + amcTotal
+    
+    // Add AMC amortized to Total Expenses (Accrued) since it doesn't hit the ledger
+    totalExpenses += amcTotal
+    
+    // Expenses Made = Actual cash out (hotel expense entries). AMC cash out is not modeled in the date range cleanly, so we only count direct expense entries.
+    expensesMade = hotelExpenseEntries.reduce((s, e) => s + Number(e.amount_usd), 0)
   } else {
     // For Basic, use standard invoices
     totalBilled = sales.reduce((sum, i) => sum + Number(i.amount_usd), 0)
@@ -443,16 +446,16 @@ export default function Dashboard() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <KpiCard label="Total Revenue" value={cp.fmt(totalBilled)} sublabel="sales invoices" icon={TrendingUp} tone="green" />
-        <KpiCard label="Total Expenses" value={cp.fmt(totalExpenses)} sublabel="purchase invoices" icon={TrendingDown} tone="red" />
-        <KpiCard label="Expected Net Profit" value={cp.fmt(netProfit)} sublabel="billed minus expenses" icon={DollarSign} tone={netProfit >= 0 ? 'green' : 'red'} />
-        <KpiCard label="Outstanding" value={cp.fmt(outstanding)} sublabel="pending + overdue" icon={AlertCircle} tone="slate" />
+        <KpiCard label="Total Revenue" value={cp.fmt(totalBilled)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'total accrued revenue' : 'sales invoices'} icon={TrendingUp} tone="green" />
+        <KpiCard label="Total Expenses" value={cp.fmt(totalExpenses)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'total accrued expenses' : 'purchase invoices'} icon={TrendingDown} tone="red" />
+        <KpiCard label="Expected Net Profit" value={cp.fmt(netProfit)} sublabel="revenue minus expenses" icon={DollarSign} tone={netProfit >= 0 ? 'green' : 'red'} />
+        <KpiCard label="Outstanding" value={cp.fmt(outstanding)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'unpaid invoices' : 'pending + overdue'} icon={AlertCircle} tone="slate" />
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
         <KpiCard label="Total Revenue Collected" value={cp.fmt(collected)} sublabel="actual paid revenue" icon={Receipt} tone="gold" />
-        <KpiCard label="Total Expenses Made" value={cp.fmt(expensesMade)} sublabel="actual paid expenses" icon={TrendingDown} tone="orange" />
-        <KpiCard label="Actual Profit" value={cp.fmt(actualProfit)} sublabel="collected minus made" icon={DollarSign} tone={actualProfit >= 0 ? 'green' : 'red'} />
+        <KpiCard label="Total Expenses Paid" value={cp.fmt(expensesMade)} sublabel="actual paid expenses" icon={TrendingDown} tone="orange" />
+        <KpiCard label="Actual Profit" value={cp.fmt(actualProfit)} sublabel="collected minus paid" icon={DollarSign} tone={actualProfit >= 0 ? 'green' : 'red'} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
