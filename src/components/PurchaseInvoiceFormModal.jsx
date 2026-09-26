@@ -270,11 +270,11 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
               </select>
             </Field>
             <Field label="Notes"><textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
-            <Field label="Upload Supplier Invoice PDF">
+            <Field label="Upload Supplier Invoice (PDF, JPG, PNG)">
               <label className="flex items-center gap-2 border border-dashed border-slate-300 rounded-lg px-3 py-2 text-sm cursor-pointer text-slate-500 hover:border-navy-400">
                 <Upload size={15} />
                 {uploading ? 'Uploading…' : attachmentUrl ? (<><span className="mr-2">File attached ✓</span><a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-navy-600 hover:underline text-xs font-medium" onClick={e => e.stopPropagation()}>Preview</a></>) : 'Choose File'}
-                <input type="file" accept="application/pdf" className="hidden" onChange={e => e.target.files[0] && handleFileUpload(e.target.files[0])} />
+                <input type="file" accept="application/pdf,image/jpeg,image/png,image/jpg" className="hidden" onChange={e => e.target.files[0] && handleFileUpload(e.target.files[0])} />
               </label>
             </Field>
           </div>
