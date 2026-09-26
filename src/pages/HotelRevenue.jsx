@@ -227,12 +227,14 @@ export default function HotelRevenue() {
           { key: 'room_revenue', label: 'Total Room Rev', render: r => <div><span className="font-semibold">{cp.fmt(r.room_revenue_usd)}</span><div className="text-[10px] text-slate-500">({cp.fmt(r.manual_room_revenue_usd||0)} man. + {cp.fmt(r.invoiced_room_revenue_usd||0)} inv.)</div></div> },
           { key: 'room_revenue_collected', label: 'Collected', render: r => <div><span className="font-semibold">{cp.fmt(r.room_revenue_collected_usd)}</span><div className="text-[10px] text-slate-500">({cp.fmt(r.manual_room_revenue_collected_usd||0)} man. + {cp.fmt(r.invoiced_room_revenue_usd||0)} inv.)</div></div> },
           { key: 'pending_collection', label: 'Pending Collection', render: r => <span className="font-semibold text-red-500">{cp.fmt((r.room_revenue_usd || 0) - (r.room_revenue_collected_usd || 0))}</span> },
-          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => (
+          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => {
+            const hasManual = (r.manual_rooms_occupied || 0) > 0 || (r.manual_room_revenue_usd || 0) > 0;
+            return (
             <div className="flex justify-end gap-1">
-              <button disabled={isLocked} onClick={() => { setEditingRow(r); setRoomModalOpen(true) }} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size={15} /></button>
-              <button disabled={isLocked || (r.notes || '').startsWith('Invoice ')} onClick={() => handleDeleteRoom(r)} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30" title={(r.notes || '').startsWith('Invoice ') ? "Delete from Guest Invoices page" : "Delete"}><Trash2 size={15} /></button>
+              {hasManual && <button disabled={isLocked} onClick={() => { setEditingRow(r); setRoomModalOpen(true) }} className="text-slate-400 hover:text-navy-600 p-1 disabled:opacity-30"><Pencil size={15} /></button>}
+              {hasManual && <button disabled={isLocked} onClick={() => handleDeleteRoom(r)} className="text-slate-400 hover:text-red-500 p-1 disabled:opacity-30" title="Delete Manual Entry"><Trash2 size={15} /></button>}
             </div>
-          ) }] : []),
+          )} }] : []),
         ]}
         rows={roomStats}
         emptyMessage="No room revenue entries in this range."
