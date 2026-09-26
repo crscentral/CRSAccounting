@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Trash2, Pencil, FileCheck, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
+import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import { getMTDRange, getYTDRange } from '../lib/fiscalYear'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
 import { CURRENCY_LIST } from '../lib/currencies'
@@ -13,24 +14,24 @@ import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exp
 
 export default function HotelGuestInvoices() {
   const { activeCompany, activeProduct, can } = useAuth()
+  const cp = useCurrencyAndPeriod('YTD')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
   const [rows, setRows] = useState([])
-  const [displayCurrency, setDisplayCurrency] = useState('USD')
-  const [rate, setRate] = useState(1)
 
   const today = new Date().toISOString().slice(0, 10)
   const mtd = getMTDRange()
   const ytd = getYTDRange(1)
 
-  useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct])
-  useEffect(() => { if (displayCurrency === 'USD') { setRate(1); return } getLatestRate(displayCurrency).then(r => setRate(r || 1)) }, [displayCurrency])
+  useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
-  function fmt(usd) { return formatMoney(convertFromUsd(usd, displayCurrency, { [displayCurrency]: rate }), displayCurrency) }
+  const fmt = cp.fmt
 
   async function loadAll() {
-    const { data } = await supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', ytd.from).order('invoice_date', { ascending: false })
+    const minFrom = cp.range.from < ytd.from ? cp.range.from : ytd.from
+    const maxTo = cp.range.to > ytd.to ? cp.range.to : (cp.range.to === '9999-12-31' ? today : ytd.to)
+    const { data } = await supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', minFrom).lte('invoice_date', maxTo).order('invoice_date', { ascending: false })
     setRows(data || [])
   }
 
@@ -44,10 +45,10 @@ export default function HotelGuestInvoices() {
     const sections = [{
       heading: 'Guest Invoices (YTD)',
       columns: ['Date', 'Room', 'Guest', 'Check-in', 'Check-out', 'Invoice Amount', 'Collected', 'Pending'],
-      rows: rows.map(r => [r.invoice_date, r.room_number || '—', r.guest_name, r.checkin_date || '—', r.checkout_date || '—', fmt(r.invoice_amount_usd), fmt(r.collected_amount_usd), fmt(r.invoice_amount_usd - r.collected_amount_usd)]),
+      rows: cpRows.map(r => [r.invoice_date, r.room_number || '—', r.guest_name, r.checkin_date || '—', r.checkout_date || '—', fmt(r.invoice_amount_usd), fmt(r.collected_amount_usd), fmt(r.invoice_amount_usd - r.collected_amount_usd)]),
     }]
     const title = 'Guest Invoices'
-    const subtitle = `${activeCompany.name} • Year to date`
+    const subtitle = `${activeCompany.name} • ${cp.range.from} to ${cp.range.to}`
     if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'guest_invoices' })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'guest_invoices' })
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'guest_invoices' })
@@ -57,7 +58,8 @@ export default function HotelGuestInvoices() {
 
   const todayRows = rows.filter(r => r.invoice_date === today)
   const mtdRows = rows.filter(r => r.invoice_date >= mtd.from && r.invoice_date <= mtd.to)
-  const ytdRows = rows // already scoped to YTD in the query
+  const ytdRows = rows.filter(r => r.invoice_date >= ytd.from && r.invoice_date <= ytd.to)
+  const cpRows = rows.filter(r => r.invoice_date >= cp.range.from && (cp.range.to === '9999-12-31' || r.invoice_date <= cp.range.to))
 
   const sum = (arr, field) => arr.reduce((s, r) => s + Number(r[field]), 0)
   const pending = (arr) => sum(arr, 'invoice_amount_usd') - sum(arr, 'collected_amount_usd')
@@ -67,14 +69,13 @@ export default function HotelGuestInvoices() {
       <PageHeader
         title="Guest Invoices"
         subtitle={`${activeCompany.name} • Daily front-desk invoice log`}
+        currencyProps={cp.currencyProps}
+        periodProps={cp.periodProps}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400">
               Download Report
             </button>
-            <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-              {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-            </select>
             {can(['owner', 'admin', 'accountant']) && (
               <button onClick={() => { setEditingRow(null); setModalOpen(true) }} className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
                 <Plus size={15} /> New Invoice
@@ -118,7 +119,7 @@ export default function HotelGuestInvoices() {
             )
           }] : []),
         ]}
-        rows={rows}
+        rows={cpRows}
         emptyMessage="No guest invoices yet this year."
       />
 
@@ -128,7 +129,7 @@ export default function HotelGuestInvoices() {
       {reportModalOpen && (
         <ReportOptionsModal
           title="Guest Invoices"
-          fields={[{ type: 'currency', key: 'currency', default: displayCurrency }]}
+          fields={[{ type: 'currency', key: 'currency', default: cp.displayCurrency }]}
           onGenerate={generateInvoicesReport}
           onClose={() => setReportModalOpen(false)}
         />
