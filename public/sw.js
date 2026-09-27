@@ -11,13 +11,13 @@
 // forever, since this file's own bytes rarely change and browsers only re-check a
 // service worker for updates when its file content changes.
 
-const CACHE_NAME = 'crs-accounting-shell-v92'
+const CACHE_NAME = 'crs-accounting-shell-v93'
 const APP_SHELL = [
-  '/CRSAccounting/',
-  '/CRSAccounting/index.html',
-  '/CRSAccounting/manifest.webmanifest',
-  '/CRSAccounting/icon-192.png',
-  '/CRSAccounting/icon-512.png',
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/icon-192.png',
+  '/icon-512.png',
 ]
 
 self.addEventListener('install', (event) => {

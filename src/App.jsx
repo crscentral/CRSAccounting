@@ -101,7 +101,7 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter basename="/CRSAccounting">
+    <BrowserRouter basename="/">
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>

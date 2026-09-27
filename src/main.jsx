@@ -12,7 +12,7 @@ createRoot(document.getElementById('root')).render(
 // Register the service worker for PWA installability ("Add to Home Screen" / "Install app").
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/CRSAccounting/sw.js').catch((err) => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
       console.warn('Service worker registration failed:', err)
     })
   })

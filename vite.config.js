@@ -4,5 +4,5 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: '/CRSAccounting/', // GitHub Pages project site path
+  base: '/', // GitHub Pages project site path
 })
