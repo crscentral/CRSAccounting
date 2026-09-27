@@ -43,11 +43,11 @@ export default function RestaurantExpenses() {
     const [{ data: exp }, { data: amc }, { data: accs }, { data: settings }, { data: budgetsData }, { data: pi }, { data: cont }] = await Promise.all([
       supabase.from('hotel_expense_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to).order('expense_date', { ascending: false }),
       supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('created_at', { ascending: false }),
-      supabase.from('accounts').select('id, code, name, subtype').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Expenses').order('code'),
+      supabase.from('accounts').select('id, code, name, subtype, type').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Expenses').order('code'),
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
       supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
       supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
-      supabase.from('contacts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('name')
+      supabase.from('contacts').select('*').eq('company_id', activeCompany.id).order('name')
     ])
     setEntries(exp || [])
     setAmcContracts(amc || [])
@@ -232,6 +232,7 @@ export default function RestaurantExpenses() {
       <DataTable
         columns={[
           { key: 'expense_date', label: 'Date' },
+          { key: 'invoice_number', label: 'Invoice #', render: r => r.invoice_number || '—' },
           { key: 'account', label: 'Expense Head', render: r => r.account ? `${r.account.code} - ${r.account.name}` : '—' },
           { key: 'amount_usd', label: 'Amount', render: r => cp.fmt(r.amount_usd) },
           { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
@@ -320,6 +321,7 @@ function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClo
   const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
   const [amount, setAmount] = useState(editingRow?.amount ?? '')
   const [notes, setNotes] = useState(editingRow?.notes || '')
+  const [invoiceNumber, setInvoiceNumber] = useState(editingRow?.invoice_number || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -381,6 +383,9 @@ function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClo
             <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
           </Field>
         </div>
+                <Field label="Invoice Number">
+          <input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} placeholder="Optional" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </Field>
         <Field label="Notes">
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         </Field>
