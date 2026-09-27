@@ -127,9 +127,9 @@ export default function RestaurantExpenses() {
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
     const logoUrl = activeCompany.logo_url
     
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'hotel_expenses', logoUrl })
-    if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'hotel_expenses' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'hotel_expenses' })
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'restaurant_expenses', logoUrl })
+    if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'restaurant_expenses' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'restaurant_expenses' })
   }
 
   if (!activeCompany) return null
@@ -138,7 +138,6 @@ export default function RestaurantExpenses() {
   const end = new Date(cp.range.to)
   const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
   const daysInView = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1)
-  const availableRoomNights = totalRooms * daysInView
 
   const amcMonthlyTotalUsd = amcContracts.reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0)
   const amcTotalForView = amcMonthlyTotalUsd * monthsInView
@@ -152,14 +151,12 @@ export default function RestaurantExpenses() {
     byHead[key] = (byHead[key] || 0) + Number(r.amount_usd)
   })
   
-  const pieData = Object.entries(byHead).filter(x => x[1] > 0).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
-  const COLORS = ['#1e293b', '#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f43f5e', '#64748b']
   const topHeads = Object.entries(byHead).sort((a, b) => b[1] - a[1]).slice(0, 3)
 
   return (
     <div>
       <PageHeader
-        title="Expenses"
+        title="Restaurant Expenses"
         subtitle={activeCompany.name}
         currencyProps={cp.currencyProps}
         periodProps={cp.periodProps}
@@ -183,46 +180,14 @@ export default function RestaurantExpenses() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-6">
-        <KpiCard title="Total Expenses" amount={cp.fmt(totalAmc + totalEntries)} />
-        <KpiCard title="Budgeted Expenses" amount={cp.fmt(budgetTotal)} />
+        <KpiCard label="Total Expenses" value={cp.fmt(totalExpenses)} tone="slate" />
+        <KpiCard label="Budgeted Expenses" value={cp.fmt(budgetTotal)} tone="slate" />
         <KpiCard 
-          title="Over / Under Budget" 
-          amount={cp.fmt((totalAmc + totalEntries) - budgetTotal)} 
-          isNegative={((totalAmc + totalEntries) - budgetTotal) > 0} 
-          subtitle={((totalAmc + totalEntries) - budgetTotal) > 0 ? 'Over Budget' : 'Under Budget'}
+          label="Over / Under Budget" 
+          value={cp.fmt(totalExpenses - budgetTotal)} 
+          tone={(totalExpenses - budgetTotal) > 0 ? 'red' : 'green'} 
         />
       </div>
-      <div className="grid lg:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (CPOR: {totalOccupied > 0 ? cp.fmt(totalExpenses/totalOccupied) : '—'})</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2}>
-                  {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <RechartsTooltip formatter={(value) => cp.fmt(value)} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '11px' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (PAR: {availableRoomNights > 0 ? cp.fmt(totalExpenses/availableRoomNights) : '—'})</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}>
-                  {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <RechartsTooltip formatter={(value) => cp.fmt(value)} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '11px' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
       <div className="flex justify-between items-end mb-3 mt-8">
         <div>
           <h3 className="font-semibold text-slate-700 flex items-center gap-3">
@@ -279,7 +244,7 @@ export default function RestaurantExpenses() {
       )}
       {reportModalOpen && (
         <ReportOptionsModal
-          title="Expenses"
+          title="Restaurant Expenses"
           fields={[
             { type: 'currency', key: 'currency', default: cp.displayCurrency },
             { type: 'period', key: 'period', default: 'ALL_TIME' },
