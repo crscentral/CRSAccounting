@@ -89,7 +89,7 @@ export default function AppShell() {
     <div className="min-h-screen bg-slate-50 flex">
       {/* Desktop / tablet sidebar */}
       <aside className={`hidden md:flex md:flex-col border-r border-slate-200 bg-white shrink-0 transition-all duration-300 ${sidebarExpanded ? 'w-20 lg:w-64' : 'w-0 overflow-hidden border-r-0'}`}>
-        <div className="w-full shrink-0 bg-navy-700" style={{ height: 'env(safe-area-inset-top)' }} />
+        <div className="w-full shrink-0 bg-navy-700" style={safeAreaStyle} />
         <div className="h-16 flex items-center gap-2 px-3 lg:px-5 border-b border-slate-100">
           <img src={logo} alt="CRS Accounting" className="h-8 w-8 object-contain shrink-0" />
           <span className="hidden lg:block font-semibold text-navy-700 leading-tight">
@@ -122,7 +122,7 @@ export default function AppShell() {
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
           <div className="absolute left-0 top-0 bottom-0 w-72 bg-white shadow-xl flex flex-col">
-            <div className="w-full shrink-0 bg-navy-700" style={{ height: 'env(safe-area-inset-top)' }} />
+            <div className="w-full shrink-0 bg-navy-700" style={safeAreaStyle} />
             <div className="h-16 flex items-center justify-between px-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <img src={logo} alt="CRS Accounting" className="h-8 w-8 object-contain" />
@@ -161,7 +161,7 @@ export default function AppShell() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile top bar */}
         <header className="md:hidden bg-white border-b border-slate-200 sticky top-0 z-30 flex flex-col">
-          <div className="w-full shrink-0 bg-navy-700" style={{ height: 'env(safe-area-inset-top)' }} />
+          <div className="w-full shrink-0 bg-navy-700" style={safeAreaStyle} />
           <div className="h-14 w-full flex items-center justify-between px-4 shrink-0">
           <button onClick={() => setDrawerOpen(true)}><Menu size={22} className="text-navy-700" /></button>
           <div className="flex flex-col items-center">
@@ -257,7 +257,7 @@ function ActiveCompanyBar({ toggleSidebar, companies, activeCompany, switchCompa
 
   return (
     <div className="hidden md:block sticky top-0 z-20 bg-navy-700 w-full">
-      <div className="w-full shrink-0 bg-navy-700" style={{ height: 'env(safe-area-inset-top)' }} />
+      <div className="w-full shrink-0 bg-navy-700" style={safeAreaStyle} />
       <div className="flex items-center justify-between px-6 lg:px-8 h-11 text-white text-sm shrink-0">
         <div className="flex items-center gap-4">
           <button onClick={toggleSidebar} className="text-white hover:text-slate-300"><Menu size={18} /></button>
