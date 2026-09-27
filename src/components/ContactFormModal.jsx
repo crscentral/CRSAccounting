@@ -26,7 +26,7 @@ export default function ContactFormModal({ companyId, contact, defaultType = 'cu
         const { error: err } = await supabase.from('contacts').update(form).eq('id', contact.id)
         if (err) throw err
       } else {
-        const { error: err } = await supabase.from('contacts').insert({ ...form, company_id: companyId })
+        const { error: err } = await supabase.from('contacts').insert({ ...form, company_id: companyId, product })
         if (err) throw err
       }
       onSaved()

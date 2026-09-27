@@ -97,7 +97,7 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
       let finalContactId = contactId
       if (newSupplierMode && supplierName.trim()) {
         const { data: newContact, error: contactErr } = await supabase.from('contacts')
-          .insert({ company_id: companyId, type: 'supplier', name: supplierName.trim(), email: supplierEmail || null, phone: supplierPhone || null, tax_id: supplierGstin || null, address: supplierAddress || null })
+          .insert({ company_id: companyId, product, type: 'supplier', name: supplierName.trim(), email: supplierEmail || null, phone: supplierPhone || null, tax_id: supplierGstin || null, address: supplierAddress || null })
           .select().single()
         if (contactErr) throw contactErr
         finalContactId = newContact.id

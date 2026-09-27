@@ -47,7 +47,7 @@ export default function HotelExpenses() {
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
       supabase.from('hotel_room_stats').select('rooms_occupied').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to),
       supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
-      supabase.from('contacts').select('*').eq('company_id', activeCompany.id).order('name')
+      supabase.from('contacts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('name')
     ])
     setEntries(exp || [])
     setAmcContracts(amc || [])
@@ -350,6 +350,7 @@ function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClo
         company_id: companyId, product, expense_date: expenseDate, account_id: accountId,
         amount: Number(amount), currency, fx_rate_locked: fxRate, amount_usd: Math.round(Number(amount) / fxRate * 100) / 100,
         notes: notes || null,
+        invoice_number: invoiceNumber || null
       }
       let err = null
       if (editingRow) {

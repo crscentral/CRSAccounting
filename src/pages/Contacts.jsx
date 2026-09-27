@@ -26,7 +26,7 @@ export default function Contacts() {
 
   async function loadAll() {
     const [{ data: contacts }, { data: si }, { data: pi }] = await Promise.all([
-      supabase.from('contacts').select('*').eq('company_id', activeCompany.id).order('name'),
+      supabase.from('contacts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('name'),
       supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
       supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
     ])
@@ -191,6 +191,7 @@ export default function Contacts() {
       {modalOpen && (
         <ContactFormModal
           companyId={activeCompany.id}
+          product={activeProduct}
           contact={editingContact}
           defaultType={tab === 'customers' ? 'customer' : 'supplier'}
           onClose={() => setModalOpen(false)}
