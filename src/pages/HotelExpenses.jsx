@@ -54,6 +54,8 @@ export default function HotelExpenses() {
     setExpenseAccounts(accs || [])
     setTotalRooms(settings?.total_rooms || 0)
     setTotalOccupied((roomStats || []).reduce((s, r) => s + (r.rooms_occupied || 0), 0))
+    setPurchaseInvoices(pi || [])
+    setContacts(cont || [])
   }
 
   async function handleDeleteEntry(row) {
