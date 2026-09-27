@@ -165,21 +165,21 @@ function AnalyticsInner() {
 
     overdueCount = (hotelGuestInvoices || []).filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)).length
 
-    (hotelGuestInvoices || []).forEach(i => {
+    ;(hotelGuestInvoices || []).forEach(i => {
       const key = (i.invoice_date || '').slice(0, 7) || 'Unknown'
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
       monthlyMap[key].invoices += 1
       monthlyMap[key].revenue += Number(i.invoice_amount_usd || 0)
       monthlyMap[key].collected += Number(i.collected_amount_usd || 0)
     })
-    (hotelRoomStats || []).forEach(r => {
+    ;(hotelRoomStats || []).forEach(r => {
       const key = (r.stat_date || '').slice(0, 7) || 'Unknown'
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
       monthlyMap[key].invoices += 1
       monthlyMap[key].revenue += Number(r.room_revenue_usd || 0)
       monthlyMap[key].collected += Number(r.manual_room_revenue_collected_usd || 0)
     })
-    (hotelRevenueEntries || []).forEach(r => {
+    ;(hotelRevenueEntries || []).forEach(r => {
       const key = (r.entry_date || '').slice(0, 7) || 'Unknown'
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
       monthlyMap[key].invoices += 1
@@ -208,13 +208,13 @@ function AnalyticsInner() {
     expenses = (purchases || []).reduce((s, i) => s + Number(i.amount_usd), 0)
     overdueCount = (sales || []).filter(i => i.status === 'Overdue').length
 
-    (sales || []).forEach(i => {
+    ;(sales || []).forEach(i => {
       const key = (i.invoice_date || '').slice(0, 7) || 'Unknown'
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
       monthlyMap[key].invoices += 1
       monthlyMap[key].revenue += Number(i.amount_usd)
     })
-    (receipts || []).forEach(r => {
+    ;(receipts || []).forEach(r => {
       const key = (r.receipt_date || '').slice(0, 7) || 'Unknown'
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
       monthlyMap[key].collected += Number(r.amount_usd)
