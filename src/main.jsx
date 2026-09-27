@@ -6,9 +6,14 @@ import App from './App.jsx'
 // Bulletproof iOS PWA detection
 if (typeof window !== 'undefined') {
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+  const isIPad = /iPad/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
   const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+  
   if (isIOS && isStandalone) {
     document.documentElement.classList.add('ios-standalone');
+  }
+  if (isIPad && isStandalone) {
+    document.documentElement.classList.add('ipad-standalone');
   }
 }
 

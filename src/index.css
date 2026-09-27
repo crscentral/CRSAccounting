@@ -42,5 +42,13 @@ body { font-family: var(--font-body); -webkit-tap-highlight-color: transparent; 
 
 /* Bulletproof iOS Standalone fallback */
 .ios-standalone .ios-safe-area-spacer {
-  height: max(env(safe-area-inset-top), 24px) !important;
+  height: env(safe-area-inset-top, 0px);
+}
+
+@media (min-width: 768px) {
+  /* On iPads in full-screen PWA mode, Apple overlaps the status bar but reports 0px safe area.
+     We force 24px padding. In split-view (<768px), it behaves correctly without padding. */
+  .ipad-standalone .ios-safe-area-spacer {
+    height: 24px !important;
+  }
 }
