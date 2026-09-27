@@ -3,36 +3,64 @@ import re
 with open('src/pages/Transactions.jsx', 'r') as f:
     content = f.read()
 
-# 1. Update loadData
-old_loadData = """    if (['hotel', 'restaurant'].includes(activeProduct)) {
-      siPromise = supabase.from('hotel_guest_invoices').select('id, invoice_number:id, invoice_date, amount_usd:invoice_amount_usd, currency, amount:invoice_amount_usd, contact:guest_name').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to)
-      piPromise = supabase.from('hotel_expense_entries').select('id, invoice_number:id, invoice_date:expense_date, amount_usd, currency, amount, contact:supplier_name').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to)
-    } else {"""
-new_loadData = """    let rdrPromise = Promise.resolve({ data: [] })
-    if (['hotel', 'restaurant'].includes(activeProduct)) {
-      siPromise = supabase.from('hotel_guest_invoices').select('id, invoice_number:id, invoice_date, amount_usd:invoice_amount_usd, currency, amount:invoice_amount_usd, contact:guest_name').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to)
-      piPromise = supabase.from('hotel_expense_entries').select('id, invoice_number:id, invoice_date:expense_date, amount_usd, currency, amount, contact:supplier_name').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to)
-      rdrPromise = supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
-    } else {"""
-content = content.replace(old_loadData, new_loadData)
+# Transactions AMC logic has two blocks (for main and export).
+# First block:
+old_amc_1 = """    // Add AMC amortization lines
+    if (amc && amc.length > 0) {
+      const amcMonthlyTotal = amc.reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0)
+      if (amcMonthlyTotal > 0) {
+        const start = new Date(cp.range.from)
+        const end = new Date(Math.min(new Date(cp.range.to).getTime(), new Date().getTime()))
+        let cur = new Date(start.getFullYear(), start.getMonth(), 1)
+        while (cur <= end) {
+          const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
+          if (dStr >= cp.range.from && dStr <= cp.range.to) {
+            combined.push({ id: `amc-${dStr}`, date: dStr, type: 'AMC Contract', desc: 'Amortized AMC (Monthly)', amount_usd: amcMonthlyTotal, amount: amcMonthlyTotal, currency: 'USD', direction: 'out' })
+          }
+          cur.setMonth(cur.getMonth() + 1)
+        }
+      }
+    }"""
 
-old_await = """    const [{ data: si }, { data: pi }, { data: pr }] = await Promise.all([siPromise, piPromise, prPromise])"""
-new_await = """    const [{ data: si }, { data: pi }, { data: pr }, { data: rdr }] = await Promise.all([siPromise, piPromise, prPromise, rdrPromise])"""
-content = content.replace(old_await, new_await)
+new_amc_1 = """    // Add AMC Contract lines (Actual Posting)
+    if (amc && amc.length > 0) {
+      amc.forEach(r => {
+        const dStr = `${r.start_year}-${String(r.start_month).padStart(2, '0')}-01`
+        if (dStr >= cp.range.from && dStr <= cp.range.to) {
+          combined.push({ id: `amc-${r.id}`, date: dStr, type: 'AMC Contract', desc: r.contract_name || 'AMC Contract', amount_usd: r.annual_amount_usd, amount: r.annual_amount || r.annual_amount_usd, currency: r.currency || 'USD', direction: 'out' })
+        }
+      })
+    }"""
 
-old_combined = """    const combined = [
-      ...(si || []).map(r => ({ id: `si-${r.id}`, date: r.invoice_date, type: ['hotel', 'restaurant'].includes(activeProduct) ? 'Guest Invoice' : 'Sales Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.contact || ''}`, amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'in' })),
-      ...(pi || []).map(r => ({ id: `pi-${r.id}`, date: r.invoice_date, type: ['hotel', 'restaurant'].includes(activeProduct) ? 'Expense' : 'Purchase Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.supplier_name_freeform || r.contact || ''}`, amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'out' })),
-      ...(pr || []).map(r => ({ id: `pr-${r.id}`, date: r.receipt_date, type: 'Payment Receipt', desc: 'Payment received', amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'in' })),
-    ].sort((a, b) => b.date.localeCompare(a.date))"""
+old_amc_2 = """    // Add AMC amortization lines
+    if (amc && amc.length > 0) {
+      const amcMonthlyTotal = amc.reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0)
+      if (amcMonthlyTotal > 0) {
+        const start = new Date(range.from)
+        const end = new Date(range.to)
+        let cur = new Date(start.getFullYear(), start.getMonth(), 1)
+        while (cur <= end) {
+          const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
+          if (dStr >= range.from && dStr <= range.to) {
+            combined.push({ date: dStr, type: 'AMC Contract', desc: 'Amortized AMC (Monthly)', amount: fmt(amcMonthlyTotal), direction: '-' })
+          }
+          cur.setMonth(cur.getMonth() + 1)
+        }
+      }
+    }"""
 
-new_combined = """    const combined = [
-      ...(si || []).map(r => ({ id: `si-${r.id}`, date: r.invoice_date, type: ['hotel', 'restaurant'].includes(activeProduct) ? 'Guest Invoice' : 'Sales Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.contact || ''}`, amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'in' })),
-      ...(pi || []).map(r => ({ id: `pi-${r.id}`, date: r.invoice_date, type: ['hotel', 'restaurant'].includes(activeProduct) ? 'Expense' : 'Purchase Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.supplier_name_freeform || r.contact || ''}`, amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'out' })),
-      ...(pr || []).map(r => ({ id: `pr-${r.id}`, date: r.receipt_date, type: 'Payment Receipt', desc: 'Payment received', amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'in' })),
-      ...(rdr || []).map(r => { const total = Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0)); return { id: `rdr-${r.id}`, date: r.revenue_date, type: 'F&B Revenue', desc: `${r.meal_period} F&B Revenue`, amount_usd: total, amount: total, currency: 'USD', direction: 'in' } }),
-    ].sort((a, b) => b.date.localeCompare(a.date))"""
-content = content.replace(old_combined, new_combined)
+new_amc_2 = """    // Add AMC Contract lines (Actual Posting)
+    if (amc && amc.length > 0) {
+      amc.forEach(r => {
+        const dStr = `${r.start_year}-${String(r.start_month).padStart(2, '0')}-01`
+        if (dStr >= range.from && dStr <= range.to) {
+          combined.push({ date: dStr, type: 'AMC Contract', desc: r.contract_name || 'AMC Contract', amount: fmt(r.annual_amount_usd), direction: '-' })
+        }
+      })
+    }"""
+
+content = content.replace(old_amc_1, new_amc_1)
+content = content.replace(old_amc_2, new_amc_2)
 
 with open('src/pages/Transactions.jsx', 'w') as f:
     f.write(content)

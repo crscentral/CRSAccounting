@@ -12,7 +12,18 @@ import { DollarSign, CheckCircle2, TrendingUp, TrendingDown, AlertTriangle } fro
 
 const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']
 
-export default function Analytics() {
+import React from 'react';
+
+class AnalyticsErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  render() { 
+    if (this.state.hasError) return <div className="p-10 text-red-500 font-bold">ERROR: {String(this.state.error)}<br/>{this.state.error && this.state.error.stack}</div>; 
+    return this.props.children; 
+  }
+}
+
+function AnalyticsInner() {
   const { activeCompany, activeProduct } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [reportModalOpen, setReportModalOpen] = useState(false)
@@ -91,7 +102,7 @@ export default function Analytics() {
       const amcTotal = hamcSel.reduce((s2, r) => s2 + (Number(r.annual_amount_usd) / 12), 0) * monthsInView
       expenses = heeSel.reduce((s2, e) => s2 + Number(e.amount_usd), 0) + amcTotal
 
-      hgiSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.invoice_amount_usd || 0); monthlyMap[k].collected += Number(i.collected_amount_usd || 0) })
+      hgiSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7) || 'Unknown'; monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.invoice_amount_usd || 0); monthlyMap[k].collected += Number(i.collected_amount_usd || 0) })
       hrsSel.forEach(i => { const k = i.stat_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.room_revenue_usd || 0); monthlyMap[k].collected += Number(i.manual_room_revenue_collected_usd || 0) })
       hreSel.forEach(i => { const k = i.entry_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.amount_usd || 0); monthlyMap[k].collected += Number(i.amount_usd || 0) })
 
@@ -101,11 +112,11 @@ export default function Analytics() {
       collected = totalInvoiced - outstanding
       expenses = pSel.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
 
-      sSel.forEach(i => { const k = i.invoice_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.amount_usd) })
+      sSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7) || 'Unknown'; monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.amount_usd) })
       rSel.forEach(i => { const k = i.receipt_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].collected += Number(i.amount_usd) })
     }
 
-    const monthlySel = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
+    const monthlySel = Object.values(monthlyMap).sort((a, b) => (a.month || '').localeCompare(b.month || ''))
 
     const sections = [
       { heading: 'Summary', keyValuePairs: [['Total Invoiced', fmt(totalInvoiced)], ['Collected', fmt(collected)], ['Outstanding', fmt(outstanding)], ['Expenses', fmt(expenses)]] },
@@ -155,21 +166,21 @@ export default function Analytics() {
     overdueCount = (hotelGuestInvoices || []).filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)).length
 
     (hotelGuestInvoices || []).forEach(i => {
-      const key = i.invoice_date.slice(0, 7)
+      const key = (i.invoice_date || '').slice(0, 7) || 'Unknown'
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
       monthlyMap[key].invoices += 1
       monthlyMap[key].revenue += Number(i.invoice_amount_usd || 0)
       monthlyMap[key].collected += Number(i.collected_amount_usd || 0)
     })
     (hotelRoomStats || []).forEach(r => {
-      const key = r.stat_date.slice(0, 7)
+      const key = (r.stat_date || '').slice(0, 7) || 'Unknown'
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
       monthlyMap[key].invoices += 1
       monthlyMap[key].revenue += Number(r.room_revenue_usd || 0)
       monthlyMap[key].collected += Number(r.manual_room_revenue_collected_usd || 0)
     })
     (hotelRevenueEntries || []).forEach(r => {
-      const key = r.entry_date.slice(0, 7)
+      const key = (r.entry_date || '').slice(0, 7) || 'Unknown'
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
       monthlyMap[key].invoices += 1
       monthlyMap[key].revenue += Number(r.amount_usd || 0)
@@ -198,13 +209,13 @@ export default function Analytics() {
     overdueCount = (sales || []).filter(i => i.status === 'Overdue').length
 
     (sales || []).forEach(i => {
-      const key = i.invoice_date.slice(0, 7)
+      const key = (i.invoice_date || '').slice(0, 7) || 'Unknown'
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
       monthlyMap[key].invoices += 1
       monthlyMap[key].revenue += Number(i.amount_usd)
     })
     (receipts || []).forEach(r => {
-      const key = r.receipt_date.slice(0, 7)
+      const key = (r.receipt_date || '').slice(0, 7) || 'Unknown'
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
       monthlyMap[key].collected += Number(r.amount_usd)
     })
@@ -218,7 +229,7 @@ export default function Analytics() {
     ]
   }
 
-  const monthly = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
+  const monthly = Object.values(monthlyMap).sort((a, b) => (a.month || '').localeCompare(b.month || ''))
 
   return (
     <div>
@@ -346,3 +357,5 @@ export default function Analytics() {
     </div>
   )
 }
+
+export default function Analytics() { return <AnalyticsErrorBoundary><AnalyticsInner /></AnalyticsErrorBoundary>; }
