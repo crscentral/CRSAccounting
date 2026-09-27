@@ -12,6 +12,9 @@ import KpiCard from '../components/KpiCard'
 import DataTable from '../components/DataTable'
 import Modal, { Field } from '../components/Modal'
 import AccountFormModal from '../components/AccountFormModal'
+import PurchaseInvoiceFormModal from '../components/PurchaseInvoiceFormModal'
+import { FileText } from 'lucide-react'
+
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 
@@ -26,18 +29,25 @@ export default function HotelExpenses() {
   const [entries, setEntries] = useState([])
   const [amcContracts, setAmcContracts] = useState([])
   const [expenseAccounts, setExpenseAccounts] = useState([])
+  const [purchaseModalOpen, setPurchaseModalOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('daily') // 'daily' or 'purchase'
+  const [purchaseInvoices, setPurchaseInvoices] = useState([])
+  const [contacts, setContacts] = useState([])
+
   const [totalRooms, setTotalRooms] = useState(0)
   const [totalOccupied, setTotalOccupied] = useState(0)
 
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadAll() {
-    const [{ data: exp }, { data: amc }, { data: accs }, { data: settings }, { data: roomStats }] = await Promise.all([
+    const [{ data: exp }, { data: amc }, { data: accs }, { data: settings }, { data: roomStats }, { data: pi }, { data: cont }] = await Promise.all([
       supabase.from('hotel_expense_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to).order('expense_date', { ascending: false }),
       supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('created_at', { ascending: false }),
       supabase.from('accounts').select('id, code, name, subtype').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Expenses').order('code'),
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
-      supabase.from('hotel_room_stats').select('rooms_occupied').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to)
+      supabase.from('hotel_room_stats').select('rooms_occupied').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to),
+      supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
+      supabase.from('contacts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('name')
     ])
     setEntries(exp || [])
     setAmcContracts(amc || [])
@@ -49,6 +59,11 @@ export default function HotelExpenses() {
   async function handleDeleteEntry(row) {
     if (!confirm('Delete this expense entry?')) return
     await supabase.from('hotel_expense_entries').delete().eq('id', row.id)
+    loadAll()
+  }
+    async function handleDeletePI(row) {
+    if (!confirm('Delete this purchase invoice?')) return
+    await supabase.from('purchase_invoices').delete().eq('id', row.id)
     loadAll()
   }
   async function handleDeleteAmc(row) {
@@ -130,7 +145,8 @@ export default function HotelExpenses() {
   const amcTotalForView = amcMonthlyTotalUsd * monthsInView
 
   const entriesTotalUsd = entries.reduce((s, r) => s + Number(r.amount_usd), 0)
-  const totalExpenses = entriesTotalUsd + amcTotalForView
+  const piTotalUsd = purchaseInvoices.reduce((s, r) => s + Number(r.amount_usd), 0)
+  const totalExpenses = entriesTotalUsd + amcTotalForView + piTotalUsd
 
   const byHead = { 'AMC Contracts (Amortized)': amcTotalForView }
   entries.forEach(r => {
@@ -158,6 +174,9 @@ export default function HotelExpenses() {
               <>
                 <button onClick={() => { setEditingRow(null); setAmcModalOpen(true); }} className="flex items-center gap-1.5 border border-slate-300 text-slate-700 text-sm font-medium px-3 py-2 rounded-lg">
                   <Repeat size={15} /> New AMC Contract
+                </button>
+                <button onClick={() => { setEditingRow(null); setPurchaseModalOpen(true); }} className="flex items-center gap-1.5 bg-gold-600 hover:bg-gold-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
+                  <FileText size={15} /> New Purchase Invoice
                 </button>
                 <button onClick={() => { setEditingRow(null); setExpenseModalOpen(true); }} className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
                   <Plus size={15} /> New Expense
@@ -204,10 +223,17 @@ export default function HotelExpenses() {
         </div>
       </div>
 
-      <div className="flex justify-between items-end mb-3 mt-8">
-        <div>
-          <h3 className="font-semibold text-slate-700 flex items-center gap-3">
-            <span>Expense Entries</span>
+      <div className="flex gap-6 border-b border-slate-200 mb-6 mt-8">
+        <button onClick={() => setActiveTab('daily')} className={`pb-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'daily' ? 'border-navy-600 text-navy-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Daily Expenses</button>
+        <button onClick={() => setActiveTab('purchase')} className={`pb-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'purchase' ? 'border-navy-600 text-navy-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Purchase Invoices</button>
+      </div>
+
+      {activeTab === 'daily' && (
+        <>
+          <div className="flex justify-between items-end mb-3">
+            <div>
+              <h3 className="font-semibold text-slate-700 flex items-center gap-3">
+                <span>Daily Expense Entries</span>
             {can(['owner', 'admin', 'accountant']) && (
               <button onClick={() => setNewHeadModalOpen(true)} className="text-xs text-navy-600 hover:text-navy-800 font-medium">+ Add Expense Head</button>
             )}
@@ -248,7 +274,35 @@ export default function HotelExpenses() {
         rows={amcContracts}
         emptyMessage="No AMC contracts yet."
       />
+        </>
+      )}
 
+      {activeTab === 'purchase' && (
+        <>
+          <div className="flex justify-between items-end mb-3 mt-8">
+            <h3 className="font-semibold text-slate-700">Purchase Invoices</h3>
+          </div>
+          <DataTable
+            columns={[
+              { key: 'date', label: 'Date', render: r => r.invoice_date },
+              { key: 'invoice_no', label: 'Invoice #', render: r => r.invoice_number },
+              { key: 'supplier', label: 'Supplier', render: r => r.contact?.name || r.supplier_name_freeform || 'Unknown' },
+              { key: 'amount', label: 'Amount', render: r => cp.fmt(r.amount_usd) },
+              { key: 'status', label: 'Status', render: r => <span className={`px-2 py-0.5 rounded text-xs font-medium ${r.status === 'Draft' ? 'bg-slate-100 text-slate-600' : r.status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{r.status}</span> },
+              ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex justify-end gap-2">
+                <button onClick={() => { setEditingRow(r); setPurchaseModalOpen(true); }} className="text-slate-400 hover:text-navy-600 p-1"><Pencil size={15} /></button>
+                <button onClick={() => handleDeletePI(r)} className="text-slate-400 hover:text-red-500 p-1"><Trash2 size={15} /></button>
+              </div> }] : []),
+            ]}
+            rows={purchaseInvoices}
+            emptyMessage="No purchase invoices yet."
+          />
+        </>
+      )}
+
+            {purchaseModalOpen && (
+        <PurchaseInvoiceFormModal companyId={activeCompany.id} product={activeProduct} company={activeCompany} contacts={contacts} accounts={expenseAccounts} invoice={editingRow} onClose={() => { setPurchaseModalOpen(false); setEditingRow(null); }} onSaved={loadAll} />
+      )}
       {expenseModalOpen && (
         <ExpenseEntryFormModal companyId={activeCompany.id} product={activeProduct} accounts={expenseAccounts} editingRow={editingRow} onClose={() => { setExpenseModalOpen(false); setEditingRow(null); }} onSaved={loadAll} />
       )}
