@@ -48,21 +48,17 @@ export default function Transactions() {
       ...(hrs || []).filter(r => Number(r.room_revenue_usd) > 0).map(r => ({ id: `hrs-${r.id}`, date: r.stat_date, type: 'Room Revenue', desc: 'Daily Room Revenue', amount_usd: r.room_revenue_usd, amount: r.room_revenue || r.room_revenue_usd, currency: r.currency || 'USD', direction: 'in' })),
     ]
     
-    // Add AMC amortization lines
+        // Add AMC Contract lines (Actual Posting or Amortized depending on view)
     if (amc && amc.length > 0) {
-      const amcMonthlyTotal = amc.reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0)
-      if (amcMonthlyTotal > 0) {
-        const start = new Date(cp.range.from)
-        const end = new Date(cp.range.to)
-        let cur = new Date(start.getFullYear(), start.getMonth(), 1)
-        while (cur <= end) {
-          const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
-          if (dStr >= cp.range.from && dStr <= cp.range.to) {
-            combined.push({ id: `amc-${dStr}`, date: dStr, type: 'AMC Contract', desc: 'Amortized AMC (Monthly)', amount_usd: amcMonthlyTotal, amount: amcMonthlyTotal, currency: 'USD', direction: 'out' })
-          }
-          cur.setMonth(cur.getMonth() + 1)
+      const isMonth = cp.periodProps.periodType.includes('MONTH') || cp.periodProps.periodType === 'LAST_30_DAYS' || (new Date(cp.range.to) - new Date(cp.range.from)) <= 35 * 24 * 60 * 60 * 1000
+      amc.forEach(r => {
+        if (isMonth) {
+          combined.push({ id: `amc-${r.id}`, date: cp.range.from, type: 'AMC Contract', desc: `${r.contract_name || 'AMC Contract'} - Amortized AMC (Monthly)`, amount_usd: Number(r.annual_amount_usd)/12, amount: Number(r.annual_amount || r.annual_amount_usd)/12, currency: r.currency || 'USD', direction: 'out' })
+        } else {
+          const dStr = r.start_year ? `${r.start_year}-${String(r.start_month).padStart(2, '0')}-01` : (r.created_at || '').split('T')[0] || cp.range.from
+          combined.push({ id: `amc-${r.id}`, date: dStr >= cp.range.from && dStr <= cp.range.to ? dStr : cp.range.from, type: 'AMC Contract', desc: r.contract_name || 'AMC Contract', amount_usd: r.annual_amount_usd, amount: r.annual_amount || r.annual_amount_usd, currency: r.currency || 'USD', direction: 'out' })
         }
-      }
+      })
     }
     
     combined.sort((a, b) => b.date.localeCompare(a.date))
@@ -110,12 +106,15 @@ export default function Transactions() {
       ...(hrs || []).filter(r => Number(r.room_revenue_usd) > 0).map(r => ({ date: r.stat_date, type: 'Room Revenue', desc: 'Daily Room Revenue', amount: fmt(r.room_revenue_usd), direction: '+' })),
     ]
 
-    // Add AMC Contract lines (Actual Posting)
+        // Add AMC Contract lines (Actual Posting or Amortized depending on view)
     if (amc && amc.length > 0) {
+      const isMonth = selections.period.includes('MONTH') || selections.period === 'LAST_30_DAYS' || (new Date(range.to) - new Date(range.from)) <= 35 * 24 * 60 * 60 * 1000
       amc.forEach(r => {
-        const dStr = r.start_year ? `${r.start_year}-${String(r.start_month).padStart(2, '0')}-01` : (r.created_at || '').split('T')[0]
-        if (dStr >= range.from && dStr <= range.to) {
-          combined.push({ date: dStr, type: 'AMC Contract', desc: r.contract_name || 'AMC Contract', amount: fmt(r.annual_amount_usd), direction: '-' })
+        if (isMonth) {
+          combined.push({ date: range.from, type: 'AMC Contract', desc: `${r.contract_name || 'AMC Contract'} - Amortized AMC (Monthly)`, amount: fmt(Number(r.annual_amount_usd)/12), direction: '-' })
+        } else {
+          const dStr = r.start_year ? `${r.start_year}-${String(r.start_month).padStart(2, '0')}-01` : (r.created_at || '').split('T')[0] || range.from
+          combined.push({ date: dStr >= range.from && dStr <= range.to ? dStr : range.from, type: 'AMC Contract', desc: r.contract_name || 'AMC Contract', amount: fmt(r.annual_amount_usd), direction: '-' })
         }
       })
     }
