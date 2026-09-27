@@ -11,7 +11,7 @@
 // forever, since this file's own bytes rarely change and browsers only re-check a
 // service worker for updates when its file content changes.
 
-const CACHE_NAME = 'crs-accounting-shell-v96'
+const CACHE_NAME = 'crs-accounting-shell-v97'
 const APP_SHELL = [
   '/',
   '/index.html',

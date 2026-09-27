@@ -100,7 +100,7 @@ function AnalyticsInner() {
       const end = new Date(Math.min(new Date(range.to).getTime(), new Date().getTime()))
       const monthsInView = Math.max(1, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1)
       const amcTotal = hamcSel.reduce((s2, r) => s2 + (Number(r.annual_amount_usd) / 12), 0) * monthsInView
-      expenses = heeSel.reduce((s2, e) => s2 + Number(e.amount_usd), 0) + amcTotal
+      expenses = heeSel.reduce((s2, e) => s2 + Number(e.amount_usd), 0) + amcTotal + pSel.reduce((s2, i) => s2 + Number(i.amount_usd || 0), 0)
 
       hgiSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7) || 'Unknown'; monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.invoice_amount_usd || 0); monthlyMap[k].collected += Number(i.collected_amount_usd || 0) })
       hrsSel.forEach(i => { const k = i.stat_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.room_revenue_usd || 0); monthlyMap[k].collected += Number(i.manual_room_revenue_collected_usd || 0) })

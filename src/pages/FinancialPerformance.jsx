@@ -224,8 +224,8 @@ export default function FinancialPerformance() {
 
   if (!activeCompany) return null
 
-  const revenue = activeProduct === 'hotel' ? revenueByAccount.reduce((s, a) => s + a.amount, 0) : sales.reduce((s, i) => s + Number(i.amount_usd), 0)
-  const expenses = activeProduct === 'hotel' ? expensesByAccount.reduce((s, a) => s + a.amount, 0) : purchases.reduce((s, i) => s + Number(i.amount_usd), 0)
+  const revenue = ['hotel', 'restaurant'].includes(activeProduct) ? revenueByAccount.reduce((s, a) => s + a.amount, 0) : sales.reduce((s, i) => s + Number(i.amount_usd), 0)
+  const expenses = ['hotel', 'restaurant'].includes(activeProduct) ? expensesByAccount.reduce((s, a) => s + a.amount, 0) : purchases.reduce((s, i) => s + Number(i.amount_usd), 0)
   const profit = revenue - expenses
   const margin = revenue ? (profit / revenue) * 100 : 0
 
