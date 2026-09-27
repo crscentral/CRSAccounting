@@ -209,8 +209,8 @@ function InstallBanner({ isIOS, canInstall, onInstall, onDismiss }) {
       <div className="flex items-center gap-2 min-w-0">
         <Download size={16} className="text-gold-700 shrink-0" />
         {isIOS ? (
-          <span className="text-slate-700 truncate">
-            Install this app: tap <Share size={13} className="inline -mt-0.5" /> Share, then <strong>"Add to Home Screen"</strong>.
+          <span className="text-slate-700 text-xs sm:text-sm">
+            <strong>To install on iOS/iPad:</strong> Tap the <Share size={13} className="inline -mt-0.5 mx-1" /> Share icon in the Safari address bar above, then scroll down and select <strong>"Add to Home Screen"</strong>.
           </span>
         ) : (
           <span className="text-slate-700 truncate">Install CRS Accounting on this device for quick, app-like access.</span>
