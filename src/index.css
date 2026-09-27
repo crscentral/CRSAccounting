@@ -34,3 +34,13 @@ body { font-family: var(--font-body); -webkit-tap-highlight-color: transparent; 
 
 ::-webkit-scrollbar { height: 8px; width: 8px; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+
+/* iOS PWA Safe Area Spacer */
+.ios-safe-area-spacer {
+  height: env(safe-area-inset-top, 0px);
+}
+
+/* Bulletproof iOS Standalone fallback */
+.ios-standalone .ios-safe-area-spacer {
+  height: max(env(safe-area-inset-top), 24px) !important;
+}
