@@ -17,6 +17,7 @@ import FinancialPerformance from './pages/FinancialPerformance'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import RestaurantRevenue from './pages/RestaurantRevenue'
+import RestaurantExpenses from './pages/RestaurantExpenses'
 import CapitalTransactions from './pages/CapitalTransactions'
 import Comparison from './pages/Comparison'
 import HistoricalImport from './pages/HistoricalImport'
@@ -89,6 +90,7 @@ function AppRoutes() {
         <Route path="/financial-performance" element={<FinancialPerformance />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/restaurant-revenue" element={<RestaurantRevenue />} />
+        <Route path="/restaurant-expenses" element={<RestaurantExpenses />} />
         <Route path="/capital" element={<CapitalTransactions />} />
         <Route path="/compare" element={<Comparison />} />
         <Route path="/import" element={<HistoricalImport />} />
