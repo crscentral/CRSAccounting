@@ -28,6 +28,9 @@ import HotelExpenseBudget from './pages/HotelExpenseBudget'
 import HotelRevenue from './pages/HotelRevenue'
 import HotelExpenses from './pages/HotelExpenses'
 import HotelGuestInvoices from './pages/HotelGuestInvoices'
+import DataSecurity from './pages/DataSecurity'
+import PrivacyPolicy from './pages/PrivacyPolicy'
+
 import TallyLayout from './pages/TallyMode/TallyLayout'
 import TallyGateway from './pages/TallyMode/TallyGateway'
 import TallyVouchers from './pages/TallyMode/TallyVouchers'
@@ -95,6 +98,9 @@ function AppRoutes() {
         <Route path="/compare" element={<Comparison />} />
         <Route path="/import" element={<HistoricalImport />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/data-security" element={<DataSecurity />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
