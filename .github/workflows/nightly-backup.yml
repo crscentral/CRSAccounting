@@ -17,58 +17,32 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Generate Individual Company Backups
+      - name: Generate Individual Company Backups via API
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           npm init -y
-          npm install pg
+          npm install @supabase/supabase-js
           
           node -e "
-          const { Client } = require('pg');
+          const { createClient } = require('@supabase/supabase-js');
           const fs = require('fs');
           
           async function run() {
-            if (!process.env.SUPABASE_DB_URL) {
-              console.error('Error: SUPABASE_DB_URL missing');
+            if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+              console.error('Error: Missing secrets! Please ensure VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are added to GitHub Secrets.');
               process.exit(1);
             }
             
-            // Bulletproof connection string parsing (handles unencoded @ in passwords)
-            let rawUrl = process.env.SUPABASE_DB_URL;
-            // Remove any query params like ?sslmode=require
-            if (rawUrl.includes('?')) rawUrl = rawUrl.split('?')[0];
-            
-            // Greedy match up to the LAST @ symbol to perfectly extract passwords containing @
-            const match = rawUrl.match(/postgres(?:ql)?:\/\/([^:]+):(.*)@([^@]+):(\d+)\/(.*)/);
-            if (!match) {
-              console.error('Error: Could not parse database URL correctly.');
-              process.exit(1);
-            }
-            
-            let user = match[1];
-            let password = match[2];
-            // If they URL encoded it (e.g. %40), unencode it. If not, leave it.
-            if (password.includes('%')) password = decodeURIComponent(password);
-            
-            const host = match[3];
-            const port = parseInt(match[4], 10);
-            const database = match[5];
-
-            const client = new Client({ 
-              user,
-              password,
-              host,
-              port,
-              database,
-              ssl: { rejectUnauthorized: false }
+            const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, {
+              auth: { persistSession: false }
             });
             
             try {
-              await client.connect();
-              
-              const res = await client.query('SELECT id, name FROM companies');
-              const companies = res.rows;
+              const { data: companies, error: compErr } = await supabase.from('companies').select('id, name');
+              if (compErr) throw compErr;
+              if (!companies) throw new Error('No companies found');
               
               const tables = [
                 'accounts', 'contacts', 'hotel_settings', 'hotel_expense_budget',
@@ -88,17 +62,23 @@ jobs:
                 const backup_data = {};
                 
                 for (const table of tables) {
-                  const tableRes = await client.query(\`SELECT * FROM \${table} WHERE company_id = $1\`, [comp_id]);
-                  backup_data[table] = tableRes.rows;
+                  const { data: tableData, error: tblErr } = await supabase
+                    .from(table)
+                    .select('*')
+                    .eq('company_id', comp_id);
+                  if (tblErr) {
+                    console.log(\`Skipping \${table} for \${comp_name}: \${tblErr.message}\`);
+                    continue;
+                  }
+                  backup_data[table] = tableData || [];
                 }
                 
                 fs.writeFileSync(\`company_backups/\${comp_name}_backup.json\`, JSON.stringify(backup_data, null, 2));
               }
               
               console.log('Successfully generated backups for ' + companies.length + ' companies.');
-              await client.end();
             } catch (err) {
-              console.error('Database Error:', err);
+              console.error('API Error:', err);
               process.exit(1);
             }
           }
