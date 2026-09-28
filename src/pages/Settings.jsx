@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { User, Shield, Bell, Users, Plus, Trash2, ShieldCheck, Check, X, Layers } from 'lucide-react'
+import { User, Shield, Bell, Users, Plus, Trash2, ShieldCheck, Check, X, Layers, Download } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { MONTH_NAMES } from '../lib/fiscalYear'
 import { CURRENCY_LIST } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
+import BackupRestore from '../components/BackupRestore'
 
 const ROLES = ['owner', 'admin', 'accountant', 'viewer']
 const PRODUCT_LABELS = { basic: 'CRS Basic Accounting', hotel: 'CRS Hotel Accounting', restaurant: 'CRS Restaurant Accounting' }
@@ -208,6 +209,7 @@ export default function Settings() {
     { key: 'security', label: 'Security', desc: 'Password and authentication', icon: Shield },
     { key: 'notifications', label: 'Notifications', desc: 'Email and app notifications', icon: Bell },
     { key: 'access', label: 'User Access & Permissions', desc: 'Invite users and set their access permissions', icon: Users },
+    { key: 'backup', label: 'Backup & Restore', desc: 'Export and import company data', icon: Download },
     ...(isPlatformAdmin ? [{ key: 'admin', label: 'Platform Admin', desc: 'Approve companies & manage product access', icon: ShieldCheck }] : []),
   ]
 
@@ -346,6 +348,11 @@ export default function Settings() {
           )}
         </div>
       )}
+      
+      {tab === 'backup' && (
+        <BackupRestore />
+      )}
+
       {tab === 'admin' && isPlatformAdmin && (
         <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 w-full">
           <div className="flex items-center justify-between mb-1">
