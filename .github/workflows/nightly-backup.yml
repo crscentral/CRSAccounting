@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: '0 0 * * *' # Runs every day at midnight (UTC)
   workflow_dispatch:
+  push:
 
 jobs:
   backup:
@@ -42,7 +43,23 @@ jobs:
                   return obj.isoformat()
               return str(obj)
 
-          conn = psycopg2.connect(db_url)
+          import urllib.parse
+          result = urllib.parse.urlparse(db_url)
+          
+          # Manually extract and decode the password to fix the %40 issue
+          username = result.username
+          password = urllib.parse.unquote(result.password) if result.password else None
+          database = result.path[1:]
+          hostname = result.hostname
+          port = result.port
+
+          conn = psycopg2.connect(
+              database=database,
+              user=username,
+              password=password,
+              host=hostname,
+              port=port
+          )
           cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
           cur.execute("SELECT id, name FROM companies")
