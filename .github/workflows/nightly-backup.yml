@@ -3,7 +3,7 @@ name: Master Nightly Database Backup
 on:
   schedule:
     - cron: '0 0 * * *' # Runs every day at midnight (UTC)
-  workflow_dispatch: # Allows you to manually trigger it by clicking a button in GitHub
+  workflow_dispatch:
 
 jobs:
   backup:
@@ -12,24 +12,74 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Install PostgreSQL Tools
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-      - name: Run Database Dump
+      - name: Install Database Drivers
+        run: pip install psycopg2-binary
+
+      - name: Generate Individual Company Backups
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           if [ -z "$SUPABASE_DB_URL" ]; then
-            echo "Error: SUPABASE_DB_URL secret is missing! Please add it in GitHub Settings -> Secrets and variables -> Actions."
+            echo "Error: SUPABASE_DB_URL secret is missing!"
             exit 1
           fi
-          echo "Starting Master Database Backup..."
-          pg_dump "$SUPABASE_DB_URL" > crs-master-backup.sql
-          echo "Backup complete!"
+          
+          python << 'PY_EOF'
+import psycopg2
+import psycopg2.extras
+import json
+import os
+from datetime import date, datetime
+
+def json_serial(obj):
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    return str(obj)
+
+url = os.environ['SUPABASE_DB_URL']
+conn = psycopg2.connect(url)
+cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+cur.execute("SELECT id, name FROM companies")
+companies = cur.fetchall()
+
+tables = [
+    'accounts', 'contacts', 'hotel_settings', 'hotel_expense_budget',
+    'hotel_room_revenue_budget', 'forecast_entries', 'sales_invoices',
+    'purchase_invoices', 'payment_receipts', 'hotel_expense_entries',
+    'hotel_amc_contracts', 'hotel_room_stats', 'hotel_guest_invoices',
+    'restaurant_daily_revenue', 'ledger_entries'
+]
+
+os.makedirs("company_backups", exist_ok=True)
+
+for comp in companies:
+    comp_id = comp['id']
+    comp_name = "".join(x for x in comp['name'] if x.isalnum() or x in " _-").strip().replace(' ', '_')
+    backup_data = {}
+    
+    for table in tables:
+        cur.execute(f"SELECT * FROM {table} WHERE company_id = %s", (comp_id,))
+        backup_data[table] = cur.fetchall()
+        
+    filename = f"company_backups/{comp_name}_backup.json"
+    with open(filename, "w") as f:
+        json.dump(backup_data, f, default=json_serial)
+
+print(f"Successfully generated backups for {len(companies)} companies.")
+PY_EOF
+
+      - name: Zip Backups
+        run: zip -r all_company_backups.zip company_backups/
 
       - name: Save Backup to Secure Vault
         uses: actions/upload-artifact@v4
         with:
-          name: master-database-backup
-          path: crs-master-backup.sql
-          retention-days: 90 # Keeps backups securely stored for 90 days
+          name: all-company-backups
+          path: all_company_backups.zip
+          retention-days: 90
