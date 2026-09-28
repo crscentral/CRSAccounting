@@ -5,6 +5,7 @@ on:
     - cron: '0 0 * * *' # Runs every day at midnight (UTC)
   workflow_dispatch:
   push:
+  push:
 
 jobs:
   backup:
