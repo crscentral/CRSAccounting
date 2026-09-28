@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: '0 0 * * *' # Runs every day at midnight (UTC)
   workflow_dispatch:
+  push:
 
 jobs:
   backup:
@@ -58,7 +59,7 @@ jobs:
               
               for (const comp of companies) {
                 const comp_id = comp.id;
-                const comp_name = comp.name.replace(/[^a-zA-Z0-9 -_]/g, '').trim().replace(/ /g, '_');
+                const comp_name = (comp.name || 'Unnamed_Company_' + comp_id).replace(/[^a-zA-Z0-9 -_]/g, '').trim().replace(/ /g, '_');
                 const backup_data = {};
                 
                 for (const table of tables) {
