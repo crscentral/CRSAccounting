@@ -11,7 +11,7 @@ import InvoicePreviewModal from './InvoicePreviewModal'
 const emptyItem = () => ({ product_name: '', hsn_sac: '', qty: 1, unit_price: 0, tax_percent: 0 })
 
 export default function PurchaseInvoiceFormModal({ companyId, product, company, contacts, accounts, invoice, onClose, onSaved }) {
-  const { activeRole } = useAuth()
+  const { activeRole, user } = useAuth()
   const [invoiceNumber, setInvoiceNumber] = useState(invoice?.invoice_number || `PINV-${Math.floor(Math.random() * 90000000 + 10000000)}`)
   const [contactId, setContactId] = useState(invoice?.contact_id || '')
   const [newSupplierMode, setNewSupplierMode] = useState(false)
@@ -271,13 +271,15 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
               </select>
             </Field>
             <Field label="Notes"><textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
-            <Field label="Upload Supplier Invoice (PDF, JPG, PNG)">
-              <label className="flex items-center gap-2 border border-dashed border-slate-300 rounded-lg px-3 py-2 text-sm cursor-pointer text-slate-500 hover:border-navy-400">
-                <Upload size={15} />
-                {uploading ? 'Uploading…' : attachmentUrl ? (<><span className="mr-2">File attached ✓</span><a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-navy-600 hover:underline text-xs font-medium" onClick={e => e.stopPropagation()}>Preview</a></>) : 'Choose File'}
-                <input type="file" accept="application/pdf,image/jpeg,image/png,image/jpg" className="hidden" onChange={e => e.target.files[0] && handleFileUpload(e.target.files[0])} />
-              </label>
-            </Field>
+            {user?.email === 'crscentral.rm@gmail.com' && (
+              <Field label="Upload Supplier Invoice (PDF, JPG, PNG)">
+                <label className="flex items-center gap-2 border border-dashed border-slate-300 rounded-lg px-3 py-2 text-sm cursor-pointer text-slate-500 hover:border-navy-400">
+                  <Upload size={15} />
+                  {uploading ? 'Uploading…' : attachmentUrl ? (<><span className="mr-2">File attached ✓</span><a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-navy-600 hover:underline text-xs font-medium" onClick={e => e.stopPropagation()}>Preview</a></>) : 'Choose File'}
+                  <input type="file" accept="application/pdf,image/jpeg,image/png,image/jpg" className="hidden" onChange={e => e.target.files[0] && handleFileUpload(e.target.files[0])} />
+                </label>
+              </Field>
+            )}
           </div>
           <div className="bg-slate-50 rounded-lg p-4 space-y-2 text-sm h-fit">
             <Row label="Subtotal" value={subtotal} currency={currency} />
