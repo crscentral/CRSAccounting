@@ -1,4 +1,4 @@
-name: Master Nightly Database Backup
+name: Daily Company Back Up
 
 on:
   schedule:
@@ -23,56 +23,55 @@ jobs:
       - name: Generate Individual Company Backups
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        shell: python
         run: |
-          if [ -z "$SUPABASE_DB_URL" ]; then
-            echo "Error: SUPABASE_DB_URL secret is missing!"
-            exit 1
-          fi
-          
-          python << 'PY_EOF'
-import psycopg2
-import psycopg2.extras
-import json
-import os
-from datetime import date, datetime
+          import psycopg2
+          import psycopg2.extras
+          import json
+          import os
+          import sys
+          from datetime import date, datetime
 
-def json_serial(obj):
-    if isinstance(obj, (datetime, date)):
-        return obj.isoformat()
-    return str(obj)
+          db_url = os.environ.get('SUPABASE_DB_URL')
+          if not db_url:
+              print("Error: SUPABASE_DB_URL secret is missing! Please add it to GitHub Secrets.")
+              sys.exit(1)
 
-url = os.environ['SUPABASE_DB_URL']
-conn = psycopg2.connect(url)
-cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+          def json_serial(obj):
+              if isinstance(obj, (datetime, date)):
+                  return obj.isoformat()
+              return str(obj)
 
-cur.execute("SELECT id, name FROM companies")
-companies = cur.fetchall()
+          conn = psycopg2.connect(db_url)
+          cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-tables = [
-    'accounts', 'contacts', 'hotel_settings', 'hotel_expense_budget',
-    'hotel_room_revenue_budget', 'forecast_entries', 'sales_invoices',
-    'purchase_invoices', 'payment_receipts', 'hotel_expense_entries',
-    'hotel_amc_contracts', 'hotel_room_stats', 'hotel_guest_invoices',
-    'restaurant_daily_revenue', 'ledger_entries'
-]
+          cur.execute("SELECT id, name FROM companies")
+          companies = cur.fetchall()
 
-os.makedirs("company_backups", exist_ok=True)
+          tables = [
+              'accounts', 'contacts', 'hotel_settings', 'hotel_expense_budget',
+              'hotel_room_revenue_budget', 'forecast_entries', 'sales_invoices',
+              'purchase_invoices', 'payment_receipts', 'hotel_expense_entries',
+              'hotel_amc_contracts', 'hotel_room_stats', 'hotel_guest_invoices',
+              'restaurant_daily_revenue', 'ledger_entries'
+          ]
 
-for comp in companies:
-    comp_id = comp['id']
-    comp_name = "".join(x for x in comp['name'] if x.isalnum() or x in " _-").strip().replace(' ', '_')
-    backup_data = {}
-    
-    for table in tables:
-        cur.execute(f"SELECT * FROM {table} WHERE company_id = %s", (comp_id,))
-        backup_data[table] = cur.fetchall()
-        
-    filename = f"company_backups/{comp_name}_backup.json"
-    with open(filename, "w") as f:
-        json.dump(backup_data, f, default=json_serial)
+          os.makedirs("company_backups", exist_ok=True)
 
-print(f"Successfully generated backups for {len(companies)} companies.")
-PY_EOF
+          for comp in companies:
+              comp_id = comp['id']
+              comp_name = "".join(x for x in comp['name'] if x.isalnum() or x in " _-").strip().replace(' ', '_')
+              backup_data = {}
+              
+              for table in tables:
+                  cur.execute(f"SELECT * FROM {table} WHERE company_id = %s", (comp_id,))
+                  backup_data[table] = cur.fetchall()
+                  
+              filename = f"company_backups/{comp_name}_backup.json"
+              with open(filename, "w") as f:
+                  json.dump(backup_data, f, default=json_serial)
+
+          print(f"Successfully generated backups for {len(companies)} companies.")
 
       - name: Zip Backups
         run: zip -r all_company_backups.zip company_backups/
