@@ -1,0 +1,35 @@
+name: Master Nightly Database Backup
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Runs every day at midnight (UTC)
+  workflow_dispatch: # Allows you to manually trigger it by clicking a button in GitHub
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install PostgreSQL Tools
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run Database Dump
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "Error: SUPABASE_DB_URL secret is missing! Please add it in GitHub Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          echo "Starting Master Database Backup..."
+          pg_dump "$SUPABASE_DB_URL" > crs-master-backup.sql
+          echo "Backup complete!"
+
+      - name: Save Backup to Secure Vault
+        uses: actions/upload-artifact@v4
+        with:
+          name: master-database-backup
+          path: crs-master-backup.sql
+          retention-days: 90 # Keeps backups securely stored for 90 days
