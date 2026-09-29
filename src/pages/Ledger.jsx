@@ -36,7 +36,14 @@ export default function Ledger() {
       .lte('entry_date', cp.range.to)
       .order('entry_date')
       
-    let combined = data || []
+    const ignoredSources = ['restaurant_revenue', 'hotel_room_stats', 'hotel_revenue_entry', 'hotel_expense_entry', 'hotel_amc', 'hotel_guest_invoice', 'owner_contribution', 'owner_dividend', 'loan_taken', 'loan_principal']
+    const filteredEntries = (data || []).filter(e => {
+      if (['hotel', 'restaurant'].includes(activeProduct)) {
+        return !ignoredSources.includes(e.source_type)
+      }
+      return true
+    })
+    let combined = [...filteredEntries]
     
     // CAPITAL & LOANS (Applies to all modes)
     const selectedAccount = (accounts || []).find(a => a.id === accountId)
@@ -253,7 +260,14 @@ export default function Ledger() {
     const { data } = await supabase.from('ledger_entries').select('*').eq('company_id', activeCompany.id).eq('account_id', selections.account)
       .gte('entry_date', range.from).lte('entry_date', range.to).order('entry_date')
 
-    let combined = data || []
+    const ignoredSources = ['restaurant_revenue', 'hotel_room_stats', 'hotel_revenue_entry', 'hotel_expense_entry', 'hotel_amc', 'hotel_guest_invoice', 'owner_contribution', 'owner_dividend', 'loan_taken', 'loan_principal']
+    const filteredEntries = (data || []).filter(e => {
+      if (['hotel', 'restaurant'].includes(activeProduct)) {
+        return !ignoredSources.includes(e.source_type)
+      }
+      return true
+    })
+    let combined = [...filteredEntries]
     
     // CAPITAL & LOANS
     if (account) {

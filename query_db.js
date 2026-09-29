@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
-const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+const supabaseUrl = 'https://pxygyucscjmvgvfilohq.supabase.co';
+const supabaseAnonKey = 'sb_publishable_daz-WI4nSsASBYZHVNkQyA_Z4IAl7QO';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 async function run() {
-  const { data } = await supabase.from('accounts').select('*').eq('product', 'restaurant').order('code');
-  console.log(data);
+  const { data: entries } = await supabase.from('restaurant_daily_revenue').select('*');
+  console.log(entries);
 }
 run();

@@ -36,7 +36,14 @@ export default function Comparison() {
     const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date')
       .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to)
 
-    let combined = entries || []
+    const ignoredSources = ['restaurant_revenue', 'hotel_room_stats', 'hotel_revenue_entry', 'hotel_expense_entry', 'hotel_amc', 'hotel_guest_invoice', 'owner_contribution', 'owner_dividend', 'loan_taken', 'loan_principal']
+    const filteredEntries = (entries || []).filter(e => {
+      if (['hotel', 'restaurant'].includes(activeProduct)) {
+        return !ignoredSources.includes(e.source_type)
+      }
+      return true
+    })
+    let combined = [...filteredEntries]
     
     if (['hotel', 'restaurant'].includes(activeProduct)) {
       const roomRevAcc = (accounts || []).find(a => (a.name || '').toLowerCase().includes('room revenue'))
