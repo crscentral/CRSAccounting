@@ -352,7 +352,7 @@ export default function FinancialPerformance() {
                   const row = monthMap[month] || { revenue_usd: 0, expenses_usd: 0 }
                   return (
                     <ForecastRow key={month} label={`${m} ${forecastYear}`} row={row}
-                      canEdit={can(['owner', 'admin', 'accountant'])}
+                      canEdit={can(['owner', 'admin', 'accountant']) && activeProduct === 'basic'}
                       onSave={(rev, exp) => saveForecastRow(month, rev, exp)} fmt={cp.fmt} />
                   )
                 })}
