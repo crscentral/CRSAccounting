@@ -151,11 +151,11 @@ export default function Ledger() {
         if ((selectedAccount.name || '').toLowerCase().includes('accounts receivable') || (selectedAccount.name || '').toLowerCase().includes('guest ledger')) {
           const { data: hgi } = await supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to)
           ;(hgi || []).forEach(i => {
-            if (Number(i.invoice_amount_usd) > 0) {
-              combined.push({ id: `hgi-inv-${i.id}`, entry_date: i.invoice_date, description: `Invoice ${(i.invoice_number || '').substring(0,8)} - ${i.guest_name}`, currency: i.currency || 'USD', debit_usd: i.invoice_amount_usd, credit_usd: 0 })
-            }
-            if (Number(i.collected_amount_usd) > 0) {
-              combined.push({ id: `hgi-col-${i.id}`, entry_date: i.invoice_date, description: `Payment Collected - ${(i.invoice_number || '').substring(0,8)}`, currency: i.currency || 'USD', debit_usd: 0, credit_usd: i.collected_amount_usd })
+            const pending = Number(i.invoice_amount_usd || 0) - Number(i.collected_amount_usd || 0);
+            if (pending > 0) {
+              combined.push({ id: `hgi-inv-${i.id}`, entry_date: i.invoice_date, description: `Invoice ${(i.invoice_number || '').substring(0,8)} - ${i.guest_name}`, currency: i.currency || 'USD', debit_usd: pending, credit_usd: 0 })
+            } else if (pending < 0) {
+              combined.push({ id: `hgi-inv-${i.id}`, entry_date: i.invoice_date, description: `Invoice ${(i.invoice_number || '').substring(0,8)} - ${i.guest_name}`, currency: i.currency || 'USD', debit_usd: 0, credit_usd: Math.abs(pending) })
             }
           })
         }        
@@ -211,17 +211,16 @@ export default function Ledger() {
           }
           
           if (isAr) {
-            ;(hrs || []).forEach(r => {
-               const rev = Number(r.room_revenue_usd) || 0
-               const col = Number(r.manual_room_revenue_collected_usd) || rev
-               const uncol = Math.max(0, rev - col)
-               if (uncol > 0) combined.push({ id: `hrs-ar-${r.id}`, entry_date: r.stat_date, description: 'Room Revenue Uncollected', currency: r.currency || 'USD', debit_usd: uncol, credit_usd: 0 })
-            })
+            // Disabled hotel_room_stats AR injection to prevent double counting with Guest Invoices
             ;(rdr || []).forEach(r => {
                const total = (Number(r.food_amount_usd)||0) + (Number(r.beverage_amount_usd)||0) + (Number(r.other_amount_usd)||0)
                const col = r.collected_usd !== null ? Number(r.collected_usd) : total
-               const uncol = Math.max(0, total - col)
-               if (uncol > 0) combined.push({ id: `rdr-ar-${r.id}`, entry_date: r.revenue_date, description: `${r.meal_period} F&B Uncollected`, currency: 'USD', debit_usd: uncol, credit_usd: 0 })
+               const uncol = total - col
+               if (uncol > 0) {
+                 combined.push({ id: `rdr-ar-${r.id}`, entry_date: r.revenue_date, description: `${r.meal_period} F&B Uncollected`, currency: 'USD', debit_usd: uncol, credit_usd: 0 })
+               } else if (uncol < 0) {
+                 combined.push({ id: `rdr-ar-${r.id}`, entry_date: r.revenue_date, description: `${r.meal_period} F&B Overcollection`, currency: 'USD', debit_usd: 0, credit_usd: Math.abs(uncol) })
+               }
             })
             ;(hre || []).forEach(r => {
                const rev = Number(r.amount_usd) || 0
@@ -368,11 +367,11 @@ export default function Ledger() {
       if ((account.name || '').toLowerCase().includes('accounts receivable') || (account.name || '').toLowerCase().includes('guest ledger')) {
         const { data: hgi } = await supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to)
         ;(hgi || []).forEach(i => {
-          if (Number(i.invoice_amount_usd) > 0) {
-            combined.push({ id: `hgi-inv-${i.id}`, entry_date: i.invoice_date, description: `Invoice ${(i.invoice_number || '').substring(0,8)} - ${i.guest_name}`, currency: i.currency || 'USD', debit_usd: i.invoice_amount_usd, credit_usd: 0 })
-          }
-          if (Number(i.collected_amount_usd) > 0) {
-            combined.push({ id: `hgi-col-${i.id}`, entry_date: i.invoice_date, description: `Payment Collected - ${(i.invoice_number || '').substring(0,8)}`, currency: i.currency || 'USD', debit_usd: 0, credit_usd: i.collected_amount_usd })
+          const pending = Number(i.invoice_amount_usd || 0) - Number(i.collected_amount_usd || 0);
+          if (pending > 0) {
+            combined.push({ id: `hgi-inv-${i.id}`, entry_date: i.invoice_date, description: `Invoice ${(i.invoice_number || '').substring(0,8)} - ${i.guest_name}`, currency: i.currency || 'USD', debit_usd: pending, credit_usd: 0 })
+          } else if (pending < 0) {
+            combined.push({ id: `hgi-inv-${i.id}`, entry_date: i.invoice_date, description: `Invoice ${(i.invoice_number || '').substring(0,8)} - ${i.guest_name}`, currency: i.currency || 'USD', debit_usd: 0, credit_usd: Math.abs(pending) })
           }
         })
       }        
@@ -428,17 +427,16 @@ export default function Ledger() {
           }
           
           if (isAr) {
-            ;(hrs || []).forEach(r => {
-               const rev = Number(r.room_revenue_usd) || 0
-               const col = Number(r.manual_room_revenue_collected_usd) || rev
-               const uncol = Math.max(0, rev - col)
-               if (uncol > 0) combined.push({ id: `hrs-ar-${r.id}`, entry_date: r.stat_date, description: 'Room Revenue Uncollected', currency: r.currency || 'USD', debit_usd: uncol, credit_usd: 0 })
-            })
+            // Disabled hotel_room_stats AR injection to prevent double counting with Guest Invoices
             ;(rdr || []).forEach(r => {
                const total = (Number(r.food_amount_usd)||0) + (Number(r.beverage_amount_usd)||0) + (Number(r.other_amount_usd)||0)
                const col = r.collected_usd !== null ? Number(r.collected_usd) : total
-               const uncol = Math.max(0, total - col)
-               if (uncol > 0) combined.push({ id: `rdr-ar-${r.id}`, entry_date: r.revenue_date, description: `${r.meal_period} F&B Uncollected`, currency: 'USD', debit_usd: uncol, credit_usd: 0 })
+               const uncol = total - col
+               if (uncol > 0) {
+                 combined.push({ id: `rdr-ar-${r.id}`, entry_date: r.revenue_date, description: `${r.meal_period} F&B Uncollected`, currency: 'USD', debit_usd: uncol, credit_usd: 0 })
+               } else if (uncol < 0) {
+                 combined.push({ id: `rdr-ar-${r.id}`, entry_date: r.revenue_date, description: `${r.meal_period} F&B Overcollection`, currency: 'USD', debit_usd: 0, credit_usd: Math.abs(uncol) })
+               }
             })
             ;(hre || []).forEach(r => {
                const rev = Number(r.amount_usd) || 0
@@ -457,9 +455,12 @@ export default function Ledger() {
       combined.sort((a, b) => a.entry_date.localeCompare(b.entry_date))
     }
 
-    const rows = combined.map(e => {
-      const lineBalance = Number(e.debit_usd) - Number(e.credit_usd)
-      const balStr = lineBalance < 0 ? `-${fmt(Math.abs(lineBalance))}` : fmt(lineBalance); 
+    let repRun = 0;
+    const rows = combined.slice().reverse().map(e => {
+      repRun += Number(e.debit_usd) - Number(e.credit_usd)
+      return { ...e, balance: repRun }
+    }).reverse().map(e => {
+      const balStr = e.balance < 0 ? `-${fmt(Math.abs(e.balance))}` : fmt(e.balance); 
       return [e.entry_date, e.description, e.currency, Number(e.debit_usd) ? fmt(e.debit_usd) : '—', Number(e.credit_usd) ? fmt(e.credit_usd) : '—', balStr]
     })
     const totalDebit = (data || []).reduce((s, e) => s + Number(e.debit_usd), 0)
@@ -483,9 +484,11 @@ export default function Ledger() {
 
   if (!activeCompany) return null
 
-  const withBalance = entries.map(e => {
-    return { ...e, balance: Number(e.debit_usd) - Number(e.credit_usd) }
-  })
+  let running = 0;
+  const withBalance = entries.slice().reverse().map(e => {
+    running += Number(e.debit_usd) - Number(e.credit_usd)
+    return { ...e, balance: running }
+  }).reverse()
   const totalDebit = entries.reduce((s, e) => s + Number(e.debit_usd), 0)
   const totalCredit = entries.reduce((s, e) => s + Number(e.credit_usd), 0)
 

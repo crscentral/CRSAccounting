@@ -21,12 +21,12 @@ const safeAreaStyle = { height: (isIOSDevice && isPWAMode) ? 'max(env(safe-area-
 const NAV_ITEMS = [
   { to: '/overview', label: 'All Companies', icon: LayoutGrid },
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/hotel-stats', label: 'Revenue & Occupancy', icon: BedDouble, products: ['hotel'] },
   { to: '/companies', label: 'Companies', icon: Building2 },
   { to: '/accounts', label: 'Chart of Accounts', icon: PieChart },
   { to: '/contacts', label: 'Customers & Suppliers', icon: Users },
   { to: '/sales-invoices', label: 'Sales Invoices', icon: FileCheck, products: ['basic'] },
   { to: '/purchase-invoices', label: 'Purchase Invoices', icon: FileText, products: ['basic'] },
-  { to: '/hotel-stats', label: 'Revenue & Occupancy', icon: BedDouble, products: ['hotel'] },
   { to: '/hotel-budget', label: 'Room Revenue Budget', icon: Target, products: ['hotel'] },
   { to: '/hotel-expense-budget', label: 'Expenses Budget', icon: Target, products: ['hotel'] },
   { to: '/hotel-revenue', label: 'Daily Revenue Collection', icon: Wallet, products: ['hotel'] },
@@ -401,7 +401,7 @@ function CompanySwitcherBlock({ companies, activeCompany, switchCompany, alwaysS
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between gap-2 px-2 lg:px-3 py-2 rounded-lg border border-slate-200 hover:border-navy-300 text-left"
       >
-        <span className={`${alwaysShowLabel ? 'block' : 'hidden lg:block'} text-sm font-medium text-slate-700 truncate`}>{activeCompany.name}</span>
+        <span className={`${alwaysShowLabel ? 'block' : 'hidden lg:block'} text-sm font-bold text-slate-800 truncate`}>{activeCompany.name}</span>
         <Building2 size={18} className={`${alwaysShowLabel ? 'hidden' : 'lg:hidden mx-auto'} text-navy-600`} />
         <ChevronDown size={14} className={`${alwaysShowLabel ? 'block' : 'hidden lg:block'} text-slate-400 shrink-0`} />
       </button>
