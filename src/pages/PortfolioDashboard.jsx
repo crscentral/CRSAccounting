@@ -82,7 +82,9 @@ export default function PortfolioDashboard() {
       
       // Expenses
       // For AMC, we need monthsInView
-      const monthsInView = (range.to.substring(0,4) - range.from.substring(0,4)) * 12 + (range.to.substring(5,7) - range.from.substring(5,7)) + 1
+      const start = new Date(range.from)
+      const end = new Date(range.to)
+      const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
       const e_amc = (amc || []).reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0) * (isNaN(monthsInView)?12:monthsInView)
       const e_hee = (hee || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
       const e_pur = (pur || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
