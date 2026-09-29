@@ -234,7 +234,7 @@ export default function HotelExpenses() {
       </div>
       <div className="grid lg:grid-cols-2 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (CPOR: {totalOccupied > 0 ? cp.fmt(totalExpenses/totalOccupied) : '—'})</h3>
+          <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (Cost Per Occupied Room: {totalOccupied > 0 ? cp.fmt(totalExpenses/totalOccupied) : '—'})</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -248,7 +248,7 @@ export default function HotelExpenses() {
           </div>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (PAR: {availableRoomNights > 0 ? cp.fmt(totalExpenses/availableRoomNights) : '—'})</h3>
+          <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (Cost Per Available Room: {availableRoomNights > 0 ? cp.fmt(totalExpenses/availableRoomNights) : '—'})</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
