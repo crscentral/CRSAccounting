@@ -428,16 +428,20 @@ function HotelExpensesInner() {
                <div className="font-bold text-slate-700">{cp.fmt(totalRevenue)}</div>
              </div>
           </div>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={barDataRev} dataKey="value" nameKey="name" cx={105} cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} stroke="none">
-                  {barDataRev.map((e, i) => <Cell key={i} fill={e.fullName === 'Remaining Revenue (Gross Profit)' ? '#e2e8f0' : COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} wrapperStyle={{ position: 'absolute', right: 0 }} />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="flex h-72 items-center">
+            <div className="w-[180px] shrink-0 h-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={barDataRev} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} stroke="none">
+                    {barDataRev.map((e, i) => <Cell key={i} fill={e.fullName === 'Remaining Revenue (Gross Profit)' ? '#e2e8f0' : COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex-1 min-w-0 pl-2 h-full overflow-y-auto flex flex-col justify-center">
+               {renderRichLegend({ payload: barDataRev.map((d, i) => ({ payload: d, color: d.fullName === 'Remaining Revenue (Gross Profit)' ? '#e2e8f0' : COLORS[i % COLORS.length] })) })}
+            </div>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm font-semibold">
              <span className="text-slate-600">Total Expenses</span>
@@ -453,16 +457,20 @@ function HotelExpensesInner() {
                <div className="font-bold text-slate-700">{cp.fmt(totalExpenses)}</div>
              </div>
           </div>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={barDataExp} dataKey="value" nameKey="name" cx={105} cy="50%" innerRadius={0} outerRadius={80} stroke="none">
-                  {barDataExp.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} wrapperStyle={{ position: 'absolute', right: 0 }} />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="flex h-72 items-center">
+            <div className="w-[180px] shrink-0 h-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={barDataExp} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={0} outerRadius={80} stroke="none">
+                    {barDataExp.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex-1 min-w-0 pl-2 h-full overflow-y-auto flex flex-col justify-center">
+               {renderRichLegend({ payload: barDataExp.map((d, i) => ({ payload: d, color: COLORS[i % COLORS.length] })) })}
+            </div>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm font-semibold">
              <span className="text-slate-600">Total Expenses</span>
