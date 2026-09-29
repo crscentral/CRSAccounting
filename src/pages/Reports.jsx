@@ -470,8 +470,8 @@ export default function Reports() {
       ]
     } else {
       sections = [
-        { heading: 'Assets', columns: ['Account', 'Amount'], rows: [...by('Assets').map(a => [`${a.code} - ${a.name}`, fmt(Math.abs(bal[a.id] || 0))]), ['Total Assets', fmt(assets)]] },
-        { heading: 'Liabilities & Equity', columns: ['Account', 'Amount'], rows: [...[...by('Liabilities'), ...by('Equity')].map(a => [`${a.code} - ${a.name}`, fmt(Math.abs(bal[a.id] || 0))]), ['Total Liabilities & Equity', fmt(liab + sum('Equity') * -1)]] },
+        { heading: 'Assets', columns: ['Account', 'Amount'], rows: [...by('Assets').map(a => [`${a.code} - ${a.name}`, fmt(bal[a.id] || 0)]), ['Total Assets', fmt(assets)]] },
+        { heading: 'Liabilities & Equity', columns: ['Account', 'Amount'], rows: [...[...by('Liabilities'), ...by('Equity')].map(a => [`${a.code} - ${a.name}`, fmt(-(bal[a.id] || 0))]), ['Total Liabilities & Equity', fmt(liab + sum('Equity') * -1)]] },
       ]
     }
 
@@ -634,10 +634,12 @@ function AccountBlock({ title, color, accounts, balances, fmt, total }) {
     <div>
       <div className={`${bg} text-white text-sm font-semibold px-3 py-2 rounded-t-lg`}>{title}</div>
       <div className="border border-t-0 border-slate-100 rounded-b-lg divide-y divide-slate-50">
-        {accounts.map(a => (
-          <Row key={a.id} label={`${a.code} - ${a.name}`} value={fmt(Math.abs(balances[a.id] || 0))} />
-        ))}
-        <Row label={`Total ${title.split(' ')[0]}`} value={fmt(Math.abs(total))} bold />
+        {accounts.map(a => {
+          let val = balances[a.id] || 0
+          if (a.type === 'Liabilities' || a.type === 'Equity' || a.type === 'Revenue') val = -val
+          return <Row key={a.id} label={`${a.code} - ${a.name}`} value={fmt(val)} />
+        })}
+        <Row label={`Total ${title.split(' ')[0]}`} value={fmt(total)} bold />
       </div>
     </div>
   )
