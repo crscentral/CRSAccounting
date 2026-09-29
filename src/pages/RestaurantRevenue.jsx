@@ -93,6 +93,9 @@ export default function RestaurantRevenue() {
         ['Total Revenue', fmt(totalRevenue)],
         ['Total Covers', totalCovers],
         ['Average Revenue / Cover', totalCovers > 0 ? fmt(totalRevenue / totalCovers) : '—'],
+        ['Food Revenue', fmt(rows.reduce((s, r) => s + Number(r.food_amount_usd), 0))],
+        ['Beverage Revenue', fmt(rows.reduce((s, r) => s + Number(r.beverage_amount_usd), 0))],
+        ['Other Revenue', fmt(rows.reduce((s, r) => s + Number(r.other_amount_usd), 0))],
       ],
     })
 
@@ -108,6 +111,9 @@ export default function RestaurantRevenue() {
   const totalRevenue = entries.reduce((s, e) => s + Number(e.amount_usd), 0)
   const totalCovers = entries.reduce((s, e) => s + Number(e.covers), 0)
   const avgPerCover = totalCovers > 0 ? totalRevenue / totalCovers : 0
+  const totalFood = entries.reduce((s, e) => s + Number(e.food_amount_usd), 0)
+  const totalBeverage = entries.reduce((s, e) => s + Number(e.beverage_amount_usd), 0)
+  const totalOther = entries.reduce((s, e) => s + Number(e.other_amount_usd), 0)
 
   const dailyMap = {}
   entries.forEach(e => {
