@@ -359,7 +359,7 @@ export default function Ledger() {
           fields={[
             { type: 'select', key: 'account', label: 'Account', options: [{value: 'all', label: 'All Accounts'}, ...accounts.map(a => ({ value: a.id, label: `${a.code} - ${a.name}` }))], default: accountId },
             { type: 'currency', key: 'currency', default: cp.displayCurrency },
-            { type: 'period', key: 'period', default: 'ALL_TIME' },
+            { type: 'period', key: 'period', default: cp.period, defaultFrom: cp.range.from, defaultTo: cp.range.to },
           ]}
           onGenerate={generateLedgerReport}
           onClose={() => setReportModalOpen(false)}

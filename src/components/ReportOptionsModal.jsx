@@ -26,10 +26,18 @@ const PERIOD_OPTIONS = [
  */
 export default function ReportOptionsModal({ title, fields, onGenerate, onClose }) {
   const initial = {}
-  fields.forEach(f => { initial[f.key] = f.default })
+  let defFrom = ''
+  let defTo = ''
+  fields.forEach(f => { 
+    initial[f.key] = f.default 
+    if (f.type === 'period') {
+      defFrom = f.defaultFrom || ''
+      defTo = f.defaultTo || ''
+    }
+  })
   const [values, setValues] = useState(initial)
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo] = useState('')
+  const [customFrom, setCustomFrom] = useState(defFrom)
+  const [customTo, setCustomTo] = useState(defTo)
   const [generating, setGenerating] = useState(false)
 
   function update(key, val) { setValues(v => ({ ...v, [key]: val })) }

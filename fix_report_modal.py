@@ -1,23 +1,34 @@
 import re
 
-with open('src/pages/HotelExpenseBudget.jsx', 'r') as f:
-    content = f.read()
+def patch():
+    with open('src/components/ReportOptionsModal.jsx', 'r') as f:
+        content = f.read()
 
-replacement = """<ReportOptionsModal
-        open={reportModalOpen}
-        onClose={() => setReportModalOpen(false)}
-        onGenerate={generateReport}
-        title="Expenses Budget"
-        fields={[
-          { type: 'currency', key: 'currency', default: displayCurrency }
-        ]}
-      />"""
+    # Find the useState lines
+    old_states = """  const initial = {}
+  fields.forEach(f => { initial[f.key] = f.default })
+  const [values, setValues] = useState(initial)
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')"""
+    
+    new_states = """  const initial = {}
+  let defFrom = ''
+  let defTo = ''
+  fields.forEach(f => { 
+    initial[f.key] = f.default 
+    if (f.type === 'period') {
+      defFrom = f.defaultFrom || ''
+      defTo = f.defaultTo || ''
+    }
+  })
+  const [values, setValues] = useState(initial)
+  const [customFrom, setCustomFrom] = useState(defFrom)
+  const [customTo, setCustomTo] = useState(defTo)"""
 
-content = re.sub(
-    r'<ReportOptionsModal\s*open=\{reportModalOpen\}\s*onClose=\{\(\) => setReportModalOpen\(false\)\}\s*onGenerate=\{generateReport\}\s*includeYearSelection=\{false\}\s*/>',
-    replacement,
-    content
-)
+    content = content.replace(old_states, new_states)
+    
+    with open('src/components/ReportOptionsModal.jsx', 'w') as f:
+        f.write(content)
+        print("Patched ReportOptionsModal.jsx")
 
-with open('src/pages/HotelExpenseBudget.jsx', 'w') as f:
-    f.write(content)
+patch()
