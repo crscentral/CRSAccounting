@@ -276,7 +276,7 @@ function HotelExpensesInner() {
             <span className="w-16 text-right font-bold text-slate-700 shrink-0">{cp.fmt(entry.payload.value)}</span>
             <span className="w-10 text-right text-slate-400 shrink-0">{entry.payload.percentStr}</span>
             <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: entry.color }}></span>
-            <span className="truncate" title={entry.payload.fullName}>{entry.payload.fullName}</span>
+            <span className="truncate" title={entry.payload.fullName || entry.payload.name}>{entry.payload.fullName || entry.payload.name}</span>
           </li>
         ))}
       </ul>
@@ -399,7 +399,7 @@ function HotelExpensesInner() {
                   {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <RechartsTooltip formatter={(value) => cp.fmt(value)} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderCustomLegend} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -413,7 +413,7 @@ function HotelExpensesInner() {
                   {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <RechartsTooltip formatter={(value) => cp.fmt(value)} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderCustomLegend} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -430,12 +430,12 @@ function HotelExpensesInner() {
           </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                <Pie data={barDataRev} dataKey="value" cx="30%" cy="50%" innerRadius={60} outerRadius={80} stroke="none">
+              <PieChart>
+                <Pie data={barDataRev} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} stroke="none">
                   {barDataRev.map((e, i) => <Cell key={i} fill={e.fullName === 'Remaining Revenue (Gross Profit)' ? '#e2e8f0' : COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} wrapperStyle={{ right: 0, width: '65%' }} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -455,12 +455,12 @@ function HotelExpensesInner() {
           </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                <Pie data={barDataExp} dataKey="value" cx="30%" cy="50%" innerRadius={0} outerRadius={80} stroke="none">
+              <PieChart>
+                <Pie data={barDataExp} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={0} outerRadius={80} stroke="none">
                   {barDataExp.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} wrapperStyle={{ right: 0, width: '65%' }} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} />
               </PieChart>
             </ResponsiveContainer>
           </div>
