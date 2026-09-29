@@ -81,28 +81,37 @@ export default function Reports() {
       const otherFbAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('other') && a.type === 'Revenue') || roomRevAcc
       
       const [{ data: hrs }, { data: hre }, { data: hee }, { data: amc }, { data: rdr }, { data: hgi }] = await Promise.all([
-        supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id),
-        supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id),
-        supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id),
-        supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id),
-        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id),
-        supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id)
+        supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
       ])
       
       if (roomRevAcc) {
         ;(hrs || []).forEach(r => {
-          if (Number(r.room_revenue_usd) > 0) combined.push({ account_id: roomRevAcc.id, debit_usd: 0, credit_usd: r.room_revenue_usd, entry_date: r.stat_date, accounts: { type: roomRevAcc.type } })
+          if (Number(r.room_revenue_usd) > 0) {
+            combined.push({ account_id: roomRevAcc.id, debit_usd: 0, credit_usd: r.room_revenue_usd, entry_date: r.stat_date, accounts: { type: roomRevAcc.type } })
+            if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: r.room_revenue_usd, credit_usd: 0, entry_date: r.stat_date, accounts: { type: cashAcc.type } })
+          }
         })
       }
       
       ;(hre || []).forEach(r => {
         const a = (accs || []).find(ac => ac.id === r.account_id)
-        if (a && Number(r.amount_usd) > 0) combined.push({ account_id: a.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.entry_date, accounts: { type: a.type } })
+        if (a && Number(r.amount_usd) > 0) {
+          combined.push({ account_id: a.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.entry_date, accounts: { type: a.type } })
+          if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.entry_date, accounts: { type: cashAcc.type } })
+        }
       })
       
       ;(hee || []).forEach(r => {
         const a = (accs || []).find(ac => ac.id === r.account_id)
-        if (a && Number(r.amount_usd) > 0) combined.push({ account_id: a.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.expense_date, accounts: { type: a.type } })
+        if (a && Number(r.amount_usd) > 0) {
+          combined.push({ account_id: a.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.expense_date, accounts: { type: a.type } })
+          if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.expense_date, accounts: { type: cashAcc.type } })
+        }
       })
       
       if (mainAcc && amc && amc.length > 0) {
@@ -114,6 +123,7 @@ export default function Reports() {
           while (cur <= end) {
             const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
             combined.push({ account_id: mainAcc.id, debit_usd: amcMonthly, credit_usd: 0, entry_date: dStr, accounts: { type: mainAcc.type } })
+            if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: 0, credit_usd: amcMonthly, entry_date: dStr, accounts: { type: cashAcc.type } })
             cur.setMonth(cur.getMonth() + 1)
           }
         }
@@ -123,6 +133,8 @@ export default function Reports() {
         if (foodAcc && Number(r.food_amount_usd) > 0) combined.push({ account_id: foodAcc.id, debit_usd: 0, credit_usd: r.food_amount_usd, entry_date: r.revenue_date, accounts: { type: foodAcc.type } })
         if (bevAcc && Number(r.beverage_amount_usd) > 0) combined.push({ account_id: bevAcc.id, debit_usd: 0, credit_usd: r.beverage_amount_usd, entry_date: r.revenue_date, accounts: { type: bevAcc.type } })
         if (otherFbAcc && Number(r.other_amount_usd) > 0) combined.push({ account_id: otherFbAcc.id, debit_usd: 0, credit_usd: r.other_amount_usd, entry_date: r.revenue_date, accounts: { type: otherFbAcc.type } })
+        const totalRev = Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0)
+        if (cashAcc && totalRev > 0) combined.push({ account_id: cashAcc.id, debit_usd: totalRev, credit_usd: 0, entry_date: r.revenue_date, accounts: { type: cashAcc.type } })
       })
       
       if (arAcc) {
@@ -242,28 +254,37 @@ export default function Reports() {
       const otherFbAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('other') && a.type === 'Revenue') || roomRevAcc
       
       const [{ data: hrs }, { data: hre }, { data: hee }, { data: amc }, { data: rdr }, { data: hgi }] = await Promise.all([
-        supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id),
-        supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id),
-        supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id),
-        supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id),
-        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id),
-        supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id)
+        supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
       ])
       
       if (roomRevAcc) {
         ;(hrs || []).forEach(r => {
-          if (Number(r.room_revenue_usd) > 0) combined.push({ account_id: roomRevAcc.id, debit_usd: 0, credit_usd: r.room_revenue_usd, entry_date: r.stat_date, accounts: { type: roomRevAcc.type } })
+          if (Number(r.room_revenue_usd) > 0) {
+            combined.push({ account_id: roomRevAcc.id, debit_usd: 0, credit_usd: r.room_revenue_usd, entry_date: r.stat_date, accounts: { type: roomRevAcc.type } })
+            if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: r.room_revenue_usd, credit_usd: 0, entry_date: r.stat_date, accounts: { type: cashAcc.type } })
+          }
         })
       }
       
       ;(hre || []).forEach(r => {
         const a = (accs || []).find(ac => ac.id === r.account_id)
-        if (a && Number(r.amount_usd) > 0) combined.push({ account_id: a.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.entry_date, accounts: { type: a.type } })
+        if (a && Number(r.amount_usd) > 0) {
+          combined.push({ account_id: a.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.entry_date, accounts: { type: a.type } })
+          if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.entry_date, accounts: { type: cashAcc.type } })
+        }
       })
       
       ;(hee || []).forEach(r => {
         const a = (accs || []).find(ac => ac.id === r.account_id)
-        if (a && Number(r.amount_usd) > 0) combined.push({ account_id: a.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.expense_date, accounts: { type: a.type } })
+        if (a && Number(r.amount_usd) > 0) {
+          combined.push({ account_id: a.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.expense_date, accounts: { type: a.type } })
+          if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.expense_date, accounts: { type: cashAcc.type } })
+        }
       })
       
       if (mainAcc && amc && amc.length > 0) {
@@ -275,6 +296,7 @@ export default function Reports() {
           while (cur <= end) {
             const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
             combined.push({ account_id: mainAcc.id, debit_usd: amcMonthly, credit_usd: 0, entry_date: dStr, accounts: { type: mainAcc.type } })
+            if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: 0, credit_usd: amcMonthly, entry_date: dStr, accounts: { type: cashAcc.type } })
             cur.setMonth(cur.getMonth() + 1)
           }
         }
@@ -284,6 +306,8 @@ export default function Reports() {
         if (foodAcc && Number(r.food_amount_usd) > 0) combined.push({ account_id: foodAcc.id, debit_usd: 0, credit_usd: r.food_amount_usd, entry_date: r.revenue_date, accounts: { type: foodAcc.type } })
         if (bevAcc && Number(r.beverage_amount_usd) > 0) combined.push({ account_id: bevAcc.id, debit_usd: 0, credit_usd: r.beverage_amount_usd, entry_date: r.revenue_date, accounts: { type: bevAcc.type } })
         if (otherFbAcc && Number(r.other_amount_usd) > 0) combined.push({ account_id: otherFbAcc.id, debit_usd: 0, credit_usd: r.other_amount_usd, entry_date: r.revenue_date, accounts: { type: otherFbAcc.type } })
+        const totalRev = Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0)
+        if (cashAcc && totalRev > 0) combined.push({ account_id: cashAcc.id, debit_usd: totalRev, credit_usd: 0, entry_date: r.revenue_date, accounts: { type: cashAcc.type } })
       })
       
       if (arAcc) {
