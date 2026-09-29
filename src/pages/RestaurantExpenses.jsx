@@ -223,6 +223,11 @@ export default function RestaurantExpenses() {
           tone={(totalExpenses - budgetTotal) > 0 ? 'red' : 'green'} 
         />
       </div>
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6">
+        <KpiCard label="Total Billed" value={cp.fmt(totalBilled)} tone="slate" />
+        <KpiCard label="Total Paid" value={cp.fmt(totalPaid)} tone="green" />
+        <KpiCard label="Total Pending" value={cp.fmt(totalPending)} tone="red" />
+      </div>
       <div className="flex gap-6 border-b border-slate-200 mb-6 mt-8">
         <button onClick={() => setActiveTab('daily')} className={`pb-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'daily' ? 'border-navy-600 text-navy-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Daily Expenses</button>
         <button onClick={() => setActiveTab('purchase')} className={`pb-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'purchase' ? 'border-navy-600 text-navy-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Purchase Invoices</button>
