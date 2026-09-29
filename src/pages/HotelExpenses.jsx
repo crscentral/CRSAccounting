@@ -160,7 +160,26 @@ export default function HotelExpenses() {
     byHead[key] = (byHead[key] || 0) + Number(r.amount_usd)
   })
   
-  const pieData = Object.entries(byHead).filter(x => x[1] > 0).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+  const pieData = Object.entries(byHead).filter(x => x[1] > 0).map(([name, value]) => ({ 
+    name, 
+    value,
+    percentStr: totalExpenses > 0 ? ((value / totalExpenses) * 100).toFixed(1) + '%' : '0.0%'
+  })).sort((a, b) => b.value - a.value)
+  
+  const renderCustomLegend = (props) => {
+    const { payload } = props;
+    return (
+      <ul className="text-[11px] space-y-1.5 w-full">
+        {payload.map((entry, index) => (
+          <li key={`item-${index}`} className="flex items-center">
+            <span className="w-10 text-right mr-2 text-slate-500 font-medium shrink-0">{entry.payload.percentStr}</span>
+            <span className="w-2.5 h-2.5 mr-2 rounded-[2px] shrink-0" style={{ backgroundColor: entry.color }}></span>
+            <span style={{ color: entry.color }} className="truncate max-w-[160px]" title={entry.value}>{entry.value}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
   const COLORS = ['#1e293b', '#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f43f5e', '#64748b']
   const topHeads = Object.entries(byHead).sort((a, b) => b[1] - a[1]).slice(0, 3)
 
@@ -208,7 +227,7 @@ export default function HotelExpenses() {
                   {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <RechartsTooltip formatter={(value) => cp.fmt(value)} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '11px' }} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderCustomLegend} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -222,7 +241,7 @@ export default function HotelExpenses() {
                   {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <RechartsTooltip formatter={(value) => cp.fmt(value)} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '11px' }} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderCustomLegend} />
               </PieChart>
             </ResponsiveContainer>
           </div>
