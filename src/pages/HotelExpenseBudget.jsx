@@ -262,7 +262,7 @@ export default function HotelExpenseBudget() {
   return (
     <div>
       <PageHeader
-        title={activeProduct === "restaurant" ? "F&B Expense Budget" : "Expenses Budget"}
+        title={activeProduct === "restaurant" ? "Expense Budget" : "Expenses Budget"}
         subtitle="Manage monthly budgets for all expense categories"
         actions={
           <div className="flex items-center gap-3">
@@ -288,10 +288,10 @@ export default function HotelExpenseBudget() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} Total Budget`} value={fmt(monthlySummary.totalBudget)} icon={TrendingUp} tone="indigo" />
         <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} FO Budget`} value={fmt(monthlySummary.foBudget)} icon={TrendingUp} tone="gold" />
         <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} F&B Budget`} value={fmt(monthlySummary.fbBudget)} icon={TrendingUp} tone="blue" />
         <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} Other Budget`} value={fmt(monthlySummary.otherBudget)} icon={TrendingUp} tone="emerald" />
-        <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} Total Budget`} value={fmt(monthlySummary.totalBudget)} icon={TrendingUp} tone="indigo" />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-10">
@@ -426,7 +426,7 @@ export default function HotelExpenseBudget() {
         <ReportOptionsModal
           onClose={() => setReportModalOpen(false)}
           onGenerate={generateReport}
-          title={activeProduct === "restaurant" ? "F&B Expense Budget" : "Expenses Budget"}
+          title={activeProduct === "restaurant" ? "Expense Budget" : "Expenses Budget"}
           fields={[
             { type: 'currency', key: 'currency', default: displayCurrency },
 { 

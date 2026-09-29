@@ -396,7 +396,7 @@ export default function HotelBudget() {
   return (
     <div>
       <PageHeader
-        title={activeProduct === "restaurant" ? "F&B Revenue Budget" : "Room Revenue Budget"}
+        title={activeProduct === "restaurant" ? "Revenue Budget" : "Room Revenue Budget"}
         subtitle={`${activeCompany.name} • ${activeProduct === "restaurant" ? "Manage your Monthly Budgets for Food, Beverage, and Other Revenue." : "Feed any two of Occupancy % / ADR / Room Revenue — the third calculates automatically"}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -449,10 +449,10 @@ export default function HotelBudget() {
       
       
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <KpiCard label={`${startMonth === 'all' ? startYear : MONTH_NAMES[Number(startMonth)-1] + ' ' + startYear} Total Budget`} value={fmt(revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev)} icon={TrendingUp} tone="indigo" />
         <KpiCard label={`${startMonth === 'all' ? startYear : MONTH_NAMES[Number(startMonth)-1] + ' ' + startYear} ${activeProduct === "restaurant" ? "Food Sales Budget" : "FO Revenue Budget"}`} value={fmt(revenueSummary.frontOffice)} icon={TrendingUp} tone="gold" />
         <KpiCard label={`${startMonth === 'all' ? startYear : MONTH_NAMES[Number(startMonth)-1] + ' ' + startYear} ${activeProduct === "restaurant" ? "Beverage Sales Budget" : "F&B Service Budget"}`} value={fmt(revenueSummary.fbService)} icon={TrendingUp} tone="blue" />
         <KpiCard label={`${startMonth === 'all' ? startYear : MONTH_NAMES[Number(startMonth)-1] + ' ' + startYear} Other Revenue Budget`} value={fmt(revenueSummary.otherRev)} icon={TrendingUp} tone="emerald" />
-        <KpiCard label={`${startMonth === 'all' ? startYear : MONTH_NAMES[Number(startMonth)-1] + ' ' + startYear} Total Budget`} value={fmt(revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev)} icon={TrendingUp} tone="indigo" />
       </div>
 
       {activeProduct === 'hotel' && years.map(year => (
@@ -675,7 +675,7 @@ export default function HotelBudget() {
 
       {reportModalOpen && (
         <ReportOptionsModal
-          title={activeProduct === "restaurant" ? "F&B Revenue Budget" : "Room Revenue Budget"}
+          title={activeProduct === "restaurant" ? "Revenue Budget" : "Room Revenue Budget"}
           fields={[
             { type: 'currency', key: 'currency', default: displayCurrency },
 { 
