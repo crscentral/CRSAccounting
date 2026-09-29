@@ -147,14 +147,15 @@ export default function HotelExpenses() {
   const amcTotalForView = amcMonthlyTotalUsd * monthsInView
 
   const entriesTotalUsd = entries.reduce((s, r) => s + Number(r.amount_usd), 0)
-  const piTotalUsd = purchaseInvoices.reduce((s, r) => s + Number(r.amount_usd), 0)
-  const totalExpenses = entriesTotalUsd + amcTotalForView + piTotalUsd
-
-
-  const entriesTotalPaidUsd = entries.reduce((s, r) => s + Number(r.paid_amount_usd || 0), 0)
-  const amcMonthlyPaidUsd = amcContracts.reduce((s, r) => s + (Number(r.paid_amount_usd || 0) / 12), 0)
-  const amcTotalPaidForView = amcMonthlyPaidUsd * monthsInView
-  const piTotalPaidUsd = purchaseInvoices.reduce((s, r) => s + (r.status === 'Paid' ? Number(r.amount_usd) : 0), 0)
+  const hotelEntries = entries.filter(e => e.product === 'hotel')
+  const restEntries = entries.filter(e => e.product === 'restaurant')
+  const hotelAmc = amcContracts.filter(a => a.product === 'hotel')
+  const restAmc = amcContracts.filter(a => a.product === 'restaurant')
+  const hotelPI = purchaseInvoices.filter(p => p.product === 'hotel')
+  const restPI = purchaseInvoices.filter(p => p.product === 'restaurant')
+  
+  const hotelEntriesTotal = hotelEntries.reduce((s, r) => s + Number(r.amount_usd), 0)
+  const restEntriesTotal = restEntries.reduce((s, r) => s + Number(r.amount_usd), 0)
 
   const totalBilled = totalExpenses
   const totalPaid = entriesTotalPaidUsd + amcTotalPaidForView + piTotalPaidUsd
@@ -273,14 +274,14 @@ export default function HotelExpenses() {
           <div className="flex justify-between items-end mb-3">
             <div>
               <h3 className="font-semibold text-slate-700 flex items-center gap-3">
-                <span>Daily Expense Entries</span>
+                <span>Hotel Daily Expense Entries</span>
             {can(['owner', 'admin', 'accountant']) && (
               <button onClick={() => setNewHeadModalOpen(true)} className="text-xs text-navy-600 hover:text-navy-800 font-medium">+ Add Expense Head</button>
             )}
           </h3>
         </div>
         <div className="text-sm text-slate-500 font-medium">
-          Total Heads: {new Set(entries.map(e => e.account_id)).size} &bull; Total Amount: {cp.fmt(entriesTotalUsd)}
+          Total Heads: {new Set(hotelEntries.map(e => e.account_id)).size} &bull; Total Amount: {cp.fmt(hotelEntriesTotal)}
         </div>
       </div>
       <DataTable
@@ -297,12 +298,12 @@ export default function HotelExpenses() {
       <button onClick={() => handleDeleteEntry(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
     </div> }] : []),
         ]}
-        rows={entries}
+        rows={hotelEntries}
         emptyMessage="No expense entries in this range."
-        footer={<span>Total Heads: {new Set(entries.map(e => e.account_id)).size} &nbsp;&bull;&nbsp; Total Amount: {cp.fmt(entriesTotalUsd)}</span>}
+        footer={<span>Total Heads: {new Set(hotelEntries.map(e => e.account_id)).size} &nbsp;&bull;&nbsp; Total Amount: {cp.fmt(hotelEntriesTotal)}</span>}
       />
 
-      <h3 className="font-semibold text-slate-700 mb-3 mt-6">AMC Contracts (auto-split across 12 months)</h3>
+      <h3 className="font-semibold text-slate-700 mb-3 mt-6">Hotel AMC Contracts (auto-split across 12 months)</h3>
       <DataTable
         columns={[
           { key: 'contract_name', label: 'Contract' },
@@ -318,16 +319,70 @@ export default function HotelExpenses() {
       <button onClick={() => handleDeleteAmc(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
     </div> }] : []),
         ]}
-        rows={amcContracts}
+        rows={hotelAmc}
         emptyMessage="No AMC contracts yet."
       />
+          {(restEntries.length > 0 || restAmc.length > 0) && (
+            <div className="mt-10 pt-8 border-t border-slate-200">
+          <div className="flex justify-between items-end mb-3">
+            <div>
+              <h3 className="font-semibold text-slate-700 flex items-center gap-3">
+                <span>Restaurant Daily Expense Entries</span>
+            
+          </h3>
+        </div>
+        <div className="text-sm text-slate-500 font-medium">
+          Total Heads: {new Set(restEntries.map(e => e.account_id)).size} &bull; Total Amount: {cp.fmt(restEntriesTotal)}
+        </div>
+      </div>
+      <DataTable
+        columns={[
+          { key: 'expense_date', label: 'Date' },
+          { key: 'invoice_number', label: 'Invoice #', render: r => r.invoice_number || '—' },
+          { key: 'account', label: 'Expense Head', render: r => r.account ? `${r.account.code} - ${r.account.name}` : '—' },
+          { key: 'amount_usd', label: 'Amount', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.amount_usd)}</span> },
+          { key: 'paid', label: 'Paid', render: r => <span className="text-emerald-600 font-medium">{cp.fmt(r.paid_amount_usd || 0)}</span> },
+          { key: 'pending', label: 'Pending', render: r => <span className="text-rose-600 font-medium">{cp.fmt(Number(r.amount_usd) - Number(r.paid_amount_usd || 0))}</span> }, 
+          { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
+          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex gap-2">
+      <button onClick={() => { setEditingRow(r); setExpenseModalOpen(true); }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
+      <button onClick={() => handleDeleteEntry(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+    </div> }] : []),
+        ]}
+        rows={restEntries}
+        emptyMessage="No expense entries in this range."
+        footer={<span>Total Heads: {new Set(restEntries.map(e => e.account_id)).size} &nbsp;&bull;&nbsp; Total Amount: {cp.fmt(restEntriesTotal)}</span>}
+      />
+
+      <h3 className="font-semibold text-slate-700 mb-3 mt-6">Restaurant AMC Contracts (auto-split across 12 months)</h3>
+      <DataTable
+        columns={[
+          { key: 'contract_name', label: 'Contract' },
+          { key: 'annual_amount_usd', label: 'Annual Amount', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.annual_amount_usd)}</span> },
+          { key: 'annual_paid', label: 'Paid (Yr)', render: r => <span className="text-emerald-600 font-medium">{cp.fmt(r.paid_amount_usd || 0)}</span> },
+          { key: 'annual_pending', label: 'Pending (Yr)', render: r => <span className="text-rose-600 font-medium">{cp.fmt(Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0))}</span> },
+          { key: 'monthly', label: 'Monthly', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.annual_amount_usd / 12)}</span> },
+          { key: 'monthly_paid', label: 'Paid (Mo)', render: r => <span className="text-emerald-600 font-medium">{cp.fmt((r.paid_amount_usd || 0) / 12)}</span> },
+          { key: 'monthly_pending', label: 'Pending (Mo)', render: r => <span className="text-rose-600 font-medium">{cp.fmt((Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0)) / 12)}</span> }, 
+          { key: 'start', label: 'Starts', render: r => `${MONTH_NAMES[r.start_month - 1]} ${r.start_year}` },
+          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex gap-2">
+      <button onClick={() => { setEditingRow(r); setAmcModalOpen(true); }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
+      <button onClick={() => handleDeleteAmc(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+    </div> }] : []),
+        ]}
+        rows={restAmc}
+        emptyMessage="No AMC contracts yet."
+      />
+
+      
+            </div>
+          )}
         </>
       )}
-
       {activeTab === 'purchase' && (
         <>
           <div className="flex justify-between items-end mb-3 mt-8">
-            <h3 className="font-semibold text-slate-700">Purchase Invoices</h3>
+            <h3 className="font-semibold text-slate-700">Hotel Purchase Invoices</h3>
           </div>
           <DataTable
             columns={[
@@ -343,9 +398,33 @@ export default function HotelExpenses() {
                 <button onClick={() => handleDeletePI(r)} className="text-slate-400 hover:text-red-500 p-1"><Trash2 size={15} /></button>
               </div> }] : []),
             ]}
-            rows={purchaseInvoices}
+            rows={hotelPI}
             emptyMessage="No purchase invoices yet."
           />
+          {restPI.length > 0 && (
+            <div className="mt-10 pt-8 border-t border-slate-200">
+          <div className="flex justify-between items-end mb-3 mt-8">
+            <h3 className="font-semibold text-slate-700">Restaurant Purchase Invoices</h3>
+          </div>
+          <DataTable
+            columns={[
+              { key: 'date', label: 'Date', render: r => r.invoice_date },
+              { key: 'invoice_no', label: 'Invoice #', render: r => r.invoice_number },
+              { key: 'supplier', label: 'Supplier', render: r => r.contact?.name || r.supplier_name_freeform || 'Unknown' },
+              { key: 'amount', label: 'Amount', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.amount_usd)}</span> },
+              { key: 'paid', label: 'Paid', render: r => { const paid = r.status === 'Paid' ? r.amount_usd : 0; return <span className="text-emerald-600 font-medium">{cp.fmt(paid)}</span> } },
+              { key: 'pending', label: 'Pending', render: r => { const pending = r.status === 'Paid' ? 0 : r.amount_usd; return <span className="text-rose-600 font-medium">{cp.fmt(pending)}</span> } }, 
+              { key: 'status', label: 'Status', render: r => <span className={`px-2 py-0.5 rounded text-xs font-medium ${r.status === 'Draft' ? 'bg-slate-100 text-slate-600' : r.status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{r.status}</span> },
+              ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex justify-end gap-2">
+                <button onClick={() => { setEditingRow(r); setPurchaseModalOpen(true); }} className="text-slate-400 hover:text-navy-600 p-1"><Pencil size={15} /></button>
+                <button onClick={() => handleDeletePI(r)} className="text-slate-400 hover:text-red-500 p-1"><Trash2 size={15} /></button>
+              </div> }] : []),
+            ]}
+            rows={restPI}
+            emptyMessage="No purchase invoices yet."
+          />
+            </div>
+          )}
         </>
       )}
 
