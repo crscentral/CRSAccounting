@@ -193,6 +193,15 @@ function HotelExpensesInner() {
   const piTotalUsd = purchaseInvoices.reduce((s, r) => s + Number(r.amount_usd), 0)
   const totalExpenses = entriesTotalUsd + amcTotalForView + piTotalUsd
 
+  const totalHotelExpenses = entries.filter(e => e.product === 'hotel').reduce((s, r) => s + Number(r.amount_usd), 0)
+    + amcContracts.filter(e => e.product === 'hotel').reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0) * monthsInView
+    + purchaseInvoices.filter(e => e.product === 'hotel').reduce((s, r) => s + Number(r.amount_usd), 0);
+
+  const totalRestExpenses = entries.filter(e => e.product === 'restaurant').reduce((s, r) => s + Number(r.amount_usd), 0)
+    + amcContracts.filter(e => e.product === 'restaurant').reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0) * monthsInView
+    + purchaseInvoices.filter(e => e.product === 'restaurant').reduce((s, r) => s + Number(r.amount_usd), 0);
+
+
   const entriesTotalPaidUsd = entries.reduce((s, r) => s + Number(r.paid_amount_usd || 0), 0)
   const amcMonthlyPaidUsd = amcContracts.reduce((s, r) => s + (Number(r.paid_amount_usd || 0) / 12), 0)
   const amcTotalPaidForView = amcMonthlyPaidUsd * monthsInView
