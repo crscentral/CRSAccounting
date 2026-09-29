@@ -431,11 +431,11 @@ function HotelExpensesInner() {
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={barDataRev} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} stroke="none">
+                <Pie data={barDataRev} dataKey="value" nameKey="name" cx={105} cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} stroke="none">
                   {barDataRev.map((e, i) => <Cell key={i} fill={e.fullName === 'Remaining Revenue (Gross Profit)' ? '#e2e8f0' : COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} wrapperStyle={{ position: 'absolute', right: 0 }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -456,11 +456,11 @@ function HotelExpensesInner() {
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={barDataExp} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={0} outerRadius={80} stroke="none">
+                <Pie data={barDataExp} dataKey="value" nameKey="name" cx={105} cy="50%" innerRadius={0} outerRadius={80} stroke="none">
                   {barDataExp.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} wrapperStyle={{ position: 'absolute', right: 0 }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
