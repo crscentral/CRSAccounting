@@ -1,31 +1,27 @@
-with open('src/components/PurchaseInvoiceFormModal.jsx', 'r') as f:
+with open('src/components/RestaurantRevenueFormModal.jsx', 'r') as f:
     content = f.read()
 
-# Replace useAuth destructuring
-old_use_auth = "  const { activeRole } = useAuth()"
-new_use_auth = "  const { activeRole, user } = useAuth()"
-content = content.replace(old_use_auth, new_use_auth)
+# Change the logic for collected
+old_logic = "const balance = total - (Number(collected) || 0)"
+new_logic = "const actualCollected = collected === '' ? total : (Number(collected) || 0)\n  const balance = total - actualCollected"
+content = content.replace(old_logic, new_logic)
 
-# Hide the upload field for non-superadmin
-old_field = """            <Field label="Upload Supplier Invoice (PDF, JPG, PNG)">
-              <label className="flex items-center gap-2 border border-dashed border-slate-300 rounded-lg px-3 py-2 text-sm cursor-pointer text-slate-500 hover:border-navy-400">
-                <Upload size={15} />
-                {uploading ? 'Uploading…' : attachmentUrl ? (<><span className="mr-2">File attached ✓</span><a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-navy-600 hover:underline text-xs font-medium" onClick={e => e.stopPropagation()}>Preview</a></>) : 'Choose File'}
-                <input type="file" accept="application/pdf,image/jpeg,image/png,image/jpg" className="hidden" onChange={e => e.target.files[0] && handleFileUpload(e.target.files[0])} />
-              </label>
-            </Field>"""
+old_submit = "collected: Number(collected) || 0,"
+new_submit = "collected: actualCollected,"
+content = content.replace(old_submit, new_submit)
 
-new_field = """            {user?.email === 'crscentral.rm@gmail.com' && (
-              <Field label="Upload Supplier Invoice (PDF, JPG, PNG)">
-                <label className="flex items-center gap-2 border border-dashed border-slate-300 rounded-lg px-3 py-2 text-sm cursor-pointer text-slate-500 hover:border-navy-400">
-                  <Upload size={15} />
-                  {uploading ? 'Uploading…' : attachmentUrl ? (<><span className="mr-2">File attached ✓</span><a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-navy-600 hover:underline text-xs font-medium" onClick={e => e.stopPropagation()}>Preview</a></>) : 'Choose File'}
-                  <input type="file" accept="application/pdf,image/jpeg,image/png,image/jpg" className="hidden" onChange={e => e.target.files[0] && handleFileUpload(e.target.files[0])} />
-                </label>
-              </Field>
-            )}"""
+old_submit_usd = "collected_usd: Math.round((Number(collected) || 0) / fxRate * 100) / 100,"
+new_submit_usd = "collected_usd: Math.round(actualCollected / fxRate * 100) / 100,"
+content = content.replace(old_submit_usd, new_submit_usd)
 
-content = content.replace(old_field, new_field)
+old_input = "placeholder={`Defaults to 0`} />"
+new_input = "placeholder={`Defaults to Full Total (${total.toFixed(2)})`} />"
+content = content.replace(old_input, new_input)
 
-with open('src/components/PurchaseInvoiceFormModal.jsx', 'w') as f:
+old_render = "Collected: <strong className=\"text-emerald-600\">{(Number(collected)||0).toFixed(2)} {currency}</strong>"
+new_render = "Collected: <strong className=\"text-emerald-600\">{actualCollected.toFixed(2)} {currency}</strong>"
+content = content.replace(old_render, new_render)
+
+with open('src/components/RestaurantRevenueFormModal.jsx', 'w') as f:
     f.write(content)
+

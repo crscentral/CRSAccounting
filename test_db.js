@@ -1,12 +1,9 @@
-const { Client } = require('pg');
+import { createClient } from '@supabase/supabase-js'
 
-const client = new Client({
-  connectionString: "postgresql://postgres:Hideaway%4024280@db.pxygyucscjmvgvfilohq.supabase.co:5432/postgres"
-});
+const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY)
 
-client.connect()
-  .then(() => {
-    console.log("Connected successfully!");
-    client.end();
-  })
-  .catch(err => console.error("Connection error", err.stack));
+async function run() {
+  const { data } = await supabase.from('restaurant_daily_revenue').select('*').order('revenue_date', { ascending: false }).limit(2)
+  console.log(JSON.stringify(data, null, 2))
+}
+run()

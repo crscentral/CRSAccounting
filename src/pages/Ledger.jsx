@@ -272,7 +272,7 @@ export default function Ledger() {
     let running = 0
     const rows = combined.map(e => {
       running += Number(e.debit_usd) - Number(e.credit_usd)
-      return [e.entry_date, e.description, e.currency, Number(e.debit_usd) ? fmt(e.debit_usd) : '—', Number(e.credit_usd) ? fmt(e.credit_usd) : '—', fmt(running)]
+      const balStr = running < 0 ? `${fmt(Math.abs(running))} Cr` : (running > 0 ? `${fmt(running)} Dr` : fmt(0)); return [e.entry_date, e.description, e.currency, Number(e.debit_usd) ? fmt(e.debit_usd) : '—', Number(e.credit_usd) ? fmt(e.credit_usd) : '—', balStr]
     })
     const totalDebit = (data || []).reduce((s, e) => s + Number(e.debit_usd), 0)
     const totalCredit = (data || []).reduce((s, e) => s + Number(e.credit_usd), 0)
@@ -344,7 +344,7 @@ export default function Ledger() {
           { key: 'currency', label: 'Orig. Currency' },
           { key: 'debit_usd', label: `Debit (${cp.displayCurrency})`, render: r => Number(r.debit_usd) ? cp.fmt(r.debit_usd) : '—' },
           { key: 'credit_usd', label: `Credit (${cp.displayCurrency})`, render: r => Number(r.credit_usd) ? cp.fmt(r.credit_usd) : '—' },
-          { key: 'balance', label: `Balance (${cp.displayCurrency})`, render: r => cp.fmt(r.balance) },
+          { key: 'balance', label: `Balance (${cp.displayCurrency})`, render: r => r.balance < 0 ? `${cp.fmt(Math.abs(r.balance))} Cr` : (r.balance > 0 ? `${cp.fmt(r.balance)} Dr` : cp.fmt(0)) },
           ...(can(['owner', 'admin', 'accountant']) ? [{
             key: 'actions', label: '', render: r => (
               <button onClick={() => handleDelete(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
