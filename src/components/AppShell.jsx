@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Building2, PieChart, Users, FileCheck, FileText,
   ArrowLeftRight, BookText, TrendingUp, BarChart3, FileBarChart, Settings,
   Menu, X, LogOut, ChevronDown, Download, Share, Layers, UtensilsCrossed, Landmark, Scale, Upload, LayoutGrid,
-  BedDouble, Target, ClipboardList, Receipt, Wallet,
+  BedDouble, Target, ClipboardList, Receipt, Wallet, AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { useInstallPrompt } from '../lib/useInstallPrompt'
@@ -216,6 +216,12 @@ export default function AppShell() {
           <InstallBanner isIOS={isIOS} canInstall={canInstall} onInstall={promptInstall} onDismiss={dismissInstallBanner} />
         )}
 
+        {backupFailed && (
+          <div className="bg-red-600 text-white p-3 text-center text-sm font-medium shadow-md z-50 sticky top-0 flex items-center justify-center gap-2">
+            <AlertTriangle size={18} />
+            CRITICAL WARNING: The Nightly Database Backup failed on GitHub at {backupFailedDate}. Please check your GitHub Actions immediately.
+          </div>
+        )}
         <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 pb-20 md:pb-8 max-w-[1600px] w-full mx-auto">
           <Outlet />
         </main>
