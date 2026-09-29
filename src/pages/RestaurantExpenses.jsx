@@ -46,7 +46,7 @@ export default function RestaurantExpenses() {
       supabase.from('accounts').select('id, code, name, subtype, type').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Expenses').order('code'),
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
       supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
+      supabase.from('purchase_invoices').select('*, contact:contacts(name), account:accounts(code, name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
       supabase.from('contacts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('name')
     ])
     setEntries(exp || [])
@@ -165,6 +165,10 @@ export default function RestaurantExpenses() {
 
   const byHead = { 'AMC Contracts (Amortized)': amcTotalForView }
   entries.forEach(r => {
+    const key = r.account ? `${r.account.code} - ${r.account.name}` : 'Unknown'
+    byHead[key] = (byHead[key] || 0) + Number(r.amount_usd)
+  })
+  purchaseInvoices.forEach(r => {
     const key = r.account ? `${r.account.code} - ${r.account.name}` : 'Unknown'
     byHead[key] = (byHead[key] || 0) + Number(r.amount_usd)
   })
