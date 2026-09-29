@@ -399,7 +399,7 @@ function HotelExpensesInner() {
                   {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <RechartsTooltip formatter={(value) => cp.fmt(value)} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderCustomLegend} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -413,7 +413,7 @@ function HotelExpensesInner() {
                   {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <RechartsTooltip formatter={(value) => cp.fmt(value)} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderCustomLegend} />
               </PieChart>
             </ResponsiveContainer>
           </div>
