@@ -234,7 +234,9 @@ export default function HotelExpenses() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <KpiCard label="Total Expenses" value={cp.fmt(totalExpenses)} tone="red" />
-        {topHeads.map(([name, usd]) => <KpiCard key={name} label={name} value={cp.fmt(usd)} tone="slate" />)}
+        <KpiCard label="Total Hotel Expenses" value={cp.fmt(totalHotelExpenses)} tone="slate" />
+        <KpiCard label="Total Restaurant Expenses" value={cp.fmt(totalRestExpenses)} tone="slate" />
+        {topHeads.slice(0, 1).map(([name, usd]) => <KpiCard key={name} label={name} value={cp.fmt(usd)} tone="slate" />)}
       </div>
 
       <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6">
@@ -290,7 +292,7 @@ export default function HotelExpenses() {
           </h3>
         </div>
         <div className="text-sm text-slate-500 font-medium">
-          Total Heads: {new Set(hotelEntries.map(e => e.account_id)).size} &bull; Total Amount: {cp.fmt(hotelEntriesTotal)}
+          Total Heads: {new Set(hotelEntries.map(e => e.account_id)).size} &bull; Total Daily Amount: {cp.fmt(hotelEntriesTotal)}
         </div>
       </div>
       <DataTable
@@ -309,7 +311,7 @@ export default function HotelExpenses() {
         ]}
         rows={hotelEntries}
         emptyMessage="No expense entries in this range."
-        footer={<span>Total Heads: {new Set(hotelEntries.map(e => e.account_id)).size} &nbsp;&bull;&nbsp; Total Amount: {cp.fmt(hotelEntriesTotal)}</span>}
+        footer={<span>Total Heads: {new Set(hotelEntries.map(e => e.account_id)).size} &nbsp;&bull;&nbsp; Total Daily Amount: {cp.fmt(hotelEntriesTotal)}</span>}
       />
 
       <h3 className="font-semibold text-slate-700 mb-3 mt-6">Hotel AMC Contracts (auto-split across 12 months)</h3>
@@ -341,7 +343,7 @@ export default function HotelExpenses() {
           </h3>
         </div>
         <div className="text-sm text-slate-500 font-medium">
-          Total Heads: {new Set(restEntries.map(e => e.account_id)).size} &bull; Total Amount: {cp.fmt(restEntriesTotal)}
+          Total Heads: {new Set(restEntries.map(e => e.account_id)).size} &bull; Total Daily Amount: {cp.fmt(restEntriesTotal)}
         </div>
       </div>
       <DataTable
@@ -360,7 +362,7 @@ export default function HotelExpenses() {
         ]}
         rows={restEntries}
         emptyMessage="No expense entries in this range."
-        footer={<span>Total Heads: {new Set(restEntries.map(e => e.account_id)).size} &nbsp;&bull;&nbsp; Total Amount: {cp.fmt(restEntriesTotal)}</span>}
+        footer={<span>Total Heads: {new Set(restEntries.map(e => e.account_id)).size} &nbsp;&bull;&nbsp; Total Daily Amount: {cp.fmt(restEntriesTotal)}</span>}
       />
 
       <h3 className="font-semibold text-slate-700 mb-3 mt-6">Restaurant AMC Contracts (auto-split across 12 months)</h3>
