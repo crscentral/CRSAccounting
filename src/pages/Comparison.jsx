@@ -92,7 +92,7 @@ export default function Comparison() {
       
       ;(rdr || []).forEach(r => {
         const meal = (r.meal_period || '').toLowerCase()
-        const mealAcc = meal ? (accs || []).find(a => (a.name || '').toLowerCase().includes(meal) && a.type === 'Revenue') : null
+        const mealAcc = meal ? (accounts || []).find(a => (a.name || '').toLowerCase().includes(meal) && a.type === 'Revenue') : null
         
         if (mealAcc) {
            const total = (Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0) + (Number(r.other_amount_usd) || 0)
