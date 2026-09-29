@@ -288,13 +288,9 @@ export default function HotelExpenses() {
           { key: 'expense_date', label: 'Date' },
           { key: 'invoice_number', label: 'Invoice #', render: r => r.invoice_number || '—' },
           { key: 'account', label: 'Expense Head', render: r => r.account ? `${r.account.code} - ${r.account.name}` : '—' },
-          { key: 'amount_usd', label: 'Amount', render: r => (
-            <div className="flex flex-col">
-              <span className="text-black font-medium">{cp.fmt(r.amount_usd)}</span>
-              <span className="text-green-600 text-xs mt-0.5">Paid: {cp.fmt(r.paid_amount_usd || 0)}</span>
-              <span className="text-red-600 text-xs">Pending: {cp.fmt(Number(r.amount_usd) - Number(r.paid_amount_usd || 0))}</span>
-            </div>
-          ) }, 
+          { key: 'amount_usd', label: 'Amount', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.amount_usd)}</span> },
+          { key: 'paid', label: 'Paid', render: r => <span className="text-emerald-600 font-medium">{cp.fmt(r.paid_amount_usd || 0)}</span> },
+          { key: 'pending', label: 'Pending', render: r => <span className="text-rose-600 font-medium">{cp.fmt(Number(r.amount_usd) - Number(r.paid_amount_usd || 0))}</span> }, 
           { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
           ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex gap-2">
       <button onClick={() => { setEditingRow(r); setExpenseModalOpen(true); }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
@@ -310,20 +306,12 @@ export default function HotelExpenses() {
       <DataTable
         columns={[
           { key: 'contract_name', label: 'Contract' },
-          { key: 'annual_amount_usd', label: 'Annual Amount', render: r => (
-            <div className="flex flex-col">
-              <span className="text-black font-medium">{cp.fmt(r.annual_amount_usd)}</span>
-              <span className="text-green-600 text-xs mt-0.5">Paid: {cp.fmt(r.paid_amount_usd || 0)}</span>
-              <span className="text-red-600 text-xs">Pending: {cp.fmt(Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0))}</span>
-            </div>
-          ) }, 
-          { key: 'monthly', label: 'Monthly', render: r => (
-            <div className="flex flex-col">
-              <span className="text-black font-medium">{cp.fmt(r.annual_amount_usd / 12)}</span>
-              <span className="text-green-600 text-xs mt-0.5">Paid: {cp.fmt((r.paid_amount_usd || 0) / 12)}</span>
-              <span className="text-red-600 text-xs">Pending: {cp.fmt((Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0)) / 12)}</span>
-            </div>
-          ) }, 
+          { key: 'annual_amount_usd', label: 'Annual Amount', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.annual_amount_usd)}</span> },
+          { key: 'annual_paid', label: 'Paid (Yr)', render: r => <span className="text-emerald-600 font-medium">{cp.fmt(r.paid_amount_usd || 0)}</span> },
+          { key: 'annual_pending', label: 'Pending (Yr)', render: r => <span className="text-rose-600 font-medium">{cp.fmt(Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0))}</span> },
+          { key: 'monthly', label: 'Monthly', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.annual_amount_usd / 12)}</span> },
+          { key: 'monthly_paid', label: 'Paid (Mo)', render: r => <span className="text-emerald-600 font-medium">{cp.fmt((r.paid_amount_usd || 0) / 12)}</span> },
+          { key: 'monthly_pending', label: 'Pending (Mo)', render: r => <span className="text-rose-600 font-medium">{cp.fmt((Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0)) / 12)}</span> }, 
           { key: 'start', label: 'Starts', render: r => `${MONTH_NAMES[r.start_month - 1]} ${r.start_year}` },
           ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex gap-2">
       <button onClick={() => { setEditingRow(r); setAmcModalOpen(true); }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
@@ -346,17 +334,9 @@ export default function HotelExpenses() {
               { key: 'date', label: 'Date', render: r => r.invoice_date },
               { key: 'invoice_no', label: 'Invoice #', render: r => r.invoice_number },
               { key: 'supplier', label: 'Supplier', render: r => r.contact?.name || r.supplier_name_freeform || 'Unknown' },
-              { key: 'amount', label: 'Amount', render: r => {
-              const paid = r.status === 'Paid' ? r.amount_usd : 0;
-              const pending = r.status === 'Paid' ? 0 : r.amount_usd;
-              return (
-                <div className="flex flex-col">
-                  <span className="text-black font-medium">{cp.fmt(r.amount_usd)}</span>
-                  <span className="text-green-600 text-xs mt-0.5">Paid: {cp.fmt(paid)}</span>
-                  <span className="text-red-600 text-xs">Pending: {cp.fmt(pending)}</span>
-                </div>
-              )
-            } }, 
+              { key: 'amount', label: 'Amount', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.amount_usd)}</span> },
+              { key: 'paid', label: 'Paid', render: r => { const paid = r.status === 'Paid' ? r.amount_usd : 0; return <span className="text-emerald-600 font-medium">{cp.fmt(paid)}</span> } },
+              { key: 'pending', label: 'Pending', render: r => { const pending = r.status === 'Paid' ? 0 : r.amount_usd; return <span className="text-rose-600 font-medium">{cp.fmt(pending)}</span> } }, 
               { key: 'status', label: 'Status', render: r => <span className={`px-2 py-0.5 rounded text-xs font-medium ${r.status === 'Draft' ? 'bg-slate-100 text-slate-600' : r.status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{r.status}</span> },
               ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex justify-end gap-2">
                 <button onClick={() => { setEditingRow(r); setPurchaseModalOpen(true); }} className="text-slate-400 hover:text-navy-600 p-1"><Pencil size={15} /></button>
