@@ -253,10 +253,35 @@ function HotelExpensesInner() {
     }
   }).sort((a, b) => b.value - a.value)
   
+  const remainingRev = totalRevenue - totalExpenses;
+  if (remainingRev > 0) {
+    barDataRev.push({
+      name: 'Remaining Revenue',
+      fullName: 'Remaining Revenue (Gross Profit)',
+      value: remainingRev,
+      percentStr: ((remainingRev / totalRevenue) * 100).toFixed(1) + '%'
+    });
+  }
   const totalRevPercent = totalRevenue > 0 ? ((totalExpenses / totalRevenue) * 100).toFixed(1) + '%' : '0.0%';
   const totalExpPercent = '100.0%';
 
   
+  const renderRichLegend = (props) => {
+    const { payload } = props;
+    const sortedPayload = [...payload].sort((a, b) => b.payload.value - a.payload.value);
+    return (
+      <ul className="text-[11px] space-y-1.5 m-0 p-0 list-none max-h-64 overflow-y-auto pr-2">
+        {sortedPayload.map((entry, index) => (
+          <li key={`item-${index}`} className="flex items-center gap-2 text-slate-600 font-medium">
+            <span className="w-16 text-right font-bold text-slate-700 shrink-0">{cp.fmt(entry.payload.value)}</span>
+            <span className="w-10 text-right text-slate-400 shrink-0">{entry.payload.percentStr}</span>
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: entry.color }}></span>
+            <span className="truncate" title={entry.payload.fullName}>{entry.payload.fullName}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
   const renderCustomLegend = (props) => {
     const { payload } = props;
     
@@ -405,16 +430,13 @@ function HotelExpensesInner() {
           </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barDataRev} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={240} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} labelFormatter={(label) => label} cursor={{fill: 'transparent'}} />
-                <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={18}>
-                  {barDataRev.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  <LabelList dataKey="value" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={600} formatter={(val) => cp.fmt(val)} />
-                </Bar>
-              </BarChart>
+              <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                <Pie data={barDataRev} dataKey="value" cx="30%" cy="50%" innerRadius={60} outerRadius={80} stroke="none">
+                  {barDataRev.map((e, i) => <Cell key={i} fill={e.fullName === 'Remaining Revenue (Gross Profit)' ? '#e2e8f0' : COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} wrapperStyle={{ right: 0, width: '65%' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm font-semibold">
@@ -433,16 +455,13 @@ function HotelExpensesInner() {
           </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barDataExp} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={240} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} labelFormatter={(label) => label} cursor={{fill: 'transparent'}} />
-                <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={18}>
+              <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                <Pie data={barDataExp} dataKey="value" cx="30%" cy="50%" innerRadius={0} outerRadius={80} stroke="none">
                   {barDataExp.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  <LabelList dataKey="value" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={600} formatter={(val) => cp.fmt(val)} />
-                </Bar>
-              </BarChart>
+                </Pie>
+                <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} />
+                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderRichLegend} wrapperStyle={{ right: 0, width: '65%' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm font-semibold">
