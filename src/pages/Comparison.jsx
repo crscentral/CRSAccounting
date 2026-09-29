@@ -46,11 +46,11 @@ export default function Comparison() {
       const otherFbAcc = (accounts || []).find(a => (a.name || '').toLowerCase().includes('other') && a.type === 'Revenue') || roomRevAcc
       
       const [{ data: hrs }, { data: hre }, { data: hee }, { data: amc }, { data: rdr }] = await Promise.all([
-        supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).gte('stat_date', range.from).lte('stat_date', range.to),
-        supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).gte('entry_date', range.from).lte('entry_date', range.to),
-        supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).gte('expense_date', range.from).lte('expense_date', range.to),
-        supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id),
-        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to)
+        supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to),
+        supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to),
+        supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', range.from).lte('expense_date', range.to),
+        supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('revenue_date', range.from).lte('revenue_date', range.to)
       ])
       
       if (roomRevAcc) {

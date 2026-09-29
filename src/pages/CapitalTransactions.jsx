@@ -387,20 +387,6 @@ function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAcc
     }
   }
 
-  const currentList = tab === 'equity' ? ownerContributions :
-                      tab === 'loans_taken' ? loansTaken :
-                      tab === 'dividends' ? dividends :
-                      loanPayments
-
-  const byCurrency = {}
-  let totalUsd = 0
-  currentList.forEach(i => {
-    byCurrency[i.currency] = byCurrency[i.currency] || { native: 0, usd: 0, count: 0 }
-    byCurrency[i.currency].native += Number(i.amount)
-    byCurrency[i.currency].usd += Number(i.amount_usd)
-    byCurrency[i.currency].count++
-    totalUsd += Number(i.amount_usd)
-  })
 
   return (
     <Modal title={initialData ? "Edit Loan Principal Repayment" : "New Loan Principal Repayment"} onClose={onClose}>
@@ -483,20 +469,6 @@ function DividendFormModal({ companyId, product, initialData, onClose, onSaved }
     }
   }
 
-  const currentList = tab === 'equity' ? ownerContributions :
-                      tab === 'loans_taken' ? loansTaken :
-                      tab === 'dividends' ? dividends :
-                      loanPayments
-
-  const byCurrency = {}
-  let totalUsd = 0
-  currentList.forEach(i => {
-    byCurrency[i.currency] = byCurrency[i.currency] || { native: 0, usd: 0, count: 0 }
-    byCurrency[i.currency].native += Number(i.amount)
-    byCurrency[i.currency].usd += Number(i.amount_usd)
-    byCurrency[i.currency].count++
-    totalUsd += Number(i.amount_usd)
-  })
 
   return (
     <Modal title={initialData ? "Edit Owner Dividend" : "New Owner Dividend"} onClose={onClose}>
@@ -572,20 +544,6 @@ function OwnerEquityFormModal({ companyId, product, cashAccounts, initialData, o
     }
   }
 
-  const currentList = tab === 'equity' ? ownerContributions :
-                      tab === 'loans_taken' ? loansTaken :
-                      tab === 'dividends' ? dividends :
-                      loanPayments
-
-  const byCurrency = {}
-  let totalUsd = 0
-  currentList.forEach(i => {
-    byCurrency[i.currency] = byCurrency[i.currency] || { native: 0, usd: 0, count: 0 }
-    byCurrency[i.currency].native += Number(i.amount)
-    byCurrency[i.currency].usd += Number(i.amount_usd)
-    byCurrency[i.currency].count++
-    totalUsd += Number(i.amount_usd)
-  })
 
   return (
     <Modal title={initialData ? "Edit Owner's Equity" : "New Owner's Equity (Contribution)"} onClose={onClose}>
@@ -662,20 +620,6 @@ function LoanTakenFormModal({ companyId, product, liabilityAccounts, cashAccount
     }
   }
 
-  const currentList = tab === 'equity' ? ownerContributions :
-                      tab === 'loans_taken' ? loansTaken :
-                      tab === 'dividends' ? dividends :
-                      loanPayments
-
-  const byCurrency = {}
-  let totalUsd = 0
-  currentList.forEach(i => {
-    byCurrency[i.currency] = byCurrency[i.currency] || { native: 0, usd: 0, count: 0 }
-    byCurrency[i.currency].native += Number(i.amount)
-    byCurrency[i.currency].usd += Number(i.amount_usd)
-    byCurrency[i.currency].count++
-    totalUsd += Number(i.amount_usd)
-  })
 
   return (
     <Modal title={initialData ? "Edit Loan Taken" : "New Loan Taken"} onClose={onClose}>
