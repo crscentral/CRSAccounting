@@ -150,6 +150,16 @@ export default function HotelExpenses() {
   const piTotalUsd = purchaseInvoices.reduce((s, r) => s + Number(r.amount_usd), 0)
   const totalExpenses = entriesTotalUsd + amcTotalForView + piTotalUsd
 
+
+  const entriesTotalPaidUsd = entries.reduce((s, r) => s + Number(r.paid_amount_usd || 0), 0)
+  const amcMonthlyPaidUsd = amcContracts.reduce((s, r) => s + (Number(r.paid_amount_usd || 0) / 12), 0)
+  const amcTotalPaidForView = amcMonthlyPaidUsd * monthsInView
+  const piTotalPaidUsd = purchaseInvoices.reduce((s, r) => s + (r.status === 'Paid' ? Number(r.amount_usd) : 0), 0)
+
+  const totalBilled = totalExpenses
+  const totalPaid = entriesTotalPaidUsd + amcTotalPaidForView + piTotalPaidUsd
+  const totalPending = totalBilled - totalPaid
+
   const byHead = { 'AMC Contracts (Amortized)': amcTotalForView }
   entries.forEach(r => {
     const key = r.account ? `${r.account.code} - ${r.account.name}` : 'Unknown'
@@ -217,6 +227,11 @@ export default function HotelExpenses() {
         {topHeads.map(([name, usd]) => <KpiCard key={name} label={name} value={cp.fmt(usd)} tone="slate" />)}
       </div>
 
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6">
+        <KpiCard label="Total Billed" value={cp.fmt(totalBilled)} tone="slate" />
+        <KpiCard label="Total Paid" value={cp.fmt(totalPaid)} tone="green" />
+        <KpiCard label="Total Pending" value={cp.fmt(totalPending)} tone="red" />
+      </div>
       <div className="grid lg:grid-cols-2 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (CPOR: {totalOccupied > 0 ? cp.fmt(totalExpenses/totalOccupied) : '—'})</h3>
@@ -273,7 +288,13 @@ export default function HotelExpenses() {
           { key: 'expense_date', label: 'Date' },
           { key: 'invoice_number', label: 'Invoice #', render: r => r.invoice_number || '—' },
           { key: 'account', label: 'Expense Head', render: r => r.account ? `${r.account.code} - ${r.account.name}` : '—' },
-          { key: 'amount_usd', label: 'Amount', render: r => cp.fmt(r.amount_usd) },
+          { key: 'amount_usd', label: 'Amount', render: r => (
+            <div className="flex flex-col">
+              <span className="text-black font-medium">{cp.fmt(r.amount_usd)}</span>
+              <span className="text-green-600 text-xs mt-0.5">Paid: {cp.fmt(r.paid_amount_usd || 0)}</span>
+              <span className="text-red-600 text-xs">Pending: {cp.fmt(Number(r.amount_usd) - Number(r.paid_amount_usd || 0))}</span>
+            </div>
+          ) }, 
           { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
           ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex gap-2">
       <button onClick={() => { setEditingRow(r); setExpenseModalOpen(true); }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
@@ -289,8 +310,20 @@ export default function HotelExpenses() {
       <DataTable
         columns={[
           { key: 'contract_name', label: 'Contract' },
-          { key: 'annual_amount_usd', label: 'Annual Amount', render: r => cp.fmt(r.annual_amount_usd) },
-          { key: 'monthly', label: 'Monthly', render: r => cp.fmt(r.annual_amount_usd / 12) },
+          { key: 'annual_amount_usd', label: 'Annual Amount', render: r => (
+            <div className="flex flex-col">
+              <span className="text-black font-medium">{cp.fmt(r.annual_amount_usd)}</span>
+              <span className="text-green-600 text-xs mt-0.5">Paid: {cp.fmt(r.paid_amount_usd || 0)}</span>
+              <span className="text-red-600 text-xs">Pending: {cp.fmt(Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0))}</span>
+            </div>
+          ) }, 
+          { key: 'monthly', label: 'Monthly', render: r => (
+            <div className="flex flex-col">
+              <span className="text-black font-medium">{cp.fmt(r.annual_amount_usd / 12)}</span>
+              <span className="text-green-600 text-xs mt-0.5">Paid: {cp.fmt((r.paid_amount_usd || 0) / 12)}</span>
+              <span className="text-red-600 text-xs">Pending: {cp.fmt((Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0)) / 12)}</span>
+            </div>
+          ) }, 
           { key: 'start', label: 'Starts', render: r => `${MONTH_NAMES[r.start_month - 1]} ${r.start_year}` },
           ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex gap-2">
       <button onClick={() => { setEditingRow(r); setAmcModalOpen(true); }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
@@ -313,7 +346,17 @@ export default function HotelExpenses() {
               { key: 'date', label: 'Date', render: r => r.invoice_date },
               { key: 'invoice_no', label: 'Invoice #', render: r => r.invoice_number },
               { key: 'supplier', label: 'Supplier', render: r => r.contact?.name || r.supplier_name_freeform || 'Unknown' },
-              { key: 'amount', label: 'Amount', render: r => cp.fmt(r.amount_usd) },
+              { key: 'amount', label: 'Amount', render: r => {
+              const paid = r.status === 'Paid' ? r.amount_usd : 0;
+              const pending = r.status === 'Paid' ? 0 : r.amount_usd;
+              return (
+                <div className="flex flex-col">
+                  <span className="text-black font-medium">{cp.fmt(r.amount_usd)}</span>
+                  <span className="text-green-600 text-xs mt-0.5">Paid: {cp.fmt(paid)}</span>
+                  <span className="text-red-600 text-xs">Pending: {cp.fmt(pending)}</span>
+                </div>
+              )
+            } }, 
               { key: 'status', label: 'Status', render: r => <span className={`px-2 py-0.5 rounded text-xs font-medium ${r.status === 'Draft' ? 'bg-slate-100 text-slate-600' : r.status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{r.status}</span> },
               ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex justify-end gap-2">
                 <button onClick={() => { setEditingRow(r); setPurchaseModalOpen(true); }} className="text-slate-400 hover:text-navy-600 p-1"><Pencil size={15} /></button>
@@ -359,6 +402,7 @@ function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClo
   const [accountId, setAccountId] = useState(editingRow?.account_id || '')
   const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
   const [amount, setAmount] = useState(editingRow?.amount ?? '')
+  const [paidAmount, setPaidAmount] = useState(editingRow?.paid_amount || '')
   const [notes, setNotes] = useState(editingRow?.notes || '')
   const [invoiceNumber, setInvoiceNumber] = useState(editingRow?.invoice_number || '')
   const [saving, setSaving] = useState(false)
@@ -374,6 +418,7 @@ function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClo
       const payload = {
         company_id: companyId, product, expense_date: expenseDate, account_id: accountId,
         amount: Number(amount), currency, fx_rate_locked: fxRate, amount_usd: Math.round(Number(amount) / fxRate * 100) / 100,
+        paid_amount: Number(paidAmount || 0), paid_amount_usd: Math.round(Number(paidAmount || 0) / fxRate * 100) / 100,
         notes: notes || null,
         invoice_number: invoiceNumber || null
       }
@@ -413,7 +458,7 @@ function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClo
             ))}
           </select>
         </Field>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <Field label="Currency">
             <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
               {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
@@ -421,6 +466,9 @@ function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClo
           </Field>
           <Field label="Amount *">
             <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </Field>
+          <Field label="Paid Amount">
+            <input type="number" step="0.01" min="0" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
           </Field>
         </div>
                 <Field label="Invoice Number">
@@ -442,6 +490,7 @@ function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClo
 function AmcContractFormModal({ companyId, product, editingRow, onClose, onSaved }) {
   const [contractName, setContractName] = useState(editingRow?.contract_name || '')
   const [annualAmount, setAnnualAmount] = useState(editingRow?.annual_amount || '')
+  const [paidAmount, setPaidAmount] = useState(editingRow?.paid_amount || '')
   const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
   const [startMonth, setStartMonth] = useState(editingRow?.start_month || new Date().getMonth() + 1)
   const [startYear, setStartYear] = useState(editingRow?.start_year || new Date().getFullYear())
@@ -459,6 +508,7 @@ function AmcContractFormModal({ companyId, product, editingRow, onClose, onSaved
       const payload = {
         company_id: companyId, product, contract_name: contractName.trim(), annual_amount: Number(annualAmount),
         currency, fx_rate_locked: fxRate, annual_amount_usd: Math.round(Number(annualAmount) / fxRate * 100) / 100,
+        paid_amount: Number(paidAmount || 0), paid_amount_usd: Math.round(Number(paidAmount || 0) / fxRate * 100) / 100,
         start_year: startYear, start_month: startMonth, notes: notes || null,
       }
       
@@ -489,7 +539,7 @@ function AmcContractFormModal({ companyId, product, editingRow, onClose, onSaved
         <Field label="Contract Name / Type *">
           <input required value={contractName} onChange={e => setContractName(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. Elevator AMC, HVAC AMC" />
         </Field>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <Field label="Currency">
             <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
               {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
@@ -497,6 +547,9 @@ function AmcContractFormModal({ companyId, product, editingRow, onClose, onSaved
           </Field>
           <Field label="Annual Amount *">
             <input type="number" step="0.01" min="0" required value={annualAmount} onChange={e => setAnnualAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </Field>
+          <Field label="Paid Amount">
+            <input type="number" step="0.01" min="0" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
