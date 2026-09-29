@@ -33,7 +33,7 @@ export default function Comparison() {
 
   async function computeMetrics(range) {
     const { data: accounts } = await supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
-    const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date')
+    const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date, source_type')
       .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to)
 
     const ignoredSources = ['restaurant_revenue', 'hotel_room_stats', 'hotel_revenue_entry', 'hotel_expense_entry', 'hotel_amc', 'hotel_guest_invoice', 'owner_contribution', 'owner_dividend', 'loan_taken', 'loan_principal']
