@@ -86,11 +86,11 @@ export default function AppShell() {
   const HOTEL_NAV_ORDER = [
     '/overview',
     '/',
+    '/hotel-stats',
     '/companies',
     '/hotel-guest-invoices',
     '/hotel-revenue',
     '/hotel-expenses',
-    '/hotel-stats',
     '/hotel-budget',
     '/hotel-expense-budget',
     '/contacts',
