@@ -187,9 +187,9 @@ function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
         room_rate: Number(roomRate) || 0, nights: Number(nights) || 0,
         room_revenue: roomRevenue, other_revenue: otherRevenue,
         line_items: lineItems,
-        invoice_amount: invoiceAmount, collected_amount: Number(collectedAmount) || 0,
+        invoice_amount: invoiceAmount, collected_amount: collectedAmount === '' ? invoiceAmount : (Number(collectedAmount) || 0),
         invoice_amount_usd: Math.round(invoiceAmount / fxRate * 100) / 100,
-        collected_amount_usd: Math.round((Number(collectedAmount) || 0) / fxRate * 100) / 100,
+        collected_amount_usd: Math.round((collectedAmount === '' ? invoiceAmount : (Number(collectedAmount) || 0)) / fxRate * 100) / 100,
       }
       if (row) {
         const { error: err } = await supabase.from('hotel_guest_invoices').update(payload).eq('id', row.id)
@@ -273,7 +273,7 @@ function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
             </div>
           </div>
           <Field label="Amount Collected">
-            <input type="number" step="0.01" min="0" value={collectedAmount} onChange={e => setCollectedAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input type="number" step="0.01" min="0" placeholder={`Defaults to Full Total (${invoiceAmount.toFixed(2)})`} value={collectedAmount} onChange={e => setCollectedAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
           </Field>
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
