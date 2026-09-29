@@ -15,7 +15,7 @@ import AccountFormModal from '../components/AccountFormModal'
 import PurchaseInvoiceFormModal from '../components/PurchaseInvoiceFormModal'
 import { FileText } from 'lucide-react'
 
-import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList } from 'recharts'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 
 
@@ -231,19 +231,27 @@ function HotelExpensesInner() {
     value,
     percentStr: totalExpenses > 0 ? ((value / totalExpenses) * 100).toFixed(1) + '%' : '0.0%'
   })).sort((a, b) => b.value - a.value)
-  const barDataRev = Object.entries(byHead).filter(x => x[1] > 0).map(([name, value]) => ({
-    name: name.split(' - ')[1] || name,
-    fullName: name,
-    value: value,
-    percentStr: totalRevenue > 0 ? ((value / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'
-  })).sort((a, b) => b.value - a.value)
+  const barDataRev = Object.entries(byHead).filter(x => x[1] > 0).map(([name, value]) => {
+    const percentStr = totalRevenue > 0 ? ((value / totalRevenue) * 100).toFixed(1) + '%' : '0.0%';
+    const shortName = name.split(' - ')[1] || name;
+    return {
+      name: `${shortName} ${percentStr}`,
+      fullName: name,
+      value: value,
+      percentStr
+    }
+  }).sort((a, b) => b.value - a.value)
 
-  const barDataExp = Object.entries(byHead).filter(x => x[1] > 0).map(([name, value]) => ({
-    name: name.split(' - ')[1] || name,
-    fullName: name,
-    value: value,
-    percentStr: totalExpenses > 0 ? ((value / totalExpenses) * 100).toFixed(1) + '%' : '0.0%'
-  })).sort((a, b) => b.value - a.value)
+  const barDataExp = Object.entries(byHead).filter(x => x[1] > 0).map(([name, value]) => {
+    const percentStr = totalExpenses > 0 ? ((value / totalExpenses) * 100).toFixed(1) + '%' : '0.0%';
+    const shortName = name.split(' - ')[1] || name;
+    return {
+      name: `${shortName} ${percentStr}`,
+      fullName: name,
+      value: value,
+      percentStr
+    }
+  }).sort((a, b) => b.value - a.value)
   
   const totalRevPercent = totalRevenue > 0 ? ((totalExpenses / totalRevenue) * 100).toFixed(1) + '%' : '0.0%';
   const totalExpPercent = '100.0%';
@@ -402,8 +410,9 @@ function HotelExpensesInner() {
                 <XAxis type="number" hide />
                 <YAxis dataKey="name" type="category" width={240} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} labelFormatter={(label) => label} cursor={{fill: 'transparent'}} />
-                <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={16}>
+                <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={18}>
                   {barDataRev.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  <LabelList dataKey="value" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={600} formatter={(val) => cp.fmt(val)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -429,8 +438,9 @@ function HotelExpensesInner() {
                 <XAxis type="number" hide />
                 <YAxis dataKey="name" type="category" width={240} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} labelFormatter={(label) => label} cursor={{fill: 'transparent'}} />
-                <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={16}>
+                <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={18}>
                   {barDataExp.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  <LabelList dataKey="value" position="insideLeft" fill="#ffffff" fontSize={10} fontWeight={600} formatter={(val) => cp.fmt(val)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
