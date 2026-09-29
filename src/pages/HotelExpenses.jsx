@@ -251,54 +251,7 @@ function HotelExpensesInner() {
   
   const renderCustomLegend = (props) => {
     const { payload } = props;
-      const groupedEntriesMap = {}
-  entries.forEach(r => {
-    const key = r.account ? `${r.account.code} - ${r.account.name}` : 'Unknown'
-    if (!groupedEntriesMap[key]) groupedEntriesMap[key] = { isGroupHeader: true, name: key, amount_usd: 0, paid_amount_usd: 0, transactions: [], account_id: r.account_id }
-    groupedEntriesMap[key].amount_usd += Number(r.amount_usd)
-    groupedEntriesMap[key].paid_amount_usd += Number(r.paid_amount_usd || 0)
-    groupedEntriesMap[key].transactions.push(r)
-  })
-  const flattenedEntries = []
-  Object.values(groupedEntriesMap).sort((a,b) => b.amount_usd - a.amount_usd).forEach(g => {
-    flattenedEntries.push({ ...g, id: 'group_' + g.name })
-    if (expandedEntries[g.name]) {
-      g.transactions.forEach(t => flattenedEntries.push({ ...t, isGroupChild: true }))
-    }
-  })
-
-  const groupedAmcMap = {}
-  amcContracts.forEach(r => {
-    const key = r.contract_name || 'Unknown'
-    if (!groupedAmcMap[key]) groupedAmcMap[key] = { isGroupHeader: true, name: key, annual_amount_usd: 0, paid_amount_usd: 0, transactions: [] }
-    groupedAmcMap[key].annual_amount_usd += Number(r.annual_amount_usd)
-    groupedAmcMap[key].paid_amount_usd += Number(r.paid_amount_usd || 0)
-    groupedAmcMap[key].transactions.push(r)
-  })
-  const flattenedAmc = []
-  Object.values(groupedAmcMap).sort((a,b) => b.annual_amount_usd - a.annual_amount_usd).forEach(g => {
-    flattenedAmc.push({ ...g, id: 'group_' + g.name })
-    if (expandedAmc[g.name]) {
-      g.transactions.forEach(t => flattenedAmc.push({ ...t, isGroupChild: true }))
-    }
-  })
-
-  const groupedPIMap = {}
-  purchaseInvoices.forEach(r => {
-    const key = r.account ? `${r.account.code} - ${r.account.name}` : (r.supplier_name_freeform || 'Unknown')
-    if (!groupedPIMap[key]) groupedPIMap[key] = { isGroupHeader: true, name: key, amount_usd: 0, paid: 0, transactions: [] }
-    groupedPIMap[key].amount_usd += Number(r.amount_usd)
-    groupedPIMap[key].paid += r.status === 'Paid' ? Number(r.amount_usd) : 0
-    groupedPIMap[key].transactions.push(r)
-  })
-  const flattenedPI = []
-  Object.values(groupedPIMap).sort((a,b) => b.amount_usd - a.amount_usd).forEach(g => {
-    flattenedPI.push({ ...g, id: 'group_' + g.name })
-    if (expandedPI[g.name]) {
-      g.transactions.forEach(t => flattenedPI.push({ ...t, isGroupChild: true }))
-    }
-  })
-
+    
   return (
       <ul className="text-[11px] space-y-1.5 w-full">
         {payload.map((entry, index) => (
