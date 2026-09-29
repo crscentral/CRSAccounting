@@ -306,7 +306,7 @@ function NavItem({ to, label, icon: Icon, end, alwaysShowLabel }) {
       title={label}
     >
       <Icon size={19} className="shrink-0" />
-      <span className={alwaysShowLabel ? 'inline truncate' : 'hidden lg:inline truncate'}>{label}</span>
+      <span className={alwaysShowLabel ? 'inline truncate' : 'hidden lg:inline truncate'} style={{ fontWeight: to === '/hotel-stats' ? '800' : undefined }}>{label}</span>
     </NavLink>
   )
 }

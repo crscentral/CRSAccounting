@@ -164,8 +164,8 @@ export default function FinancialPerformance() {
         const o = Number(r.other_amount_usd) || 0
         
         if (activeProduct === 'hotel') {
-          const acc4016 = (accs || []).find(a => a.code === '4016'); const acc4011 = (accs || []).find(a => a.code === '4011');
-          const acc4020 = (accs || []).find(a => a.code === '4020'); const acc4021 = (accs || []).find(a => a.code === '4021');
+          const acc4016 = (accs || []).find(a => a.name === 'Breakfast Revenue'); const acc4011 = (accs || []).find(a => a.name === 'Beverage Sales');
+          const acc4020 = (accs || []).find(a => a.name === 'Beverage Revenue' || a.name === 'F&B Revenue'); const acc4021 = (accs || []).find(a => a.name === 'Other F&B Revenue');
           if (f > 0) { const acc = r.meal_period === 'Breakfast' ? acc4016 : acc4011; if (acc) { revMap[acc.id] = revMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; revMap[acc.id].amount += f } }
           if (b > 0 && acc4020) { revMap[acc4020.id] = revMap[acc4020.id] || { code: acc4020.code, name: acc4020.name, amount: 0 }; revMap[acc4020.id].amount += b }
           if (o > 0 && acc4021) { revMap[acc4021.id] = revMap[acc4021.id] || { code: acc4021.code, name: acc4021.name, amount: 0 }; revMap[acc4021.id].amount += o }

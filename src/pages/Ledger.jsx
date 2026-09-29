@@ -18,7 +18,7 @@ async function fetchAndProcessEntries(targetAccountId, rangeFrom, rangeTo, compa
   }
 
   const { data } = await query;
-  const ignoredSources = ['restaurant_revenue', 'hotel_room_stats', 'hotel_revenue_entry', 'hotel_expense_entry', 'hotel_amc_contract', 'hotel_guest_invoice', 'owner_contribution', 'owner_dividend', 'loan_taken', 'loan_principal']
+  const ignoredSources = ['restaurant_revenue', 'hotel_room_stats', 'hotel_revenue_entry', 'hotel_expense_entry', 'hotel_amc_contract', 'hotel_guest_invoice', 'owner_contribution', 'owner_dividend', 'loan_taken', 'loan_principal', 'sales_invoice', 'purchase_invoice', 'payment_receipt']
   const filteredEntries = (data || []).filter(e => {
     if (['hotel', 'restaurant'].includes(product)) {
       return !ignoredSources.includes(e.source_type)
@@ -224,7 +224,7 @@ export default function Ledger() {
     setAccounts(data || [])
     if (data && data.length > 0) {
       if (!accountId || (accountId !== 'all' && !data.find(a => a.id === accountId))) {
-        setAccountId(data.find(a => a.code === '4010')?.id || data[0].id)
+        setAccountId(data.find(a => a.name === 'Room Revenue' || a.name === 'Sales Revenue')?.id || data[0].id)
       }
     }
   }

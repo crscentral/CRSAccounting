@@ -17,6 +17,15 @@ export default function AccountFormModal({ companyId, product, account, onClose,
 
   function update(field, value) { setForm(f => ({ ...f, [field]: value })) }
 
+
+  async function handleNameBlur() {
+    if (!form.name.trim() || account) return
+    const { data } = await supabase.from('accounts').select('code, type, subtype').eq('company_id', companyId).ilike('name', form.name.trim()).limit(1).maybeSingle()
+    if (data) {
+      setForm(f => ({ ...f, code: data.code, type: data.type, subtype: data.subtype || f.subtype }))
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
@@ -55,7 +64,7 @@ export default function AccountFormModal({ companyId, product, account, onClose,
           </Field>
         </div>
         <Field label="Name *">
-          <input required value={form.name} onChange={e => update('name', e.target.value)}
+          <input required value={form.name} onChange={e => update('name', e.target.value)} onBlur={handleNameBlur}
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. Software & Subscriptions" />
         </Field>
         <div className="grid grid-cols-2 gap-3">

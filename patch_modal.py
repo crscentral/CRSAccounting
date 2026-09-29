@@ -1,27 +1,23 @@
-with open('src/components/RestaurantRevenueFormModal.jsx', 'r') as f:
+with open('src/components/AccountFormModal.jsx', 'r') as f:
     content = f.read()
 
-# Change the logic for collected
-old_logic = "const balance = total - (Number(collected) || 0)"
-new_logic = "const actualCollected = collected === '' ? total : (Number(collected) || 0)\n  const balance = total - actualCollected"
-content = content.replace(old_logic, new_logic)
+func = """
+  async function handleNameBlur() {
+    if (!form.name.trim() || account) return
+    const { data } = await supabase.from('accounts').select('code, type, subtype').eq('company_id', companyId).ilike('name', form.name.trim()).limit(1).maybeSingle()
+    if (data) {
+      setForm(f => ({ ...f, code: data.code, type: data.type, subtype: data.subtype || f.subtype }))
+    }
+  }
 
-old_submit = "collected: Number(collected) || 0,"
-new_submit = "collected: actualCollected,"
-content = content.replace(old_submit, new_submit)
+  async function handleSubmit(e) {"""
 
-old_submit_usd = "collected_usd: Math.round((Number(collected) || 0) / fxRate * 100) / 100,"
-new_submit_usd = "collected_usd: Math.round(actualCollected / fxRate * 100) / 100,"
-content = content.replace(old_submit_usd, new_submit_usd)
+content = content.replace("  async function handleSubmit(e) {", func)
 
-old_input = "placeholder={`Defaults to 0`} />"
-new_input = "placeholder={`Defaults to Full Total (${total.toFixed(2)})`} />"
-content = content.replace(old_input, new_input)
+input_name = """<input required value={form.name} onChange={e => update('name', e.target.value)}"""
+input_name_new = """<input required value={form.name} onChange={e => update('name', e.target.value)} onBlur={handleNameBlur}"""
 
-old_render = "Collected: <strong className=\"text-emerald-600\">{(Number(collected)||0).toFixed(2)} {currency}</strong>"
-new_render = "Collected: <strong className=\"text-emerald-600\">{actualCollected.toFixed(2)} {currency}</strong>"
-content = content.replace(old_render, new_render)
+content = content.replace(input_name, input_name_new)
 
-with open('src/components/RestaurantRevenueFormModal.jsx', 'w') as f:
+with open('src/components/AccountFormModal.jsx', 'w') as f:
     f.write(content)
-

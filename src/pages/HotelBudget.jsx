@@ -159,7 +159,7 @@ export default function HotelBudget() {
       for (const a of ancillaryAccounts) {
         const k = `${a.code}-${m}`
         const amt = ancillaryBudgets[k] ? (Number(ancillaryBudgets[k].amount_usd) || 0) : 0
-        if (a.subtype === 'Front Office' || (activeProduct === 'restaurant' && (a.code === '4010' || a.subtype === 'F&B Revenue' || a.subtype === 'Sales'))) frontOffice += amt
+        if (a.subtype === 'Front Office' || (activeProduct === 'restaurant' && (a.name === 'Room Revenue' || a.subtype === 'F&B Revenue' || a.subtype === 'Sales'))) frontOffice += amt
         else if (a.subtype === 'F&B Service') fbService += amt
         else otherRev += amt
       }

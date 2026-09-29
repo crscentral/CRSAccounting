@@ -15,10 +15,37 @@ import AccountFormModal from '../components/AccountFormModal'
 import PurchaseInvoiceFormModal from '../components/PurchaseInvoiceFormModal'
 import { FileText } from 'lucide-react'
 
-import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 
+
+import React from 'react';
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return <div style={{ padding: '2rem', color: 'red' }}><h1>Something went wrong.</h1><pre>{this.state.error.toString()}</pre></div>;
+    }
+    return this.props.children;
+  }
+}
+
+
 export default function HotelExpenses() {
+  return <ErrorBoundary><HotelExpensesInner /></ErrorBoundary>;
+}
+
+function HotelExpensesInner() {
+
   const { activeCompany, activeProduct, can } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
@@ -27,6 +54,7 @@ export default function HotelExpenses() {
   const [newHeadModalOpen, setNewHeadModalOpen] = useState(false)
   const [reportModalOpen, setReportModalOpen] = useState(false)
   const [entries, setEntries] = useState([])
+  const [totalRevenue, setTotalRevenue] = useState(0)
   const [amcContracts, setAmcContracts] = useState([])
   const [expenseAccounts, setExpenseAccounts] = useState([])
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false)
@@ -40,15 +68,27 @@ export default function HotelExpenses() {
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadAll() {
-    const [{ data: exp }, { data: amc }, { data: accs }, { data: settings }, { data: roomStats }, { data: pi }, { data: cont }] = await Promise.all([
+    const [{ data: exp }, { data: amc }, { data: accs }, { data: settings }, { data: roomStats }, { data: pi }, { data: cont }, { data: hre }, { data: rdr }] = await Promise.all([
       supabase.from('hotel_expense_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).in('product', ['hotel', 'restaurant']).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to).order('expense_date', { ascending: false }),
       supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', ['hotel', 'restaurant']).order('created_at', { ascending: false }),
       supabase.from('accounts').select('id, code, name, subtype, type').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Expenses').order('code'),
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
-      supabase.from('hotel_room_stats').select('rooms_occupied').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to),
+      supabase.from('hotel_room_stats').select('rooms_occupied, room_revenue_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to),
       supabase.from('purchase_invoices').select('*, contact:contacts(name), account:accounts(code, name)').eq('company_id', activeCompany.id).in('product', ['hotel', 'restaurant']).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
-      supabase.from('contacts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('name')
+      supabase.from('contacts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('name'),
+      supabase.from('hotel_revenue_entries').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
+      supabase.from('restaurant_daily_revenue').select('total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
     ])
+    
+    let rev = 0;
+    (roomStats || []).forEach(r => rev += Number(r.room_revenue_usd) || 0);
+    (hre || []).forEach(r => rev += Number(r.amount_usd) || 0);
+    (rdr || []).forEach(r => {
+       const total = Number(r.total_amount_usd) || ((Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0) + (Number(r.other_amount_usd) || 0))
+       if (total > 0) rev += total;
+    });
+    setTotalRevenue(rev);
+    
     setEntries(exp || [])
     setAmcContracts(amc || [])
     setExpenseAccounts(accs || [])
@@ -136,7 +176,7 @@ export default function HotelExpenses() {
   }
 
   if (!activeCompany) return null
-
+  
   const start = new Date(cp.range.from)
   const end = new Date(cp.range.to)
   const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
@@ -147,15 +187,8 @@ export default function HotelExpenses() {
   const amcTotalForView = amcMonthlyTotalUsd * monthsInView
 
   const entriesTotalUsd = entries.reduce((s, r) => s + Number(r.amount_usd), 0)
-  const hotelEntries = entries.filter(e => e.product === 'hotel')
-  const restEntries = entries.filter(e => e.product === 'restaurant')
-  const hotelAmc = amcContracts.filter(a => a.product === 'hotel')
-  const restAmc = amcContracts.filter(a => a.product === 'restaurant')
-  const hotelPI = purchaseInvoices.filter(p => p.product === 'hotel')
-  const restPI = purchaseInvoices.filter(p => p.product === 'restaurant')
   
-  const hotelEntriesTotal = hotelEntries.reduce((s, r) => s + Number(r.amount_usd), 0)
-  const restEntriesTotal = restEntries.reduce((s, r) => s + Number(r.amount_usd), 0)
+  const entriesTotal = entries.reduce((s, r) => s + Number(r.amount_usd), 0)
 
   const piTotalUsd = purchaseInvoices.reduce((s, r) => s + Number(r.amount_usd), 0)
   const totalExpenses = entriesTotalUsd + amcTotalForView + piTotalUsd
@@ -185,6 +218,23 @@ export default function HotelExpenses() {
     value,
     percentStr: totalExpenses > 0 ? ((value / totalExpenses) * 100).toFixed(1) + '%' : '0.0%'
   })).sort((a, b) => b.value - a.value)
+  const barDataRev = Object.entries(byHead).filter(x => x[1] > 0).map(([name, value]) => ({
+    name: name.split(' - ')[1] || name,
+    fullName: name,
+    value: value,
+    percentStr: totalRevenue > 0 ? ((value / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'
+  })).sort((a, b) => b.value - a.value)
+
+  const barDataExp = Object.entries(byHead).filter(x => x[1] > 0).map(([name, value]) => ({
+    name: name.split(' - ')[1] || name,
+    fullName: name,
+    value: value,
+    percentStr: totalExpenses > 0 ? ((value / totalExpenses) * 100).toFixed(1) + '%' : '0.0%'
+  })).sort((a, b) => b.value - a.value)
+  
+  const totalRevPercent = totalRevenue > 0 ? ((totalExpenses / totalRevenue) * 100).toFixed(1) + '%' : '0.0%';
+  const totalExpPercent = '100.0%';
+
   
   const renderCustomLegend = (props) => {
     const { payload } = props;
@@ -274,6 +324,61 @@ export default function HotelExpenses() {
           </div>
         </div>
       </div>
+      <div className="grid lg:grid-cols-2 gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex justify-between items-start mb-4">
+             <h3 className="text-sm font-semibold text-slate-800">Expense % compared to Revenue Generated</h3>
+             <div className="text-right text-xs">
+               <div className="text-slate-500 font-medium">Total Revenue</div>
+               <div className="font-bold text-slate-700">{cp.fmt(totalRevenue)}</div>
+             </div>
+          </div>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barDataRev} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} labelFormatter={(label) => label} cursor={{fill: 'transparent'}} />
+                <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={16}>
+                  {barDataRev.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm font-semibold">
+             <span className="text-slate-600">Total Expenses</span>
+             <span className="text-slate-800">{cp.fmt(totalExpenses)} <span className="text-blue-600 ml-1">({totalRevPercent})</span></span>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex justify-between items-start mb-4">
+             <h3 className="text-sm font-semibold text-slate-800">Expense % compared to Total Expense</h3>
+             <div className="text-right text-xs">
+               <div className="text-slate-500 font-medium">Total Expenses</div>
+               <div className="font-bold text-slate-700">{cp.fmt(totalExpenses)}</div>
+             </div>
+          </div>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barDataExp} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                <RechartsTooltip formatter={(value, name, props) => [`${cp.fmt(value)} (${props?.payload?.percentStr || ''})`, 'Amount']} labelFormatter={(label) => label} cursor={{fill: 'transparent'}} />
+                <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={16}>
+                  {barDataExp.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm font-semibold">
+             <span className="text-slate-600">Total Expenses</span>
+             <span className="text-slate-800">{cp.fmt(totalExpenses)} <span className="text-amber-600 ml-1">({totalExpPercent})</span></span>
+          </div>
+        </div>
+      </div>
 
       <div className="flex gap-6 border-b border-slate-200 mb-6 mt-8">
         <button onClick={() => setActiveTab('daily')} className={`pb-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'daily' ? 'border-navy-600 text-navy-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Daily Expenses</button>
@@ -285,14 +390,14 @@ export default function HotelExpenses() {
           <div className="flex justify-between items-end mb-3">
             <div>
               <h3 className="font-semibold text-slate-700 flex items-center gap-3">
-                <span>Hotel Daily Expense Entries</span>
+                <span>Combined Daily Expense Entries</span>
             {can(['owner', 'admin', 'accountant']) && (
               <button onClick={() => setNewHeadModalOpen(true)} className="text-xs text-navy-600 hover:text-navy-800 font-medium">+ Add Expense Head</button>
             )}
           </h3>
         </div>
         <div className="text-sm text-slate-500 font-medium">
-          Total Heads: {new Set(hotelEntries.map(e => e.account_id)).size} &bull; Total Daily Amount: {cp.fmt(hotelEntriesTotal)}
+          Total Heads: {new Set(entries.map(e => e.account_id)).size} &bull; Total Daily Amount: {cp.fmt(entriesTotal)}
         </div>
       </div>
       <DataTable
@@ -309,12 +414,12 @@ export default function HotelExpenses() {
       <button onClick={() => handleDeleteEntry(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
     </div> }] : []),
         ]}
-        rows={hotelEntries}
+        rows={entries}
         emptyMessage="No expense entries in this range."
-        footer={<span>Total Heads: {new Set(hotelEntries.map(e => e.account_id)).size} &nbsp;&bull;&nbsp; Total Daily Amount: {cp.fmt(hotelEntriesTotal)}</span>}
+        footer={<span>Total Heads: {new Set(entries.map(e => e.account_id)).size} &nbsp;&bull;&nbsp; Total Daily Amount: {cp.fmt(entriesTotal)}</span>}
       />
 
-      <h3 className="font-semibold text-slate-700 mb-3 mt-6">Hotel AMC Contracts (auto-split across 12 months)</h3>
+      <h3 className="font-semibold text-slate-700 mb-3 mt-6">Combined AMC Contracts (auto-split across 12 months)</h3>
       <DataTable
         columns={[
           { key: 'contract_name', label: 'Contract' },
@@ -330,70 +435,16 @@ export default function HotelExpenses() {
       <button onClick={() => handleDeleteAmc(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
     </div> }] : []),
         ]}
-        rows={hotelAmc}
+        rows={amcContracts}
         emptyMessage="No AMC contracts yet."
       />
-          {(restEntries.length > 0 || restAmc.length > 0) && (
-            <div className="mt-10 pt-8 border-t border-slate-200">
-          <div className="flex justify-between items-end mb-3">
-            <div>
-              <h3 className="font-semibold text-slate-700 flex items-center gap-3">
-                <span>Restaurant Daily Expense Entries</span>
-            
-          </h3>
-        </div>
-        <div className="text-sm text-slate-500 font-medium">
-          Total Heads: {new Set(restEntries.map(e => e.account_id)).size} &bull; Total Daily Amount: {cp.fmt(restEntriesTotal)}
-        </div>
-      </div>
-      <DataTable
-        columns={[
-          { key: 'expense_date', label: 'Date' },
-          { key: 'invoice_number', label: 'Invoice #', render: r => r.invoice_number || '—' },
-          { key: 'account', label: 'Expense Head', render: r => r.account ? `${r.account.code} - ${r.account.name}` : '—' },
-          { key: 'amount_usd', label: 'Amount', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.amount_usd)}</span> },
-          { key: 'paid', label: 'Paid', render: r => <span className="text-emerald-600 font-medium">{cp.fmt(r.paid_amount_usd || 0)}</span> },
-          { key: 'pending', label: 'Pending', render: r => <span className="text-rose-600 font-medium">{cp.fmt(Number(r.amount_usd) - Number(r.paid_amount_usd || 0))}</span> }, 
-          { key: 'notes', label: 'Notes', render: r => r.notes || '—' },
-          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex gap-2">
-      <button onClick={() => { setEditingRow(r); setExpenseModalOpen(true); }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
-      <button onClick={() => handleDeleteEntry(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
-    </div> }] : []),
-        ]}
-        rows={restEntries}
-        emptyMessage="No expense entries in this range."
-        footer={<span>Total Heads: {new Set(restEntries.map(e => e.account_id)).size} &nbsp;&bull;&nbsp; Total Daily Amount: {cp.fmt(restEntriesTotal)}</span>}
-      />
-
-      <h3 className="font-semibold text-slate-700 mb-3 mt-6">Restaurant AMC Contracts (auto-split across 12 months)</h3>
-      <DataTable
-        columns={[
-          { key: 'contract_name', label: 'Contract' },
-          { key: 'annual_amount_usd', label: 'Annual Amount', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.annual_amount_usd)}</span> },
-          { key: 'annual_paid', label: 'Paid (Yr)', render: r => <span className="text-emerald-600 font-medium">{cp.fmt(r.paid_amount_usd || 0)}</span> },
-          { key: 'annual_pending', label: 'Pending (Yr)', render: r => <span className="text-rose-600 font-medium">{cp.fmt(Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0))}</span> },
-          { key: 'monthly', label: 'Monthly', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.annual_amount_usd / 12)}</span> },
-          { key: 'monthly_paid', label: 'Paid (Mo)', render: r => <span className="text-emerald-600 font-medium">{cp.fmt((r.paid_amount_usd || 0) / 12)}</span> },
-          { key: 'monthly_pending', label: 'Pending (Mo)', render: r => <span className="text-rose-600 font-medium">{cp.fmt((Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0)) / 12)}</span> }, 
-          { key: 'start', label: 'Starts', render: r => `${MONTH_NAMES[r.start_month - 1]} ${r.start_year}` },
-          ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex gap-2">
-      <button onClick={() => { setEditingRow(r); setAmcModalOpen(true); }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
-      <button onClick={() => handleDeleteAmc(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
-    </div> }] : []),
-        ]}
-        rows={restAmc}
-        emptyMessage="No AMC contracts yet."
-      />
-
-      
-            </div>
-          )}
+          
         </>
       )}
       {activeTab === 'purchase' && (
         <>
           <div className="flex justify-between items-end mb-3 mt-8">
-            <h3 className="font-semibold text-slate-700">Hotel Purchase Invoices</h3>
+            <h3 className="font-semibold text-slate-700">Combined Purchase Invoices</h3>
           </div>
           <DataTable
             columns={[
@@ -409,33 +460,10 @@ export default function HotelExpenses() {
                 <button onClick={() => handleDeletePI(r)} className="text-slate-400 hover:text-red-500 p-1"><Trash2 size={15} /></button>
               </div> }] : []),
             ]}
-            rows={hotelPI}
+            rows={purchaseInvoices}
             emptyMessage="No purchase invoices yet."
           />
-          {restPI.length > 0 && (
-            <div className="mt-10 pt-8 border-t border-slate-200">
-          <div className="flex justify-between items-end mb-3 mt-8">
-            <h3 className="font-semibold text-slate-700">Restaurant Purchase Invoices</h3>
-          </div>
-          <DataTable
-            columns={[
-              { key: 'date', label: 'Date', render: r => r.invoice_date },
-              { key: 'invoice_no', label: 'Invoice #', render: r => r.invoice_number },
-              { key: 'supplier', label: 'Supplier', render: r => r.contact?.name || r.supplier_name_freeform || 'Unknown' },
-              { key: 'amount', label: 'Amount', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.amount_usd)}</span> },
-              { key: 'paid', label: 'Paid', render: r => { const paid = r.status === 'Paid' ? r.amount_usd : 0; return <span className="text-emerald-600 font-medium">{cp.fmt(paid)}</span> } },
-              { key: 'pending', label: 'Pending', render: r => { const pending = r.status === 'Paid' ? 0 : r.amount_usd; return <span className="text-rose-600 font-medium">{cp.fmt(pending)}</span> } }, 
-              { key: 'status', label: 'Status', render: r => <span className={`px-2 py-0.5 rounded text-xs font-medium ${r.status === 'Draft' ? 'bg-slate-100 text-slate-600' : r.status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{r.status}</span> },
-              ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => <div className="flex justify-end gap-2">
-                <button onClick={() => { setEditingRow(r); setPurchaseModalOpen(true); }} className="text-slate-400 hover:text-navy-600 p-1"><Pencil size={15} /></button>
-                <button onClick={() => handleDeletePI(r)} className="text-slate-400 hover:text-red-500 p-1"><Trash2 size={15} /></button>
-              </div> }] : []),
-            ]}
-            rows={restPI}
-            emptyMessage="No purchase invoices yet."
-          />
-            </div>
-          )}
+          
         </>
       )}
 
