@@ -20,7 +20,7 @@ export default function KpiCard({ label, value, sublabel, icon: Icon, tone = 'sl
           </span>
         )}
       </div>
-      <div className={`${sizeClass} font-bold text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis`} title={String(value)}>
+      <div className={`${sizeClass} font-bold text-slate-800 break-words`} title={String(value)}>
         {value}
       </div>
       {sublabel && <div className="text-xs text-slate-400">{sublabel}</div>}

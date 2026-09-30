@@ -439,11 +439,11 @@ export default function HotelBudget() {
       </div>)}
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
-        <KpiCard label={`${MONTH_NAMES[activeMonth - 1]} Budget`} value={fmt(monthlyBudgetUsd)} icon={TrendingUp} tone="gold" />
-        <KpiCard label={`${MONTH_NAMES[activeMonth - 1]} ${isCurrentMonth ? 'MTD ' : ''}Actual`} value={fmt(mtdActualUsd)} icon={TrendingUp} tone="green" />
+        <KpiCard label={`${MONTH_NAMES[activeMonth - 1]} Budget`} value={fmtRounded(monthlyBudgetUsd)} icon={TrendingUp} tone="gold" />
+        <KpiCard label={`${MONTH_NAMES[activeMonth - 1]} ${isCurrentMonth ? 'MTD ' : ''}Actual`} value={fmtRounded(mtdActualUsd)} icon={TrendingUp} tone="green" />
         <KpiCard
           label="Variance"
-          value={fmtRoundedAbs(mtdPaceVariance)}
+          value={fmtRounded(Math.abs(mtdPaceVariance))}
           icon={mtdPaceVariance >= 0 ? TrendingUp : AlertTriangle}
           tone={mtdPaceVariance >= 0 ? 'green' : 'red'}
           sublabel={isCurrentMonth ? "Actual vs. where you should be by today" : "Actual vs. Full Month Budget"}
