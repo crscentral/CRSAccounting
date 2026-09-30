@@ -452,7 +452,7 @@ export default function HotelBudget() {
 
       
       
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
         <KpiCard label="YTD Actual Revenue" value={fmtRounded(grandTotalRevenueActual)} icon={TrendingUp} tone="green" />
         <KpiCard label="YTD Total Budget" value={fmtRounded(revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev)} icon={TrendingUp} tone="indigo" />
         <KpiCard label="YTD Variance" value={fmtRounded(grandTotalRevenueActual - (revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev))} icon={grandTotalRevenueActual >= (revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev) ? TrendingUp : AlertTriangle} tone={grandTotalRevenueActual >= (revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev) ? 'green' : 'red'} />
