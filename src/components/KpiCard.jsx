@@ -8,7 +8,30 @@ export default function KpiCard({ label, value, sublabel, icon: Icon, tone = 'sl
   }
 
   const len = String(value).length
-  const sizeClass = len > 18 ? 'text-[11px] sm:text-xs' : len > 15 ? 'text-sm sm:text-base' : len > 12 ? 'text-base sm:text-lg' : len > 9 ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'
+  let content = value
+  const valStr = String(value)
+  const m = valStr.match(/^([^\d]*)([\d,.]+)([^\d]*)$/)
+  
+  // If it's a long number (e.g., LAK 1,384,584)
+  if (m && len > 11) {
+    const prefix = m[1].trim()
+    const suffix = m[3].trim()
+    // Avoid splitting percentages like "100.0%"
+    if (suffix !== '%' && prefix !== '%') {
+        const currencyStr = [prefix, suffix].filter(Boolean).join(' ')
+        if (currencyStr) {
+          content = (
+            <div className="flex flex-col items-center justify-center w-full mt-1">
+              <span className="text-sm font-bold text-slate-400 mb-0.5">{currencyStr}</span>
+              <span className="whitespace-nowrap">{m[2]}</span>
+            </div>
+          )
+        }
+    }
+  }
+
+  const sizeClass = len > 16 ? 'text-lg sm:text-xl' : len > 12 ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl'
+
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-col gap-2 min-w-0">
@@ -20,8 +43,8 @@ export default function KpiCard({ label, value, sublabel, icon: Icon, tone = 'sl
           </span>
         )}
       </div>
-      <div className={`${sizeClass} font-bold text-slate-800 break-words`} title={String(value)}>
-        {value}
+      <div className={`flex items-center ${content !== value ? 'justify-center' : ''} ${sizeClass} font-bold text-slate-800 break-words`} title={String(value)}>
+        {content}
       </div>
       {sublabel && <div className="text-xs text-slate-400">{sublabel}</div>}
     </div>
