@@ -52,6 +52,7 @@ export default function HotelOccupancyStats() {
   }
 
   async function loadAll() {
+    const now = new Date();
     setLoading(true)
     const range = rangeFor(view)
       
