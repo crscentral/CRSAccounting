@@ -93,3 +93,16 @@ export function formatMoney(amount, currencyCode) {
     return `${amount.toFixed(2)} ${currencyCode}`
   }
 }
+
+export function formatMoneyRounded(amount, currencyCode) {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Math.round(amount))
+  } catch {
+    return `${Math.round(amount)} ${currencyCode}`
+  }
+}

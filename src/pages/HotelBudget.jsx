@@ -3,7 +3,7 @@ import { Save, TrendingUp, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { MONTH_NAMES } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatMoneyRounded } from '../lib/fx'
 import { CURRENCY_LIST, CURRENCIES } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
@@ -514,7 +514,7 @@ export default function HotelBudget() {
                     <td className="py-1.5 px-3">
                       <input type="number" min="0" step="0.01" value={row.adr || ''} onChange={e => updateRow(year, month, 'adr', e.target.value)} className="w-20 border border-slate-200 rounded px-2 py-1 text-xs" placeholder="ADR" />
                     </td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs">{roomsOcc}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-xs whitespace-nowrap">{roomsOcc}</td>
                     <td className="py-1.5 px-3">
                       <div className="flex items-center gap-1">
                         <select value={row.currency || displayCurrency} onChange={e => updateRow(year, month, 'currency', e.target.value)} className="w-16 border border-slate-200 rounded px-1 py-1 text-[10px] bg-slate-50">
@@ -523,13 +523,13 @@ export default function HotelBudget() {
                         <input type="number" step="0.01" value={row.revenue || ''} onChange={e => updateRow(year, month, 'revenue', e.target.value)} className="w-24 border border-slate-200 rounded px-2 py-1 text-xs" placeholder="Revenue" />
                       </div>
                     </td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs">{(row.currency || displayCurrency) === 'USD' ? formatMoney(row.revenue || 0, 'USD') : (row.revenue_usd ? formatMoney(row.revenue_usd, 'USD') : <span className="text-slate-300 italic text-[10px]">On save</span>)}</td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs font-medium">{formatMoney(Math.round(monthlyBudget), row.currency || displayCurrency).replace('.00', '')}</td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs">{formatMoney(Math.round(monthlyUsd), 'USD').replace('.00', '')}</td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs font-medium">{formatMoney(actualLocal, row.currency || displayCurrency)}</td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs">{fmt(actualUsd)}</td>
-                    <td className={`py-1.5 px-3 text-xs font-medium ${varLocal < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varLocal)), row.currency || displayCurrency).replace('.00', '')}</td>
-                    <td className={`py-1.5 px-3 text-xs ${varUsd < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varUsd)), 'USD').replace('.00', '')}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-xs whitespace-nowrap">{(row.currency || displayCurrency) === 'USD' ? formatMoney(row.revenue || 0, 'USD') : (row.revenue_usd ? formatMoney(row.revenue_usd, 'USD') : <span className="text-slate-300 italic text-[10px]">On save</span>)}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-xs font-medium whitespace-nowrap">{formatMoneyRounded(monthlyBudget, row.currency || displayCurrency)}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-xs whitespace-nowrap">{fmtRounded(monthlyUsd, 'USD')}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-xs font-medium whitespace-nowrap">{formatMoneyRounded(actualLocal, row.currency || displayCurrency)}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-xs whitespace-nowrap">{fmtRounded(actualUsd, 'USD')}</td>
+                    <td className={`py-1.5 px-3 text-xs font-medium whitespace-nowrap ${varLocal < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varLocal)), row.currency || displayCurrency).replace('.00', '')}</td>
+                    <td className={`py-1.5 px-3 text-xs whitespace-nowrap ${varUsd < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varUsd)), 'USD').replace('.00', '')}</td>
                     <td className="py-1.5 px-3">
                       {can(['owner', 'admin', 'accountant']) && (
                         <div className="flex gap-2 justify-end items-center">
@@ -570,11 +570,11 @@ export default function HotelBudget() {
                 {ancillaryMonthlySummary.months.map(m => (
                   <tr key={m.month} className="border-b border-slate-50 hover:bg-slate-50/50">
                     <td className="py-2 px-3 font-medium text-slate-700 w-32">{m.name}</td>
-                    <td className="py-2 px-3 text-slate-500 font-medium">{formatMoney(m.budgetLocal, displayCurrency)}</td>
-                    <td className="py-2 px-3 text-slate-500">{fmt(m.budgetUsd)}</td>
-                    <td className="py-2 px-3 text-slate-500 font-medium">{formatMoney(m.actualLocal, displayCurrency)}</td>
-                    <td className="py-2 px-3 text-slate-500">{fmt(m.actualUsd)}</td>
-                    <td className={`py-2 px-3 font-medium ${m.varianceLocal < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatMoney(Math.abs(m.varianceLocal), displayCurrency)}</td>
+                    <td className="py-2 px-3 text-slate-500 font-medium">{formatMoneyRounded(m.budgetLocal, displayCurrency)}</td>
+                    <td className="py-2 px-3 text-slate-500">{fmtRounded(m.budgetUsd, 'USD')}</td>
+                    <td className="py-2 px-3 text-slate-500 font-medium">{formatMoneyRounded(m.actualLocal, displayCurrency)}</td>
+                    <td className="py-2 px-3 text-slate-500">{fmtRounded(m.actualUsd, 'USD')}</td>
+                    <td className={`py-2 px-3 font-medium ${m.varianceLocal < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatMoneyRounded(Math.abs(m.varianceLocal), displayCurrency)}</td>
                     <td className={`py-2 px-3 ${m.varianceUsd < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{fmt(Math.abs(m.varianceUsd))}</td>
                   </tr>
                 ))}
@@ -651,7 +651,7 @@ export default function HotelBudget() {
                             </td>
                             <td className="py-2 px-3 text-slate-500 min-w-[120px]">{formatMoney(monthlyUsd, 'USD')}</td>
                             <td className="py-2 px-3 text-slate-500 min-w-[120px]">{formatMoney(actualLocal, cur)}</td>
-                            <td className="py-2 px-3 text-slate-500 min-w-[120px]">{formatMoney(actualUsd, 'USD')}</td>
+                            <td className="py-2 px-3 text-slate-500 min-w-[120px]">{fmtRounded(actualUsd, 'USD')}</td>
                             <td className={`py-2 px-3 font-medium min-w-[120px] ${varLocal < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatMoney(Math.abs(varLocal), cur)}</td>
                             <td className={`py-2 px-3 font-medium min-w-[120px] ${varUsd < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatMoney(Math.abs(varUsd), 'USD')}</td>
                             <td className="py-2 px-3 text-right">

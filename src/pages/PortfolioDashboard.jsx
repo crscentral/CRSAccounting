@@ -40,16 +40,16 @@ export default function PortfolioDashboard() {
 
   useEffect(() => { if (companies.length > 0) loadPortfolio(cp.range) }, [companies.length, cp.range.from, cp.range.to])
 
-  async function computeCompanyProductMetrics(companyId, product, range) {
+  async function computeCompanyProductMetrics(company, product, range) {
     const [{ data: hotelSettings }, { data: hotelStats }, { data: accounts }, { data: entries }, { data: salesInv }, { data: receipts }, { data: guestInv }, { data: roomStatsExt }] = await Promise.all([
-      supabase.from('hotel_settings').select('total_rooms').eq('company_id', companyId).eq('product', product).maybeSingle(),
-      product === 'hotel' ? supabase.from('hotel_room_stats').select('rooms_occupied, room_revenue_usd').eq('company_id', companyId).eq('product', product).gte('stat_date', range.from).lte('stat_date', range.to) : Promise.resolve({ data: null }),
-      supabase.from('accounts').select('id, type, subtype, name').eq('company_id', companyId).eq('product', product),
-      supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, source_type').eq('company_id', companyId).eq('product', product).gte('entry_date', range.from).lte('entry_date', range.to),
-      supabase.from('sales_invoices').select('id, amount_usd').eq('company_id', companyId).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to),
-      supabase.from('payment_receipts').select('amount_usd').eq('company_id', companyId).eq('product', product).gte('receipt_date', range.from).lte('receipt_date', range.to),
-      product === 'hotel' ? supabase.from('hotel_guest_invoices').select('invoice_amount_usd, collected_amount_usd').eq('company_id', companyId).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to) : Promise.resolve({ data: null }),
-      product === 'hotel' ? supabase.from('hotel_room_stats').select('room_revenue_collected_usd').eq('company_id', companyId).eq('product', product).gte('stat_date', range.from).lte('stat_date', range.to) : Promise.resolve({ data: null }),
+      supabase.from('hotel_settings').select('total_rooms').eq('company_id', company.id).eq('product', product).maybeSingle(),
+      product === 'hotel' ? supabase.from('hotel_room_stats').select('rooms_occupied, room_revenue_usd').eq('company_id', company.id).eq('product', product).gte('stat_date', range.from).lte('stat_date', range.to) : Promise.resolve({ data: null }),
+      supabase.from('accounts').select('id, type, subtype, name').eq('company_id', company.id).eq('product', product),
+      supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, source_type').eq('company_id', company.id).eq('product', product).gte('entry_date', range.from).lte('entry_date', range.to),
+      supabase.from('sales_invoices').select('id, amount_usd').eq('company_id', company.id).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to),
+      supabase.from('payment_receipts').select('amount_usd').eq('company_id', company.id).eq('product', product).gte('receipt_date', range.from).lte('receipt_date', range.to),
+      product === 'hotel' ? supabase.from('hotel_guest_invoices').select('invoice_amount_usd, collected_amount_usd').eq('company_id', company.id).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to) : Promise.resolve({ data: null }),
+      product === 'hotel' ? supabase.from('hotel_room_stats').select('room_revenue_collected_usd').eq('company_id', company.id).eq('product', product).gte('stat_date', range.from).lte('stat_date', range.to) : Promise.resolve({ data: null }),
     ])
 
     const balances = {}
@@ -74,13 +74,13 @@ export default function PortfolioDashboard() {
 
     if (['hotel', 'restaurant'].includes(product)) {
       const [{ data: hrs }, { data: hre }, { data: rdr }, { data: hee }, { data: amc }, { data: hgi }, { data: pur }] = await Promise.all([
-        supabase.from('hotel_room_stats').select('*').eq('company_id', companyId).eq('product', product).gte('stat_date', range.from).lte('stat_date', range.to),
-        supabase.from('hotel_revenue_entries').select('*').eq('company_id', companyId).eq('product', product).gte('entry_date', range.from).lte('entry_date', range.to),
-        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', companyId).eq('product', product).gte('revenue_date', range.from).lte('revenue_date', range.to),
-        supabase.from('hotel_expense_entries').select('*').eq('company_id', companyId).eq('product', product).gte('expense_date', range.from).lte('expense_date', range.to),
-        supabase.from('hotel_amc_contracts').select('*').eq('company_id', companyId).eq('product', product),
-        supabase.from('hotel_guest_invoices').select('*').eq('company_id', companyId).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to),
-        supabase.from('purchase_invoices').select('*').eq('company_id', companyId).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to)
+        supabase.from('hotel_room_stats').select('*').eq('company_id', company.id).eq('product', product).gte('stat_date', range.from).lte('stat_date', range.to),
+        supabase.from('hotel_revenue_entries').select('*').eq('company_id', company.id).eq('product', product).gte('entry_date', range.from).lte('entry_date', range.to),
+        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', company.id).eq('product', product).gte('revenue_date', range.from).lte('revenue_date', range.to),
+        supabase.from('hotel_expense_entries').select('*').eq('company_id', company.id).eq('product', product).gte('expense_date', range.from).lte('expense_date', range.to),
+        supabase.from('hotel_amc_contracts').select('*').eq('company_id', company.id).eq('product', product),
+        supabase.from('hotel_guest_invoices').select('*').eq('company_id', company.id).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to),
+        supabase.from('purchase_invoices').select('*').eq('company_id', company.id).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to)
       ])
       
       const r_hrs = (hrs || []).reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
@@ -94,7 +94,7 @@ export default function PortfolioDashboard() {
       const start = new Date(range.from)
       const end = new Date(range.to)
       const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
-      const fyStart = comp?.fiscal_year_start_month || 1;
+      const fyStart = company.fiscal_year_start_month || 1;
       const e_amc = (amc || []).reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, range.from, range.to), 0)
       const e_hee = (hee || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
       const e_pur = (pur || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
@@ -130,7 +130,7 @@ export default function PortfolioDashboard() {
     companies.forEach(({ company }) => {
       ;(company.company_products || []).forEach(({ product }) => {
         tasks.push(
-          computeCompanyProductMetrics(company.id, product, range).then(metrics => ({
+          computeCompanyProductMetrics(company, product, range).then(metrics => ({
             companyId: company.id, companyName: company.name, product, ...metrics,
           }))
         )
@@ -149,7 +149,7 @@ export default function PortfolioDashboard() {
     const tasks = []
     companies.forEach(({ company }) => {
       ;(company.company_products || []).forEach(({ product }) => {
-        tasks.push(computeCompanyProductMetrics(company.id, product, range).then(m => ({ companyName: company.name, product, ...m })))
+        tasks.push(computeCompanyProductMetrics(company, product, range).then(m => ({ companyName: company.name, product, ...m })))
       })
     })
     const reportRows = await Promise.all(tasks)

@@ -7,7 +7,7 @@ import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
-import { resolveReportPeriod } from '../lib/fiscalYear'
+import { resolveReportPeriod , getAmcActiveMonths, getAmcMonthsInView } from '../lib/fiscalYear'
 import { DollarSign, CheckCircle2, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
 
 const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']

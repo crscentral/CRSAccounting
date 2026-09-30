@@ -3,7 +3,7 @@ import { Save, TrendingUp, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { MONTH_NAMES } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatMoneyRounded } from '../lib/fx'
 import { CURRENCIES } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
@@ -313,8 +313,8 @@ export default function HotelExpenseBudget() {
               {monthlySummary.months.map(m => (
                 <tr key={m.month} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="py-2 px-3 font-medium text-slate-700 w-32">{m.name}</td>
-                  <td className="py-2 px-3 text-slate-500">{fmt(m.budget)}</td>
-                  <td className="py-2 px-3 text-slate-500">{fmt(m.actual)}</td>
+                  <td className="py-2 px-3 text-slate-500 whitespace-nowrap">{fmt(m.budget)}</td>
+                  <td className="py-2 px-3 text-slate-500 whitespace-nowrap">{fmt(m.actual)}</td>
                   <td className={`py-2 px-3 font-medium ${m.variance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{fmt(m.variance)}</td>
                 </tr>
               ))}
