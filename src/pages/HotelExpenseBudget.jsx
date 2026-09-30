@@ -313,8 +313,8 @@ export default function HotelExpenseBudget() {
               {monthlySummary.months.map(m => (
                 <tr key={m.month} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="py-2 px-3 font-medium text-slate-700 w-32">{m.name}</td>
-                  <td className="py-2 px-3 text-slate-500 whitespace-nowrap">{fmt(m.budget)}</td>
-                  <td className="py-2 px-3 text-slate-500 whitespace-nowrap">{fmt(m.actual)}</td>
+                  <td className="py-2 px-3 text-slate-500 text-[11px]">{fmt(m.budget)}</td>
+                  <td className="py-2 px-3 text-slate-500 text-[11px]">{fmt(m.actual)}</td>
                   <td className={`py-2 px-3 font-medium ${m.variance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{fmt(m.variance)}</td>
                 </tr>
               ))}

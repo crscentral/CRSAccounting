@@ -8,7 +8,7 @@ export default function KpiCard({ label, value, sublabel, icon: Icon, tone = 'sl
   }
 
   const len = String(value).length
-  const sizeClass = len > 15 ? 'text-base sm:text-lg' : len > 11 ? 'text-lg sm:text-xl' : len > 8 ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl'
+  const sizeClass = len > 18 ? 'text-[11px] sm:text-xs' : len > 15 ? 'text-sm sm:text-base' : len > 12 ? 'text-base sm:text-lg' : len > 9 ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-col gap-2 min-w-0">

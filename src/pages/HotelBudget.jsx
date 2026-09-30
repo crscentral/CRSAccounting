@@ -514,7 +514,7 @@ export default function HotelBudget() {
                     <td className="py-1.5 px-3">
                       <input type="number" min="0" step="0.01" value={row.adr || ''} onChange={e => updateRow(year, month, 'adr', e.target.value)} className="w-20 border border-slate-200 rounded px-2 py-1 text-xs" placeholder="ADR" />
                     </td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs whitespace-nowrap">{roomsOcc}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-[11px]">{roomsOcc}</td>
                     <td className="py-1.5 px-3">
                       <div className="flex items-center gap-1">
                         <select value={row.currency || displayCurrency} onChange={e => updateRow(year, month, 'currency', e.target.value)} className="w-16 border border-slate-200 rounded px-1 py-1 text-[10px] bg-slate-50">
@@ -523,13 +523,13 @@ export default function HotelBudget() {
                         <input type="number" step="0.01" value={row.revenue || ''} onChange={e => updateRow(year, month, 'revenue', e.target.value)} className="w-24 border border-slate-200 rounded px-2 py-1 text-xs" placeholder="Revenue" />
                       </div>
                     </td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs whitespace-nowrap">{(row.currency || displayCurrency) === 'USD' ? formatMoney(row.revenue || 0, 'USD') : (row.revenue_usd ? formatMoney(row.revenue_usd, 'USD') : <span className="text-slate-300 italic text-[10px]">On save</span>)}</td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs font-medium whitespace-nowrap">{formatMoneyRounded(monthlyBudget, row.currency || displayCurrency)}</td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs whitespace-nowrap">{fmtRounded(monthlyUsd, 'USD')}</td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs font-medium whitespace-nowrap">{formatMoneyRounded(actualLocal, row.currency || displayCurrency)}</td>
-                    <td className="py-1.5 px-3 text-slate-500 text-xs whitespace-nowrap">{fmtRounded(actualUsd, 'USD')}</td>
-                    <td className={`py-1.5 px-3 text-xs font-medium whitespace-nowrap ${varLocal < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varLocal)), row.currency || displayCurrency).replace('.00', '')}</td>
-                    <td className={`py-1.5 px-3 text-xs whitespace-nowrap ${varUsd < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varUsd)), 'USD').replace('.00', '')}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-[11px]">{(row.currency || displayCurrency) === 'USD' ? formatMoney(row.revenue || 0, 'USD') : (row.revenue_usd ? formatMoney(row.revenue_usd, 'USD') : <span className="text-slate-300 italic text-[10px]">On save</span>)}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-[11px] font-medium">{formatMoneyRounded(monthlyBudget, row.currency || displayCurrency)}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-[11px]">{fmtRounded(monthlyUsd, 'USD')}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-[11px] font-medium">{formatMoneyRounded(actualLocal, row.currency || displayCurrency)}</td>
+                    <td className="py-1.5 px-3 text-slate-500 text-[11px]">{fmtRounded(actualUsd, 'USD')}</td>
+                    <td className={`py-1.5 px-3 text-[11px] font-medium ${varLocal < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varLocal)), row.currency || displayCurrency).replace('.00', '')}</td>
+                    <td className={`py-1.5 px-3 text-[11px] ${varUsd < 0 ? 'text-red-500' : 'text-green-600'}`}>{formatMoney(Math.abs(Math.round(varUsd)), 'USD').replace('.00', '')}</td>
                     <td className="py-1.5 px-3">
                       {can(['owner', 'admin', 'accountant']) && (
                         <div className="flex gap-2 justify-end items-center">
