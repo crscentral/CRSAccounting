@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import AppShell from './components/AppShell'
 import CreateFirstCompanyScreen from './components/CreateFirstCompanyScreen'
 import PendingApprovalScreen from './components/PendingApprovalScreen'
@@ -113,6 +114,7 @@ export default function App() {
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>
+          </ErrorBoundary>
     </BrowserRouter>
   )
 }
