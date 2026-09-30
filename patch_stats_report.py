@@ -1,22 +1,12 @@
 import re
 
 with open('src/pages/HotelOccupancyStats.jsx', 'r') as f:
-    code = f.read()
+    content = f.read()
 
-old_gen = """    // If the modal selected a different view, we should theoretically re-fetch, but 
-    // for simplicity, let's trigger a view change if it doesn't match and warn, OR
-    // just use the current data since the page state drives the data.
-    // To properly support it, we'd need to await loadData for that view.
-    // For now, if selections.view !== view, we'll just alert that they should change it on the page first, or we can just fetch it!
+# I will insert generateStatsReport right before `const totalOccupied = ...`
+report_func = """
+  async function generateStatsReport(selections, format) {
     const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
-
-    const { data: statRows } = await supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to).order('stat_date')
-    const rows = statRows || []
-    const sections = [{
-      heading: `Occupancy & Revenue Statistics — ${VIEWS.find(v => v.key === view)?.label}`,"""
-
-new_gen = """    const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
     const reportView = selections.view || view
     const reportRange = rangeFor(reportView)
@@ -24,15 +14,28 @@ new_gen = """    const rrate = selections.currency === 'USD' ? 1 : (await getLat
     const { data: statRows } = await supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', reportRange.from).lte('stat_date', reportRange.to).order('stat_date')
     const rows = statRows || []
     const sections = [{
-      heading: `Occupancy & Revenue Statistics — ${VIEWS.find(v => v.key === reportView)?.label}`,"""
-code = code.replace(old_gen, new_gen)
+      heading: `Occupancy & Revenue Statistics — ${VIEWS.find(v => v.key === reportView)?.label}`,
+      columns: ['Date', 'Rooms Occupied', 'Occupancy %', 'ADR', 'RevPAR', 'Room Revenue', 'Collected'],
+      rows: rows.map(r => {
+        const occPct = totalRooms > 0 ? ((r.rooms_occupied / totalRooms) * 100).toFixed(1) + '%' : '—'
+        const adr = r.rooms_occupied > 0 ? f(r.room_revenue_usd / r.rooms_occupied) : '—'
+        const revpar = totalRooms > 0 ? f(r.room_revenue_usd / totalRooms) : '—'
+        return [r.stat_date, r.rooms_occupied, occPct, adr, revpar, f(r.room_revenue_usd), f(r.room_revenue_collected_usd)]
+      }),
+    }]
 
-old_range = "const range = rangeFor(view)"
-code = code.replace(old_range, "")
+    const title = 'Hotel Revenue & Occupancy Statistics'
+    const subtitle = `${activeCompany.name} • ${reportRange.from} to ${reportRange.to} • ${selections.currency}`
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'hotel_occupancy_stats' })
+    if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'hotel_occupancy_stats' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'hotel_occupancy_stats' })
+  }
 
-old_subtitle = "const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`"
-new_subtitle = "const subtitle = `${activeCompany.name} • ${reportRange.from} to ${reportRange.to} • ${selections.currency}`"
-code = code.replace(old_subtitle, new_subtitle)
+  if (!activeCompany) return null
+
+  const totalOccupied = stats.reduce((s, r) => s + r.rooms_occupied, 0)"""
+
+content = content.replace("  const totalOccupied = stats.reduce((s, r) => s + r.rooms_occupied, 0)", report_func)
 
 with open('src/pages/HotelOccupancyStats.jsx', 'w') as f:
-    f.write(code)
+    f.write(content)

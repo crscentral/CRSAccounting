@@ -111,6 +111,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter basename="/">
+      <ErrorBoundary>
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>
