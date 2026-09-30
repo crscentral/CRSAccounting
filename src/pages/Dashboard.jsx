@@ -116,32 +116,33 @@ export default function Dashboard() {
   const [restaurantRevenue, setRestaurantRevenue] = useState([])
 
   async function loadData() {
+    const prodFilter = activeProduct === 'hotel' ? ['hotel', 'restaurant'] : [activeProduct]
         const [{ data: s }, { data: p }, { data: r }, { data: allS }, { data: allP }, { data: accs }, { data: led }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }, { data: hPi }] = await Promise.all([
-      supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
-      supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
-      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
-      supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('accounts').select('id, type, name').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to) : Promise.resolve({ data: [] }),
+      supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
+      supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
+      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
+      supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter),
+      supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter),
+      supabase.from('accounts').select('id, type, name').eq('company_id', activeCompany.id).in('product', prodFilter),
+      supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('invoice_date, amount_usd, currency, status, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }).limit(10) : Promise.resolve({ data: [] })
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('invoice_date, amount_usd, currency, status, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }).limit(10) : Promise.resolve({ data: [] })
     ])
 
     let allHrs = [], allHgi = [], allHee = [], allHre = [], allRdr = [], allHPi = [];
     if (['hotel', 'restaurant'].includes(activeProduct)) {
       const [{ data: aHrs }, { data: aHgi }, { data: aHee }, { data: aHre }, { data: aRdr }, { data: aHotelPi }] = await Promise.all([
-        supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd, manual_room_revenue_collected_usd, invoiced_room_revenue_collected').eq('company_id', activeCompany.id).eq('product', activeProduct),
-        supabase.from('hotel_guest_invoices').select('invoice_date, invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct),
-        supabase.from('hotel_expense_entries').select('expense_date, amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct),
-        supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, collected_usd').eq('company_id', activeCompany.id).eq('product', activeProduct),
-        supabase.from('restaurant_daily_revenue').select('revenue_date, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).eq('product', activeProduct),
-        supabase.from('purchase_invoices').select('invoice_date, amount_usd, status').eq('company_id', activeCompany.id).eq('product', activeProduct)
+        supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd, manual_room_revenue_collected_usd, invoiced_room_revenue_collected').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('hotel_guest_invoices').select('invoice_date, invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('hotel_expense_entries').select('expense_date, amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('restaurant_daily_revenue').select('revenue_date, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('purchase_invoices').select('invoice_date, amount_usd, status').eq('company_id', activeCompany.id).in('product', prodFilter)
       ])
       allHrs = aHrs || []
       allHgi = aHgi || []
@@ -173,28 +174,28 @@ export default function Dashboard() {
 
     // Recent Transactions: latest 5 across sales, purchases, and receipts, all-time (not period-filtered)
     const [{ data: recentS }, { data: recentP }, { data: recentR }] = await Promise.all([
-      supabase.from('sales_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }).limit(5),
-      supabase.from('purchase_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }).limit(5),
-      supabase.from('payment_receipts').select('receipt_date, amount_usd, currency, amount').eq('company_id', activeCompany.id).eq('product', activeProduct).order('receipt_date', { ascending: false }).limit(5),
+      supabase.from('sales_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(5),
+      supabase.from('purchase_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(5),
+      supabase.from('payment_receipts').select('receipt_date, amount_usd, currency, amount').eq('company_id', activeCompany.id).in('product', prodFilter).order('receipt_date', { ascending: false }).limit(5),
     ])
     const combined = [
       ...(recentS || []).map(r => ({ date: r.invoice_date, label: r.contact?.name || r.invoice_number, amount: r.amount, currency: r.currency })),
       ...(recentP || []).map(r => ({ date: r.invoice_date, label: r.contact?.name || r.supplier_name_freeform || r.invoice_number, amount: r.amount, currency: r.currency })),
       ...(recentR || []).map(r => ({ date: r.receipt_date, label: 'Payment Received', amount: r.amount, currency: r.currency })),
-    ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 5)
+    ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 3)
     if (['hotel', 'restaurant'].includes(activeProduct)) {
       const [{ data: hgi }, { data: hre }, { data: hee }, { data: hPi }] = await Promise.all([
-        supabase.from('hotel_guest_invoices').select('id, invoice_date, invoice_amount_usd, currency, guest_name').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }).limit(10),
-        supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, currency, account:accounts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('entry_date', { ascending: false }).limit(10),
-        supabase.from('hotel_expense_entries').select('expense_date, amount_usd, currency, account:accounts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('expense_date', { ascending: false }).limit(10),
-        supabase.from('purchase_invoices').select('invoice_date, amount_usd, currency, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).order('invoice_date', { ascending: false }).limit(10),
+        supabase.from('hotel_guest_invoices').select('id, invoice_date, invoice_amount_usd, currency, guest_name').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(10),
+        supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, currency, account:accounts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('entry_date', { ascending: false }).limit(10),
+        supabase.from('hotel_expense_entries').select('expense_date, amount_usd, currency, account:accounts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('expense_date', { ascending: false }).limit(10),
+        supabase.from('purchase_invoices').select('invoice_date, amount_usd, currency, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(10),
       ])
       const hCombined = [
         ...(hgi || []).map(r => ({ date: r.invoice_date, label: r.guest_name || 'Guest Invoice', amount: r.invoice_amount_usd, currency: 'USD' })),
         ...(hre || []).map(r => ({ date: r.entry_date, label: r.account?.name || 'Revenue', amount: r.amount_usd, currency: 'USD' })),
         ...(hee || []).map(r => ({ date: r.expense_date, label: r.account?.name || 'Expense', amount: r.amount_usd, currency: 'USD' })),
         ...(restaurantRevenue || []).map(r => ({ date: r.revenue_date, label: r.meal_period + ' F&B Revenue', amount: (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), currency: 'USD' }))
-      ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 10)
+      ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 3)
       setRecentTx(hCombined)
     } else {
       setRecentTx(combined)
@@ -209,31 +210,31 @@ export default function Dashboard() {
     const fmt = (usd) => formatMoney(conv(usd), selections.currency)
 
         const [{ data: s }, { data: p }, { data: r }, { data: allS }, { data: allP }, { data: accs }, { data: led }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }, { data: hPi }] = await Promise.all([
-      supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
-      supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
-      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
-      supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('accounts').select('id, type, name').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to) : Promise.resolve({ data: [] }),
+      supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
+      supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
+      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
+      supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter),
+      supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter),
+      supabase.from('accounts').select('id, type, name').eq('company_id', activeCompany.id).in('product', prodFilter),
+      supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('invoice_date, amount_usd, currency, status, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }).limit(10) : Promise.resolve({ data: [] })
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('invoice_date, amount_usd, currency, status, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }).limit(10) : Promise.resolve({ data: [] })
     ])
 
     let allHrs = [], allHgi = [], allHee = [], allHre = [], allRdr = [], allHPi = [];
     if (['hotel', 'restaurant'].includes(activeProduct)) {
       const [{ data: aHrs }, { data: aHgi }, { data: aHee }, { data: aHre }, { data: aRdr }, { data: aHotelPi }] = await Promise.all([
-        supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd, manual_room_revenue_collected_usd, invoiced_room_revenue_collected').eq('company_id', activeCompany.id).eq('product', activeProduct),
-        supabase.from('hotel_guest_invoices').select('invoice_date, invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct),
-        supabase.from('hotel_expense_entries').select('expense_date, amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct),
-        supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, collected_usd').eq('company_id', activeCompany.id).eq('product', activeProduct),
-        supabase.from('restaurant_daily_revenue').select('revenue_date, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).eq('product', activeProduct),
-        supabase.from('purchase_invoices').select('invoice_date, amount_usd, status').eq('company_id', activeCompany.id).eq('product', activeProduct)
+        supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd, manual_room_revenue_collected_usd, invoiced_room_revenue_collected').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('hotel_guest_invoices').select('invoice_date, invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('hotel_expense_entries').select('expense_date, amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('restaurant_daily_revenue').select('revenue_date, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('purchase_invoices').select('invoice_date, amount_usd, status').eq('company_id', activeCompany.id).in('product', prodFilter)
       ])
       allHrs = aHrs || []
       allHgi = aHgi || []
@@ -293,8 +294,8 @@ export default function Dashboard() {
     if (selections.sections.includes('Company Overview - YTD')) {
       const ytd = getYTDRange(activeCompany.fiscal_year_start_month || 1)
       const [{ data: allS }, { data: allP }] = await Promise.all([
-        supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', ytd.from).lte('invoice_date', ytd.to),
-        supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', ytd.from).lte('invoice_date', ytd.to),
+        supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', ytd.from).lte('invoice_date', ytd.to),
+        supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', ytd.from).lte('invoice_date', ytd.to),
       ])
       const rev = (allS || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
       const exp = (allP || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
@@ -303,8 +304,8 @@ export default function Dashboard() {
 
     if (selections.sections.includes('Company Overview - All Time')) {
       const [{ data: allS }, { data: allP }] = await Promise.all([
-        supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct),
-        supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct),
+        supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
       ])
       const rev = (allS || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
       const exp = (allP || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
@@ -316,7 +317,7 @@ export default function Dashboard() {
         ...sSel.map(i => ({ date: i.invoice_date, label: i.contact?.name || i.invoice_number, amount: fmt(i.amount_usd) })),
         ...pSel.map(i => ({ date: i.invoice_date, label: i.invoice_number, amount: fmt(i.amount_usd) })),
         ...rSel.map(i => ({ date: i.receipt_date, label: 'Payment Received', amount: fmt(i.amount_usd) })),
-      ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 10)
+      ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 3)
       sections.push({ heading: 'Recent Transactions', columns: ['Date', 'Description', 'Amount'], rows: combined.map(t => [t.date, t.label, t.amount]) })
     }
 
