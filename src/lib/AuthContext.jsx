@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [activeCompanyId, setActiveCompanyId] = useState(localStorage.getItem('crs_active_company') || null)
   const [activeProduct, setActiveProduct] = useState(localStorage.getItem('crs_active_product') || 'basic')
   const [loading, setLoading] = useState(true)
+  const [loadingCompanies, setLoadingCompanies] = useState(true)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -27,12 +28,14 @@ export function AuthProvider({ children }) {
   }, [session])
 
   async function loadCompanies() {
+    setLoadingCompanies(true)
     const { data, error } = await supabase
       .from('company_members')
       .select('role, products, company:companies(*, company_products(product))')
       .eq('user_id', session.user.id)
-    if (error) { console.error(error); return }
+    if (error) { console.error(error); setLoadingCompanies(false); return }
     setCompanies(data || [])
+    setLoadingCompanies(false)
     if (data && data.length > 0 && !activeCompanyId) {
       setActiveCompanyId(data[0].company.id)
       localStorage.setItem('crs_active_company', data[0].company.id)
@@ -81,6 +84,7 @@ export function AuthProvider({ children }) {
     switchProduct,
     signOut,
     loading,
+    loadingCompanies,
     refreshCompanies: loadCompanies,
     can: (roles) => activeRole && roles.includes(activeRole),
   }

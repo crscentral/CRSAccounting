@@ -40,11 +40,14 @@ import TallyReports from './pages/TallyMode/TallyReports'
 import TallyDashboardEmbed from './pages/TallyMode/TallyDashboardEmbed'
 
 function Gate({ children }) {
-  const { session, loading, companies, activeCompany } = useAuth()
+  const { session, loading, loadingCompanies, companies, activeCompany } = useAuth()
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Loading CRS Accounting…</div>
   }
   if (!session) return <Navigate to="/login" replace />
+  if (loadingCompanies) {
+    return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Loading Companies…</div>
+  }
   if (companies.length === 0) {
     return <CreateFirstCompanyScreen />
   }

@@ -7,37 +7,48 @@ const FX_API_URL = 'https://open.er-api.com/v6/latest/USD'
  * Ensures today's FX rates are cached in Supabase. Called once per session/page load.
  * Cheap no-op if today's rates already exist.
  */
+let isFetchingRates = false;
+let ratesPromise = null;
+
 export async function ensureTodayRatesCached() {
-  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()
-  const { data: existing } = await supabase
-    .from('fx_rates_cache')
-    .select('currency_code')
-    .eq('rate_date', today)
-    .limit(1)
+  if (ratesPromise) return ratesPromise;
+  ratesPromise = (async () => {
+    const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()
+    const { data: existing } = await supabase
+      .from('fx_rates_cache')
+      .select('currency_code')
+      .eq('rate_date', today)
+      .limit(1)
 
-  if (existing && existing.length > 0) return
+    if (existing && existing.length > 0) return
 
-  try {
-    const res = await fetch(FX_API_URL)
-    const json = await res.json()
-    if (json.result !== 'success' || !json.rates) return
+    if (isFetchingRates) return
+    isFetchingRates = true
 
-    const rows = Object.entries(json.rates).map(([currency_code, rate_to_usd]) => ({
-      currency_code,
-      rate_date: today,
-      rate_to_usd,
-    }))
+    try {
+      const res = await fetch(FX_API_URL)
+      const json = await res.json()
+      if (json.result !== 'success' || !json.rates) return
 
-    // Upsert in chunks to stay well under request size limits.
-    const chunkSize = 100
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      await supabase.from('fx_rates_cache').upsert(rows.slice(i, i + chunkSize), {
-        onConflict: 'currency_code,rate_date',
-      })
+      const rows = Object.entries(json.rates).map(([currency_code, rate_to_usd]) => ({
+        currency_code,
+        rate_date: today,
+        rate_to_usd,
+      }))
+
+      const chunkSize = 100
+      for (let i = 0; i < rows.length; i += chunkSize) {
+        await supabase.from('fx_rates_cache').upsert(rows.slice(i, i + chunkSize), {
+          onConflict: 'currency_code,rate_date',
+        })
+      }
+    } catch (e) {
+      console.warn('FX rate refresh failed, will use last cached rates:', e)
+    } finally {
+      isFetchingRates = false
     }
-  } catch (e) {
-    console.warn('FX rate refresh failed, will use last cached rates:', e)
-  }
+  })();
+  return ratesPromise;
 }
 
 /**

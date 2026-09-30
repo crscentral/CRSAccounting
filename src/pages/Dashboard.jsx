@@ -67,20 +67,27 @@ export default function Dashboard() {
   useEffect(() => { if (activeCompany && activeProduct === 'hotel') loadHotelStats() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadHotelStats() {
-    const [{ data: settings }, { data: stats }, { data: invoices }, { data: budgetRows }] = await Promise.all([
+    const [{ data: settings }, { data: stats }, { data: invoices }, { data: budgetRows }, { data: ancRevEntries }, { data: restRevEntries }] = await Promise.all([
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', 'hotel').maybeSingle(),
       supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('stat_date', cp.range.from).lte('stat_date', cp.range.to).order('stat_date'),
       supabase.from('hotel_guest_invoices').select('invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', 'hotel'),
+      supabase.from('hotel_revenue_entries').select('entry_date, amount_usd').eq('company_id', activeCompany.id).in('product', ['hotel', 'restaurant']).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
+      supabase.from('restaurant_daily_revenue').select('revenue_date, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
     ])
     const totalRooms = settings?.total_rooms || 0
     const totalOccupied = (stats || []).reduce((s, r) => s + r.rooms_occupied, 0)
-    const totalRevenue = (stats || []).reduce((s, r) => s + Number(r.room_revenue_usd), 0)
+    
+    const roomRev = (stats || []).reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
+    const ancRev = (ancRevEntries || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+    const restRev = (restRevEntries || []).reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
+    const totalRevenue = roomRev + ancRev + restRev
+
     const daysInView = Math.max(1, Math.round((Math.min(new Date(cp.range.to).getTime(), new Date().getTime()) - new Date(cp.range.from).getTime()) / (1000 * 60 * 60 * 24)) + 1)
     const availableRoomNights = totalRooms * daysInView
     const occupancyPct = availableRoomNights > 0 ? (totalOccupied / availableRoomNights) * 100 : 0
-    const adr = totalOccupied > 0 ? totalRevenue / totalOccupied : 0
-    const revpar = availableRoomNights > 0 ? totalRevenue / availableRoomNights : 0
+    const adr = totalOccupied > 0 ? roomRev / totalOccupied : 0
+    const revpar = availableRoomNights > 0 ? roomRev / availableRoomNights : 0
     const invoicesPending = (invoices || []).reduce((s, i) => s + (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd)), 0)
 
     // Daily Actual vs Budget trend -- budget is now saved as the DAILY budgeted figure directly.
@@ -106,27 +113,43 @@ export default function Dashboard() {
     // Fill in the actuals
     ;(stats || []).forEach(s => {
       if (dailyTrendMap[s.stat_date]) {
-        dailyTrendMap[s.stat_date].Actual = Number(s.room_revenue_usd)
+        dailyTrendMap[s.stat_date].Actual += Number(s.room_revenue_usd || 0)
       } else {
-        // If it's somehow out of bounds but returned by the query, add it anyway
         const [y, m] = s.stat_date.split('-')
         const dailyBudget = budgetByMonth[`${y}-${Number(m)}`] || 0
-        dailyTrendMap[s.stat_date] = { date: s.stat_date, Actual: Number(s.room_revenue_usd), Budget: dailyBudget }
+        dailyTrendMap[s.stat_date] = { date: s.stat_date, Actual: Number(s.room_revenue_usd || 0), Budget: dailyBudget }
         totalBudgetUsd += dailyBudget
+      }
+    })
+    ;(ancRevEntries || []).forEach(s => {
+      if (dailyTrendMap[s.entry_date]) dailyTrendMap[s.entry_date].Actual += Number(s.amount_usd || 0)
+    })
+    ;(restRevEntries || []).forEach(s => {
+      if (dailyTrendMap[s.revenue_date]) {
+        const amt = Number(s.total_amount_usd) || (Number(s.food_amount_usd||0) + Number(s.beverage_amount_usd||0) + Number(s.other_amount_usd||0))
+        dailyTrendMap[s.revenue_date].Actual += amt
       }
     })
     
     const dailyTrend = Object.values(dailyTrendMap).sort((a, b) => a.date.localeCompare(b.date))
     const totalVarianceUsd = totalRevenue - totalBudgetUsd
+    
+    const baseCurrency = activeCompany.base_currency || 'THB'
+    const baseRate = baseCurrency === 'USD' ? 1 : (await getLatestRate(baseCurrency)) || 1
+    const totalRevenueBase = convertFromUsd(totalRevenue, baseCurrency, { [baseCurrency]: baseRate })
+    const totalBudgetBase = convertFromUsd(totalBudgetUsd, baseCurrency, { [baseCurrency]: baseRate })
+    const totalVarianceBase = convertFromUsd(totalVarianceUsd, baseCurrency, { [baseCurrency]: baseRate })
+
     setHotelStats({ occupancyPct, adr, revpar, invoicesPending, totalRevenue, totalBudgetUsd, totalVarianceUsd,
-      budgetCurrency: budgetRows?.[0]?.currency || activeCompany?.currency || 'USD', dailyTrend })
+      budgetCurrency: baseCurrency, totalRevenueBase, totalBudgetBase, totalVarianceBase, dailyTrend })
   }
 
   const [restaurantRevenue, setRestaurantRevenue] = useState([])
 
   async function loadData() {
     const prodFilter = activeProduct === 'hotel' ? ['hotel', 'restaurant'] : [activeProduct]
-        const [{ data: s }, { data: p }, { data: r }, { data: allS }, { data: allP }, { data: accs }, { data: led }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }, { data: hPi }] = await Promise.all([
+    
+    const queries = [
       supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
       supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
       supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
@@ -140,26 +163,33 @@ export default function Dashboard() {
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('invoice_date, amount_usd, currency, status, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }).limit(10) : Promise.resolve({ data: [] })
-    ])
-
-    let allHrs = [], allHgi = [], allHee = [], allHre = [], allRdr = [], allHPi = [];
-    if (['hotel', 'restaurant'].includes(activeProduct)) {
-      const [{ data: aHrs }, { data: aHgi }, { data: aHee }, { data: aHre }, { data: aRdr }, { data: aHotelPi }] = await Promise.all([
-        supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd, manual_room_revenue_collected_usd, invoiced_room_revenue_collected').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('hotel_guest_invoices').select('invoice_date, invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('hotel_expense_entries').select('expense_date, amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('restaurant_daily_revenue').select('revenue_date, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('purchase_invoices').select('invoice_date, amount_usd, status').eq('company_id', activeCompany.id).in('product', prodFilter)
-      ])
-      allHrs = aHrs || []
-      allHgi = aHgi || []
-      allHee = aHee || []
-      allHPi = aHotelPi || []
-      allHre = aHre || []
-      allRdr = aRdr || []
-    }
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('invoice_date, amount_usd, currency, status, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }).limit(10) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd, manual_room_revenue_collected_usd, invoiced_room_revenue_collected').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_guest_invoices').select('invoice_date, invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('expense_date, amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('restaurant_daily_revenue').select('revenue_date, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('invoice_date, amount_usd, status').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
+      supabase.from('sales_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(5),
+      supabase.from('purchase_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(5),
+      supabase.from('payment_receipts').select('receipt_date, amount_usd, currency, amount').eq('company_id', activeCompany.id).in('product', prodFilter).order('receipt_date', { ascending: false }).limit(5),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_guest_invoices').select('id, invoice_date, invoice_amount_usd, currency, guest_name').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(10) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, currency, account:accounts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('entry_date', { ascending: false }).limit(10) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('expense_date, amount_usd, currency, account:accounts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('expense_date', { ascending: false }).limit(10) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('invoice_date, amount_usd, currency, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(10) : Promise.resolve({ data: [] })
+    ]
+    
+    const results = await Promise.all(queries)
+    const [
+      { data: s }, { data: p }, { data: r }, { data: allS }, { data: allP }, { data: accs }, { data: led },
+      { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }, { data: hPi },
+      { data: aHrs }, { data: aHgi }, { data: aHee }, { data: aHre }, { data: aRdr }, { data: aHotelPi },
+      { data: recentS }, { data: recentP }, { data: recentR },
+      { data: hgiRecent }, { data: hreRecent }, { data: heeRecent }, { data: hPiRecent }
+    ] = results
+    
+    let allHrs = aHrs || [], allHgi = aHgi || [], allHee = aHee || [], allHre = aHre || [], allRdr = aRdr || [], allHPi = aHotelPi || [];
+    
     setAllHotelRoomStats(allHrs)
     setAllHotelGuestInvoices(allHgi)
     setAllHotelExpenseEntries(allHee)
@@ -181,36 +211,24 @@ export default function Dashboard() {
     setAllSales(allS || [])
     setAllPurchases(allP || [])
 
-    // Recent Transactions: latest 5 across sales, purchases, and receipts, all-time (not period-filtered)
-    const [{ data: recentS }, { data: recentP }, { data: recentR }] = await Promise.all([
-      supabase.from('sales_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(5),
-      supabase.from('purchase_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(5),
-      supabase.from('payment_receipts').select('receipt_date, amount_usd, currency, amount').eq('company_id', activeCompany.id).in('product', prodFilter).order('receipt_date', { ascending: false }).limit(5),
-    ])
     const combined = [
       ...(recentS || []).map(r => ({ date: r.invoice_date, label: r.contact?.name || r.invoice_number, amount: r.amount, currency: r.currency })),
       ...(recentP || []).map(r => ({ date: r.invoice_date, label: r.contact?.name || r.supplier_name_freeform || r.invoice_number, amount: r.amount, currency: r.currency })),
       ...(recentR || []).map(r => ({ date: r.receipt_date, label: 'Payment Received', amount: r.amount, currency: r.currency })),
     ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 3)
+    
     if (['hotel', 'restaurant'].includes(activeProduct)) {
-      const [{ data: hgi }, { data: hre }, { data: hee }, { data: hPi }] = await Promise.all([
-        supabase.from('hotel_guest_invoices').select('id, invoice_date, invoice_amount_usd, currency, guest_name').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(10),
-        supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, currency, account:accounts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('entry_date', { ascending: false }).limit(10),
-        supabase.from('hotel_expense_entries').select('expense_date, amount_usd, currency, account:accounts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('expense_date', { ascending: false }).limit(10),
-        supabase.from('purchase_invoices').select('invoice_date, amount_usd, currency, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(10),
-      ])
       const hCombined = [
-        ...(hgi || []).map(r => ({ date: r.invoice_date, label: r.guest_name || 'Guest Invoice', amount: r.invoice_amount_usd, currency: 'USD' })),
-        ...(hre || []).map(r => ({ date: r.entry_date, label: r.account?.name || 'Revenue', amount: r.amount_usd, currency: 'USD' })),
-        ...(hee || []).map(r => ({ date: r.expense_date, label: r.account?.name || 'Expense', amount: r.amount_usd, currency: 'USD' })),
-        ...(restaurantRevenue || []).map(r => ({ date: r.revenue_date, label: r.meal_period + ' F&B Revenue', amount: (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), currency: 'USD' }))
+        ...(hgiRecent || []).map(r => ({ date: r.invoice_date, label: r.guest_name || 'Guest Invoice', amount: r.invoice_amount_usd, currency: 'USD' })),
+        ...(hreRecent || []).map(r => ({ date: r.entry_date, label: r.account?.name || 'Revenue', amount: r.amount_usd, currency: 'USD' })),
+        ...(heeRecent || []).map(r => ({ date: r.expense_date, label: r.account?.name || 'Expense', amount: r.amount_usd, currency: 'USD' })),
+        ...(rdr || []).map(r => ({ date: r.revenue_date, label: r.meal_period + ' F&B Revenue', amount: (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), currency: 'USD' }))
       ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 3)
       setRecentTx(hCombined)
     } else {
       setRecentTx(combined)
     }
   }
-
 
   async function generateDashboardReport(selections, format) {
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
@@ -356,10 +374,6 @@ export default function Dashboard() {
   let expensesMade = 0
 
   if (['hotel', 'restaurant'].includes(activeProduct)) {
-    const start = new Date(cp.range.from)
-    const end = new Date(cp.range.to)
-    const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
-    
     // Link Total Revenue directly to Daily Revenue Collection stats to perfectly match the page
     const roomRev = hotelRoomStats.reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
     const ancRev = hotelRevenueEntries.reduce((s, r) => s + Number(r.amount_usd || 0), 0)
@@ -367,19 +381,20 @@ export default function Dashboard() {
     totalBilled = roomRev + ancRev + restRev
     
     // Link Total Expenses directly to Expenses page
-    const amcTotal = hotelAmc.reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0) * monthsInView
+    const fyStart = activeCompany.fiscal_year_start_month || 1;
+    const amcTotal = hotelAmc.reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, cp.range.from, cp.range.to), 0)
     const directExpenses = hotelExpenseEntries.reduce((s, e) => s + Number(e.amount_usd || 0), 0)
     const piExpenses = hotelPurchaseInvoices.reduce((s, e) => s + Number(e.amount_usd || 0), 0)
     totalExpenses = directExpenses + amcTotal + piExpenses
     
-    // Outstanding = Unpaid Guest Invoices
-    outstanding = hotelGuestInvoices.reduce((s, i) => s + (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd)), 0)
-    
     // Collected = Room Revenue Collected + Ancillary Collected + Restaurant Collected
-    const roomCollected = hotelRoomStats.reduce((s, r) => s + Number(r.room_revenue_collected_usd || 0), 0)
+    const roomCollected = hotelRoomStats.reduce((s, r) => s + Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected || 0), 0)
     const ancillaryCollected = hotelRevenueEntries.reduce((s, r) => s + Number(r.collected_usd || 0), 0)
     const restRevCollected = restaurantRevenue.reduce((s, r) => s + Number(r.collected_usd || 0), 0)
     collected = roomCollected + ancillaryCollected + restRevCollected
+
+    // Outstanding = Total Billed - Collected
+    outstanding = totalBilled - collected
     
     // Expenses Made = Actual cash out (hotel expense entries).
     const piExpensesPaid = hotelPurchaseInvoices.reduce((s, e) => s + (e.status === 'Paid' ? Number(e.amount_usd || 0) : 0), 0)
@@ -421,22 +436,16 @@ export default function Dashboard() {
     // Build monthlyMap using ALL historical data for accurate Charts, YTD, and All-Time.
     const uniqueMonths = new Set()
     
-    allHotelGuestInvoices.forEach(i => {
-      const key = (i.invoice_date || '').slice(0, 7)
-      uniqueMonths.add(key)
-      if (!key) return
-      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
-      monthlyMap[key].Outstanding += (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd))
-      monthlyMap[key].Collected += Number(i.collected_amount_usd)
-    })
+    // We NO LONGER use allHotelGuestInvoices for Revenue or Outstanding as it causes duplicates and confusion.
+    // We use Stats, Revenue Entries, and Restaurant Revenue.
     
     allHotelRoomStats.forEach(r => {
       const key = (r.stat_date || '').slice(0, 7)
       uniqueMonths.add(key)
       if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
-      monthlyMap[key].Revenue += Number(r.room_revenue_usd)
-      monthlyMap[key].Collected += Number(r.manual_room_revenue_collected_usd || 0)
+      monthlyMap[key].Revenue += Number(r.room_revenue_usd || 0)
+      monthlyMap[key].Collected += Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected || 0)
     })
     
     allHotelRevenueEntries.forEach(r => {
@@ -444,25 +453,8 @@ export default function Dashboard() {
       uniqueMonths.add(key)
       if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
-      monthlyMap[key].Revenue += Number(r.amount_usd)
+      monthlyMap[key].Revenue += Number(r.amount_usd || 0)
       monthlyMap[key].Collected += Number(r.collected_usd || 0)
-      monthlyMap[key].Outstanding += (Number(r.amount_usd) - Number(r.collected_usd || 0))
-    })
-    
-    allHotelExpenseEntries.forEach(r => {
-      const key = (r.expense_date || '').slice(0, 7)
-      uniqueMonths.add(key)
-      if (!key) return
-      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
-      monthlyMap[key].Expenses += Number(r.amount_usd)
-    })
-    
-    allHotelPurchaseInvoices.forEach(r => {
-      const key = (r.invoice_date || '').slice(0, 7)
-      uniqueMonths.add(key)
-      if (!key) return
-      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
-      monthlyMap[key].Expenses += Number(r.amount_usd)
     })
     
     allRestaurantRevenue.forEach(r => {
@@ -473,7 +465,27 @@ export default function Dashboard() {
       const total = Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))
       monthlyMap[key].Revenue += total
       monthlyMap[key].Collected += Number(r.collected_usd || 0)
-      monthlyMap[key].Outstanding += (total - Number(r.collected_usd || 0))
+    })
+
+    // Calculate Outstanding per month: Revenue - Collected
+    Object.values(monthlyMap).forEach(m => {
+      m.Outstanding = m.Revenue - m.Collected
+    })
+    
+    allHotelExpenseEntries.forEach(r => {
+      const key = (r.expense_date || '').slice(0, 7)
+      uniqueMonths.add(key)
+      if (!key) return
+      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+      monthlyMap[key].Expenses += Number(r.amount_usd || 0)
+    })
+    
+    allHotelPurchaseInvoices.forEach(r => {
+      const key = (r.invoice_date || '').slice(0, 7)
+      uniqueMonths.add(key)
+      if (!key) return
+      monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+      monthlyMap[key].Expenses += Number(r.amount_usd || 0)
     })
     
     // For AMC, compute exact overlap for each month
@@ -507,11 +519,6 @@ export default function Dashboard() {
     // Calculate All-Time from the map
     allTimeRevenue = Object.values(monthlyMap).reduce((s, m) => s + m.Revenue, 0)
     allTimeExpenses = Object.values(monthlyMap).reduce((s, m) => s + m.Expenses, 0)
-    
-  } else {
-    // Basic product
-    allTimeRevenue = allSales.reduce((s, i) => s + Number(i.amount_usd), 0)
-    allTimeExpenses = allPurchases.reduce((s, i) => s + Number(i.amount_usd), 0)
     
     const ytdSales = allSales.filter(i => i.invoice_date >= ytdRange.from && i.invoice_date <= ytdRange.to)
     const ytdPurchases = allPurchases.filter(i => i.invoice_date >= ytdRange.from && i.invoice_date <= ytdRange.to)
@@ -701,9 +708,9 @@ export default function Dashboard() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={[
-                        { name: 'Actual', value: Math.abs(hotelStats.totalRevenue), realValue: hotelStats.totalRevenue, fill: '#1B3A6B' },
-                        { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetUsd), realValue: hotelStats.totalBudgetUsd, fill: '#C9A84C' },
-                        { name: 'Variance', value: Math.abs(hotelStats.totalVarianceUsd), realValue: hotelStats.totalVarianceUsd, fill: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444' }
+                        { name: 'Actual', value: Math.abs(hotelStats.totalRevenueBase), realValue: hotelStats.totalRevenueBase, fill: '#1B3A6B' },
+                        { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetBase), realValue: hotelStats.totalBudgetBase, fill: '#C9A84C' },
+                        { name: 'Variance', value: Math.abs(hotelStats.totalVarianceBase), realValue: hotelStats.totalVarianceBase, fill: hotelStats.totalVarianceBase >= 0 ? '#10B981' : '#EF4444' }
                       ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} label={false}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
@@ -712,13 +719,13 @@ export default function Dashboard() {
                   </ResponsiveContainer>
                 </div>
                 <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center text-sm mt-2 text-slate-600 w-full">
-                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#1B3A6B'}}></span> Actual: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(hotelStats.totalRevenue)}</div>
-                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#C9A84C'}}></span> Budgeted: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(hotelStats.totalBudgetUsd)}</div>
-                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444'}}></span> Variance: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(hotelStats.totalVarianceUsd)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#1B3A6B'}}></span> Actual: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(hotelStats.totalRevenueBase)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#C9A84C'}}></span> Budgeted: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(hotelStats.totalBudgetBase)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: hotelStats.totalVarianceBase >= 0 ? '#10B981' : '#EF4444'}}></span> Variance: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(hotelStats.totalVarianceBase)}</div>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col items-center">
-                <h3 className="font-semibold text-slate-700 mb-4 self-start">Actual vs Budget ({cp.displayCurrency})</h3>
+                <h3 className="font-semibold text-slate-700 mb-4 self-start">Actual vs Budget (USD)</h3>
                 <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -729,14 +736,14 @@ export default function Dashboard() {
                       ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} label={false}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
-                      <Tooltip formatter={(val, name, props) => cp.fmt(props.payload.realValue)} />
+                      <Tooltip formatter={(val, name, props) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(props.payload.realValue)} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
                 <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center text-sm mt-2 text-slate-600 w-full">
-                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#1B3A6B'}}></span> Actual: {cp.fmt(hotelStats.totalRevenue)}</div>
-                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#C9A84C'}}></span> Budgeted: {cp.fmt(hotelStats.totalBudgetUsd)}</div>
-                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444'}}></span> Variance: {cp.fmt(hotelStats.totalVarianceUsd)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#1B3A6B'}}></span> Actual: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(hotelStats.totalRevenue)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#C9A84C'}}></span> Budgeted: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(hotelStats.totalBudgetUsd)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444'}}></span> Variance: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(hotelStats.totalVarianceUsd)}</div>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 lg:col-span-2">
