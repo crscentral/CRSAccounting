@@ -28,6 +28,10 @@ export default function HotelOccupancyStats() {
   const [totalRooms, setTotalRooms] = useState(0)
   const [stats, setStats] = useState([])
   const [budget, setBudget] = useState([])
+  const [hotelRevTotal, setHotelRevTotal] = useState(0)
+  const [roomRevTotal, setRoomRevTotal] = useState(0)
+  const [hotelColTotal, setHotelColTotal] = useState(0)
+  const [budgetVar, setBudgetVar] = useState(null)
   const [gop, setGop] = useState(0)
   const [loading, setLoading] = useState(true)
   const [reportModalOpen, setReportModalOpen] = useState(false)
@@ -35,6 +39,7 @@ export default function HotelOccupancyStats() {
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, view])
   useEffect(() => { if (displayCurrency === 'USD') { setRate(1); return } getLatestRate(displayCurrency).then(r => setRate(r || 1)) }, [displayCurrency])
 
+  function fmtRounded(usd) { return formatMoney(Math.round(convertFromUsd(usd, displayCurrency, { [displayCurrency]: rate })), displayCurrency).replace('.00', '') }
   function fmt(usd) { return formatMoney(convertFromUsd(usd, displayCurrency, { [displayCurrency]: rate }), displayCurrency) }
 
   function rangeFor(v) {
@@ -49,75 +54,105 @@ export default function HotelOccupancyStats() {
   async function loadAll() {
     setLoading(true)
     const range = rangeFor(view)
-    
-    const [{ data: settings }, { data: statRows }, { data: budgetRows }, { data: accounts }, { data: entries }] = await Promise.all([
-      supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
-      supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to).order('stat_date'),
+      
+    const [{ data: s }, { data: b }, { data: settings }, { data: anc }, { data: restRev }, { data: expBudget }, { data: accounts }] = await Promise.all([
+      supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to).order('stat_date', { ascending: false }),
       supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('accounts').select('id, type, subtype, name').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to),
+      supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
+      supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to),
+      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to) : Promise.resolve({ data: [] }),
+      supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', now.getFullYear()),
+      supabase.from('accounts').select('id, type').eq('company_id', activeCompany.id).eq('type', 'Revenue')
     ])
+    
+    setStats(s || [])
+    setBudget(b || [])
     setTotalRooms(settings?.total_rooms || 0)
-    setStats(statRows || [])
-    setBudget(budgetRows || [])
-
-    // GOP for GOPPAR: Revenue - Operating Expenses (excludes Below-GOP items)
-    const balances = {}
-    ;(entries || []).forEach(e => { balances[e.account_id] = (balances[e.account_id] || 0) + Number(e.debit_usd) - Number(e.credit_usd) })
-    const byType = (t) => (accounts || []).filter(a => a.type === t)
-    const revenue = -byType('Revenue').reduce((s, a) => s + (balances[a.id] || 0), 0)
-    const operatingExp = byType('Expenses').filter(a => !['Below GOP', 'Below EBITDA'].includes(a.subtype)).reduce((s, a) => s + (balances[a.id] || 0), 0)
-    setGop(revenue - operatingExp)
-
+    
+    // Calculate Actuals
+    const aRoom = []; const aFB = []; const aOther = [];
+    (anc || []).forEach(a => {
+      const st = (a.account?.subtype || '').toLowerCase()
+      const nm = (a.account?.name || '').toLowerCase()
+      if (st.includes('f&b') || nm.includes('breakfast') || nm.includes('food') || nm.includes('beverage')) aFB.push(a)
+      else if (st.includes('room') || st.includes('front office') || nm.includes('extra bed') || nm.includes('early check') || nm.includes('late check')) aRoom.push(a)
+      else aOther.push(a)
+    })
+    
+    const ancRoomAmt = aRoom.reduce((sum, x) => sum + Number(x.amount_usd || 0), 0)
+    const ancRoomCol = aRoom.reduce((sum, x) => sum + Number(x.collected_usd || 0), 0)
+    const ancFBAmt = aFB.reduce((sum, x) => sum + Number(x.amount_usd || 0), 0)
+    const ancFBCol = aFB.reduce((sum, x) => sum + Number(x.collected_usd || 0), 0)
+    const ancOtherAmt = aOther.reduce((sum, x) => sum + Number(x.amount_usd || 0), 0)
+    const ancOtherCol = aOther.reduce((sum, x) => sum + Number(x.collected_usd || 0), 0)
+    
+    const restAmt = (restRev || []).reduce((sum, x) => sum + (Number(x.total_amount_usd) || (Number(x.food_amount_usd||0) + Number(x.beverage_amount_usd||0) + Number(x.other_amount_usd||0))), 0)
+    const restCol = (restRev || []).reduce((sum, x) => sum + Number(x.collected_usd || 0), 0)
+    
+    const roomRevOnly = (s || []).reduce((sum, x) => sum + Number(x.room_revenue_usd || 0), 0)
+    const roomColOnly = (s || []).reduce((sum, x) => sum + Number(x.room_revenue_collected_usd || 0), 0)
+    
+    const tr = roomRevOnly + ancRoomAmt
+    const trc = roomColOnly + ancRoomCol
+    const th = tr + ancFBAmt + ancOtherAmt + restAmt
+    const thc = trc + ancFBCol + ancOtherCol + restCol
+    
+    setRoomRevTotal(tr)
+    setHotelRevTotal(th)
+    setHotelColTotal(thc)
+    
+    // Calculate Budgets
+    const isMtd = view === 'mtd'
+    const isYtd = view === 'ytd'
+    let v = null
+    if (isMtd || isYtd) {
+        const startMonth = isMtd ? (now.getMonth() + 1) : 1
+        const endMonth = now.getMonth() + 1
+        
+        let roomB = 0
+        for (let m = startMonth; m <= endMonth; m++) {
+           const row = (b || []).find(bx => bx.budget_year === now.getFullYear() && bx.budget_month === m)
+           if (row) {
+              const days = new Date(now.getFullYear(), m, 0).getDate()
+              roomB += Number(row.budgeted_room_revenue_usd || 0) * days
+           }
+        }
+        
+        let ancB = 0
+        const revAccIds = new Set((accounts || []).map(a => a.id))
+        ;(expBudget || []).forEach(eb => {
+           if (revAccIds.has(eb.account_id)) {
+               for (let m = startMonth; m <= endMonth; m++) {
+                   const key = `month_${m}_amount_usd`
+                   ancB += Number(eb[key] || 0)
+               }
+           }
+        })
+        
+        const totalB = roomB + ancB
+        v = th - totalB
+    }
+    setBudgetVar(v)
+    
+    // For GOPPAR
+    const { data: g } = await supabase.from('hotel_expense_entries').select('amount_usd').eq('company_id', activeCompany.id).in('product', activeProduct === 'hotel' ? ['hotel', 'restaurant'] : [activeProduct]).gte('expense_date', range.from).lte('expense_date', range.to)
+    const exps = (g || []).reduce((sum, x) => sum + Number(x.amount_usd || 0), 0)
+    setGop(th - exps)
+    
     setLoading(false)
   }
-
-  async function generateStatsReport(selections, format) {
-    const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
-    const reportView = selections.view || view
-    const reportRange = rangeFor(reportView)
-
-    const { data: statRows } = await supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', reportRange.from).lte('stat_date', reportRange.to).order('stat_date')
-    const rows = statRows || []
-    const sections = [{
-      heading: `Occupancy & Revenue Statistics — ${VIEWS.find(v => v.key === reportView)?.label}`,
-      columns: ['Date', 'Rooms Occupied', 'Occupancy %', 'ADR', 'RevPAR', 'Room Revenue', 'Collected'],
-      rows: rows.map(r => {
-        const occPct = totalRooms > 0 ? ((r.rooms_occupied / totalRooms) * 100).toFixed(1) + '%' : '—'
-        const adr = r.rooms_occupied > 0 ? f(r.room_revenue_usd / r.rooms_occupied) : '—'
-        const revpar = totalRooms > 0 ? f(r.room_revenue_usd / totalRooms) : '—'
-        return [r.stat_date, r.rooms_occupied, occPct, adr, revpar, f(r.room_revenue_usd), f(r.room_revenue_collected_usd)]
-      }),
-    }]
-
-    const title = 'Hotel Revenue & Occupancy Statistics'
-    const subtitle = `${activeCompany.name} • ${reportRange.from} to ${reportRange.to} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'hotel_occupancy_stats' })
-    if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'hotel_occupancy_stats' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'hotel_occupancy_stats' })
-  }
-
-  if (!activeCompany) return null
-
   const totalOccupied = stats.reduce((s, r) => s + r.rooms_occupied, 0)
-  const totalRevenue = stats.reduce((s, r) => s + Number(r.room_revenue_usd), 0)
-  const totalCollected = stats.reduce((s, r) => s + Number(r.room_revenue_collected_usd), 0)
+  
   
   const currentRange = rangeFor(view)
   const daysInView = Math.max(1, Math.round((new Date(currentRange.to) - new Date(currentRange.from)) / (1000 * 60 * 60 * 24)) + 1)
   const availableRoomNights = totalRooms * daysInView
   const occupancyPct = availableRoomNights > 0 ? (totalOccupied / availableRoomNights) * 100 : 0
-  const adr = totalOccupied > 0 ? totalRevenue / totalOccupied : 0
-  const revpar = availableRoomNights > 0 ? totalRevenue / availableRoomNights : 0
+  const adr = totalOccupied > 0 ? roomRevTotal / totalOccupied : 0
+  const revpar = availableRoomNights > 0 ? roomRevTotal / availableRoomNights : 0
   const goppar = availableRoomNights > 0 ? gop / availableRoomNights : 0
 
   // Budget comparison
-  const now = new Date()
-  const thisMonthBudget = budget.find(b => b.budget_year === now.getFullYear() && b.budget_month === now.getMonth() + 1)
-  const ytdBudget = budget.filter(b => b.budget_year === now.getFullYear() && b.budget_month <= now.getMonth() + 1).reduce((s, b) => s + Number(b.budgeted_room_revenue_usd), 0)
-  const variance = (view === 'mtd' && thisMonthBudget) ? totalRevenue - Number(thisMonthBudget.budgeted_room_revenue_usd)
-    : (view === 'ytd' ? totalRevenue - ytdBudget : null)
 
   const chartData = stats.map(r => ({
     date: r.stat_date,
@@ -158,16 +193,19 @@ export default function HotelOccupancyStats() {
         <p className="text-sm text-slate-400 text-center py-10">Loading…</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-4">
             <KpiCard label="Occupancy %" value={`${occupancyPct.toFixed(1)}%`} icon={Percent} tone="blue" />
             <KpiCard label="Rooms Occupied" value={totalOccupied} icon={BedDouble} tone="slate" />
             <KpiCard label="ADR" value={fmt(adr)} icon={DollarSign} tone="green" />
             <KpiCard label="RevPAR" value={fmt(revpar)} icon={TrendingUp} tone="gold" />
             <KpiCard label="GOPPAR" value={fmt(goppar)} icon={TrendingUp} tone="blue" sublabel="GOP per available room" />
-            <KpiCard label="Total Room Revenue" value={fmt(totalRevenue)} icon={DollarSign} tone="green" />
-            <KpiCard label="Collected" value={fmt(totalCollected)} icon={DollarSign} tone="slate" />
-            {variance !== null && (
-              <KpiCard label={`Budget Variance (${view === 'mtd' ? 'MTD' : 'YTD'})`} value={fmt(variance)} icon={variance >= 0 ? TrendingUp : AlertTriangle} tone={variance >= 0 ? 'green' : 'red'} />
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+            <KpiCard label="Total Revenue" value={fmtRounded(hotelRevTotal)} icon={DollarSign} tone="indigo" />
+            <KpiCard label="Total Room Revenue" value={fmtRounded(roomRevTotal)} icon={DollarSign} tone="green" />
+            <KpiCard label="Collected" value={fmtRounded(hotelColTotal)} icon={DollarSign} tone="slate" />
+            {budgetVar !== null && (
+              <KpiCard label={`Budget Variance (${view === 'mtd' ? 'MTD' : 'YTD'})`} value={fmtRounded(budgetVar)} icon={budgetVar >= 0 ? TrendingUp : AlertTriangle} tone={budgetVar >= 0 ? 'green' : 'red'} />
             )}
           </div>
 

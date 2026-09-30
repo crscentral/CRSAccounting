@@ -49,12 +49,9 @@ export default function HotelBudget() {
     async function loadAncillary() {
       if (!activeCompany || ancillaryAccounts.length === 0) return
 
-      let ledgerQuery = supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(code, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', `${startYear}-01-01`).lte('entry_date', `${startYear}-12-31`).eq('accounts.type', 'Revenue')
-      if (activeProduct === 'hotel') ledgerQuery = ledgerQuery.neq('accounts.code', '4010')
-      
       const [{ data: budgetRows }, { data: ledgerRows }, { data: restRev }] = await Promise.all([
         supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', startYear),
-        ledgerQuery,
+        supabase.from('hotel_revenue_entries').select('amount_usd, entry_date, account:accounts(code, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', `${startYear}-01-01`).lte('entry_date', `${startYear}-12-31`),
         supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', `${startYear}-01-01`).lte('revenue_date', `${startYear}-12-31`)
       ])
 
@@ -69,9 +66,10 @@ export default function HotelBudget() {
       const aMap = {}
       if (ledgerRows) {
         ledgerRows.forEach(r => {
+          if (r.account?.code === '4010') return; // Skip main room revenue
           const m = parseInt(r.entry_date.split('-')[1], 10)
-          const k = `${r.accounts.code}-${m}`
-          const amt = (Number(r.credit_usd) || 0) - (Number(r.debit_usd) || 0) // Revenue is credit
+          const k = `${r.account?.code}-${m}`
+          const amt = Number(r.amount_usd) || 0
           aMap[k] = (aMap[k] || 0) + amt
         })
       }
@@ -81,18 +79,13 @@ export default function HotelBudget() {
         restRev.forEach(r => {
           const m = parseInt(r.revenue_date.split('-')[1], 10)
           
-          if (activeProduct === 'hotel') {
-            const foodKey = r.meal_period === 'Breakfast' ? `4016-${m}` : `4011-${m}`
-            const bevKey = `4020-${m}`
-            const otherKey = `4021-${m}`
-            
-            aMap[foodKey] = (aMap[foodKey] || 0) + (Number(r.food_amount_usd) || 0)
-            aMap[bevKey] = (aMap[bevKey] || 0) + (Number(r.beverage_amount_usd) || 0)
-            aMap[otherKey] = (aMap[otherKey] || 0) + (Number(r.other_amount_usd) || 0)
-            
-          }
-          // Note: If activeProduct === 'restaurant', we do NOT inject restRev manually because 
-          // those postings are already in ledger_entries and caught by ledgerQuery!
+          const foodKey = r.meal_period === 'Breakfast' ? `4016-${m}` : `4011-${m}`
+          const bevKey = `4020-${m}`
+          const otherKey = `4021-${m}`
+          
+          aMap[foodKey] = (aMap[foodKey] || 0) + (Number(r.food_amount_usd) || 0)
+          aMap[bevKey] = (aMap[bevKey] || 0) + (Number(r.beverage_amount_usd) || 0)
+          aMap[otherKey] = (aMap[otherKey] || 0) + (Number(r.other_amount_usd) || 0)
         })
       }
       setAncillaryActuals(aMap)
@@ -460,12 +453,12 @@ export default function HotelBudget() {
       
       
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
-        <KpiCard label="YTD Actual Revenue" value={fmt(grandTotalRevenueActual)} icon={TrendingUp} tone="green" />
-        <KpiCard label="YTD Total Budget" value={fmt(revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev)} icon={TrendingUp} tone="indigo" />
-        <KpiCard label="YTD Variance" value={fmt(grandTotalRevenueActual - (revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev))} icon={grandTotalRevenueActual >= (revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev) ? TrendingUp : AlertTriangle} tone={grandTotalRevenueActual >= (revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev) ? 'green' : 'red'} />
-        <KpiCard label={activeProduct === "restaurant" ? "YTD Food Sales Budget" : "YTD FO Revenue Budget"} value={fmt(revenueSummary.frontOffice)} icon={TrendingUp} tone="gold" />
-        <KpiCard label={activeProduct === "restaurant" ? "YTD Beverage Sales Budget" : "YTD F&B Service Budget"} value={fmt(revenueSummary.fbService)} icon={TrendingUp} tone="blue" />
-        <KpiCard label="YTD Other Revenue Budget" value={fmt(revenueSummary.otherRev)} icon={TrendingUp} tone="emerald" />
+        <KpiCard label="YTD Actual Revenue" value={fmtRounded(grandTotalRevenueActual)} icon={TrendingUp} tone="green" />
+        <KpiCard label="YTD Total Budget" value={fmtRounded(revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev)} icon={TrendingUp} tone="indigo" />
+        <KpiCard label="YTD Variance" value={fmtRounded(grandTotalRevenueActual - (revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev))} icon={grandTotalRevenueActual >= (revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev) ? TrendingUp : AlertTriangle} tone={grandTotalRevenueActual >= (revenueSummary.frontOffice + revenueSummary.fbService + revenueSummary.otherRev) ? 'green' : 'red'} />
+        <KpiCard label={activeProduct === "restaurant" ? "YTD Food Sales Budget" : "YTD FO Revenue Budget"} value={fmtRounded(revenueSummary.frontOffice)} icon={TrendingUp} tone="gold" />
+        <KpiCard label={activeProduct === "restaurant" ? "YTD Beverage Sales Budget" : "YTD F&B Service Budget"} value={fmtRounded(revenueSummary.fbService)} icon={TrendingUp} tone="blue" />
+        <KpiCard label="YTD Other Revenue Budget" value={fmtRounded(revenueSummary.otherRev)} icon={TrendingUp} tone="emerald" />
       </div>
 
       {activeProduct === 'hotel' && years.map(year => (

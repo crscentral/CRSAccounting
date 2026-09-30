@@ -43,6 +43,7 @@ export default function HotelExpenseBudget() {
     getLatestRate(displayCurrency).then(r => setRate(r || 1)) 
   }, [displayCurrency])
 
+  function fmtRounded(usd) { return formatMoney(Math.round(convertFromUsd(usd, displayCurrency, { [displayCurrency]: rate })), displayCurrency).replace('.00', '') }
   function fmt(usd) { return formatMoney(convertFromUsd(usd, displayCurrency, { [displayCurrency]: rate }), displayCurrency) }
 
   // 1. Fetch Accounts
@@ -288,12 +289,12 @@ export default function HotelExpenseBudget() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
-        <KpiCard label="YTD Actual" value={fmt(monthlySummary.totalActual)} icon={TrendingUp} tone="green" />
-        <KpiCard label="YTD Total Budget" value={fmt(monthlySummary.totalBudget)} icon={TrendingUp} tone="indigo" />
-        <KpiCard label="YTD Variance" value={fmt(monthlySummary.totalBudget - monthlySummary.totalActual)} icon={monthlySummary.totalBudget >= monthlySummary.totalActual ? TrendingUp : AlertTriangle} tone={monthlySummary.totalBudget >= monthlySummary.totalActual ? 'green' : 'red'} />
-        <KpiCard label={`${selectedYear} FO Budget`} value={fmt(monthlySummary.foBudget)} icon={TrendingUp} tone="gold" />
-        <KpiCard label={`${selectedYear} F&B Budget`} value={fmt(monthlySummary.fbBudget)} icon={TrendingUp} tone="blue" />
-        <KpiCard label={`${selectedYear} Other Budget`} value={fmt(monthlySummary.otherBudget)} icon={TrendingUp} tone="emerald" />
+        <KpiCard label="YTD Actual" value={fmtRounded(monthlySummary.totalActual)} icon={TrendingUp} tone="green" />
+        <KpiCard label="YTD Total Budget" value={fmtRounded(monthlySummary.totalBudget)} icon={TrendingUp} tone="indigo" />
+        <KpiCard label="YTD Variance" value={fmtRounded(monthlySummary.totalBudget - monthlySummary.totalActual)} icon={monthlySummary.totalBudget >= monthlySummary.totalActual ? TrendingUp : AlertTriangle} tone={monthlySummary.totalBudget >= monthlySummary.totalActual ? 'green' : 'red'} />
+        <KpiCard label={`${selectedYear} FO Budget`} value={fmtRounded(monthlySummary.foBudget)} icon={TrendingUp} tone="gold" />
+        <KpiCard label={`${selectedYear} F&B Budget`} value={fmtRounded(monthlySummary.fbBudget)} icon={TrendingUp} tone="blue" />
+        <KpiCard label={`${selectedYear} Other Budget`} value={fmtRounded(monthlySummary.otherBudget)} icon={TrendingUp} tone="emerald" />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-10">
