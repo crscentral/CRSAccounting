@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cart
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
-import { getYTDRange, resolveReportPeriod } from '../lib/fiscalYear'
+import { getYTDRange, resolveReportPeriod, getAmcActiveMonths, getAmcMonthsInView } from '../lib/fiscalYear'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
