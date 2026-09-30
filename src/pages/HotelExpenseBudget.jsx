@@ -287,11 +287,13 @@ export default function HotelExpenseBudget() {
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} Total Budget`} value={fmt(monthlySummary.totalBudget)} icon={TrendingUp} tone="indigo" />
-        <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} FO Budget`} value={fmt(monthlySummary.foBudget)} icon={TrendingUp} tone="gold" />
-        <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} F&B Budget`} value={fmt(monthlySummary.fbBudget)} icon={TrendingUp} tone="blue" />
-        <KpiCard label={`${selectedMonth === 'all' ? selectedYear : MONTH_NAMES[Number(selectedMonth)-1] + ' ' + selectedYear} Other Budget`} value={fmt(monthlySummary.otherBudget)} icon={TrendingUp} tone="emerald" />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
+        <KpiCard label="YTD Actual" value={fmt(monthlySummary.totalActual)} icon={TrendingUp} tone="green" />
+        <KpiCard label="YTD Total Budget" value={fmt(monthlySummary.totalBudget)} icon={TrendingUp} tone="indigo" />
+        <KpiCard label="YTD Variance" value={fmt(monthlySummary.totalBudget - monthlySummary.totalActual)} icon={monthlySummary.totalBudget >= monthlySummary.totalActual ? TrendingUp : AlertTriangle} tone={monthlySummary.totalBudget >= monthlySummary.totalActual ? 'green' : 'red'} />
+        <KpiCard label={`${selectedYear} FO Budget`} value={fmt(monthlySummary.foBudget)} icon={TrendingUp} tone="gold" />
+        <KpiCard label={`${selectedYear} F&B Budget`} value={fmt(monthlySummary.fbBudget)} icon={TrendingUp} tone="blue" />
+        <KpiCard label={`${selectedYear} Other Budget`} value={fmt(monthlySummary.otherBudget)} icon={TrendingUp} tone="emerald" />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-10">
