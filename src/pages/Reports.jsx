@@ -2,11 +2,20 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
-import { resolveReportPeriod } from '../lib/fiscalYear'
+import { getAmcActiveMonths, getAmcMonthsInView, resolveReportPeriod } from '../lib/fiscalYear'
 import { Printer } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+
+
+function getAmcOverlapUsd(r, fyStart, rangeFrom, rangeTo) {
+  const activeMonths = getAmcActiveMonths(r.start_year, r.start_month, fyStart).totalMonths;
+  const amount = Number(r.annual_amount_usd || 0);
+  const monthlyAmount = activeMonths > 0 ? amount / activeMonths : 0;
+  const overlapMonths = getAmcMonthsInView(r.start_year, r.start_month, fyStart, rangeFrom, rangeTo);
+  return monthlyAmount * overlapMonths;
+}
 
 export default function Reports() {
   const { activeCompany, activeProduct } = useAuth()
@@ -133,17 +142,20 @@ export default function Reports() {
       
       // 4. Hotel AMC Contracts
       if (mainAcc && amc && amc.length > 0) {
-        const amcMonthly = amc.reduce((s, r) => s + (Number(r.annual_amount_usd)/12), 0)
-        if (amcMonthly > 0) {
-          const start = new Date(cp.range.from < '2020-01-01' ? '2020-01-01' : cp.range.from)
-          const end = new Date(cp.range.to)
-          let cur = new Date(start.getFullYear(), start.getMonth(), 1)
-          while (cur <= end) {
-            const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
-            combined.push({ account_id: mainAcc.id, debit_usd: amcMonthly, credit_usd: 0, entry_date: dStr, accounts: { type: mainAcc.type } })
-            if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: 0, credit_usd: amcMonthly, entry_date: dStr, accounts: { type: cashAcc.type } })
-            cur.setMonth(cur.getMonth() + 1)
+        const fyStart = activeCompany.fiscal_year_start_month || 1;
+        const start = new Date(cp.range.from < '2020-01-01' ? '2020-01-01' : cp.range.from)
+        const end = new Date(cp.range.to)
+        let cur = new Date(start.getFullYear(), start.getMonth(), 1)
+        while (cur <= end) {
+          const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
+          const mStart = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-01`
+          const mEnd = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-31`
+          const amcForMonth = amc.reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, mStart, mEnd), 0)
+          if (amcForMonth > 0) {
+            combined.push({ account_id: mainAcc.id, debit_usd: amcForMonth, credit_usd: 0, entry_date: dStr, accounts: { type: mainAcc.type } })
+            if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: 0, credit_usd: amcForMonth, entry_date: dStr, accounts: { type: cashAcc.type } })
           }
+          cur.setMonth(cur.getMonth() + 1)
         }
       }
       
@@ -344,17 +356,20 @@ export default function Reports() {
       
       // 4. Hotel AMC Contracts
       if (mainAcc && amc && amc.length > 0) {
-        const amcMonthly = amc.reduce((s, r) => s + (Number(r.annual_amount_usd)/12), 0)
-        if (amcMonthly > 0) {
-          const start = new Date(cp.range.from < '2020-01-01' ? '2020-01-01' : cp.range.from)
-          const end = new Date(cp.range.to)
-          let cur = new Date(start.getFullYear(), start.getMonth(), 1)
-          while (cur <= end) {
-            const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
-            combined.push({ account_id: mainAcc.id, debit_usd: amcMonthly, credit_usd: 0, entry_date: dStr, accounts: { type: mainAcc.type } })
-            if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: 0, credit_usd: amcMonthly, entry_date: dStr, accounts: { type: cashAcc.type } })
-            cur.setMonth(cur.getMonth() + 1)
+        const fyStart = activeCompany.fiscal_year_start_month || 1;
+        const start = new Date(cp.range.from < '2020-01-01' ? '2020-01-01' : cp.range.from)
+        const end = new Date(cp.range.to)
+        let cur = new Date(start.getFullYear(), start.getMonth(), 1)
+        while (cur <= end) {
+          const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
+          const mStart = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-01`
+          const mEnd = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-31`
+          const amcForMonth = amc.reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, mStart, mEnd), 0)
+          if (amcForMonth > 0) {
+            combined.push({ account_id: mainAcc.id, debit_usd: amcForMonth, credit_usd: 0, entry_date: dStr, accounts: { type: mainAcc.type } })
+            if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: 0, credit_usd: amcForMonth, entry_date: dStr, accounts: { type: cashAcc.type } })
           }
+          cur.setMonth(cur.getMonth() + 1)
         }
       }
       

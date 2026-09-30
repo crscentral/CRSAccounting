@@ -3,7 +3,7 @@ import { Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
-import { resolveReportPeriod } from '../lib/fiscalYear'
+import { getAmcActiveMonths, getAmcMonthsInView, resolveReportPeriod } from '../lib/fiscalYear'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
@@ -159,16 +159,19 @@ async function fetchAndProcessEntries(targetAccountId, rangeFrom, rangeTo, compa
            if (amt > 0) combined.push({ id: `hee-c-${r.id}-${selectedAccount.id}`, entry_date: r.expense_date, description: r.notes || 'Expense Paid', currency: r.currency || 'USD', debit_usd: 0, credit_usd: amt, account_id: selectedAccount.id })
         })
         if (amc && amc.length > 0) {
-          const amcMonthly = amc.reduce((s, r) => s + (Number(r.annual_amount_usd)/12), 0)
-          if (amcMonthly > 0) {
-            const start = new Date(rangeFrom < '2020-01-01' ? '2020-01-01' : rangeFrom)
-            const end = new Date(rangeTo)
-            let cur = new Date(start.getFullYear(), start.getMonth(), 1)
-            while (cur <= end) {
-              const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
-              combined.push({ id: `amc-c-${dStr}-${selectedAccount.id}`, entry_date: dStr, description: 'AMC Monthly Amortization', currency: 'USD', debit_usd: 0, credit_usd: amcMonthly, account_id: selectedAccount.id })
-              cur.setMonth(cur.getMonth() + 1)
+          const fyStart = comp?.fiscal_year_start_month || 1;
+          const start = new Date(rangeFrom < '2020-01-01' ? '2020-01-01' : rangeFrom)
+          const end = new Date(rangeTo)
+          let cur = new Date(start.getFullYear(), start.getMonth(), 1)
+          while (cur <= end) {
+            const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
+            const mStart = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-01`
+            const mEnd = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-31`
+            const amcForMonth = amc.reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, mStart, mEnd), 0)
+            if (amcForMonth > 0) {
+              combined.push({ id: `amc-c-${dStr}-${selectedAccount.id}`, entry_date: dStr, description: 'AMC Monthly Amortization', currency: 'USD', debit_usd: 0, credit_usd: amcForMonth, account_id: selectedAccount.id })
             }
+            cur.setMonth(cur.getMonth() + 1)
           }
         }
         ;(hgi || []).forEach(r => {
@@ -200,6 +203,15 @@ async function fetchAndProcessEntries(targetAccountId, rangeFrom, rangeTo, compa
   
   combined.sort((a, b) => a.entry_date.localeCompare(b.entry_date))
   return combined
+}
+
+
+function getAmcOverlapUsd(r, fyStart, rangeFrom, rangeTo) {
+  const activeMonths = getAmcActiveMonths(r.start_year, r.start_month, fyStart).totalMonths;
+  const amount = Number(r.annual_amount_usd || 0);
+  const monthlyAmount = activeMonths > 0 ? amount / activeMonths : 0;
+  const overlapMonths = getAmcMonthsInView(r.start_year, r.start_month, fyStart, rangeFrom, rangeTo);
+  return monthlyAmount * overlapMonths;
 }
 
 export default function Ledger() {

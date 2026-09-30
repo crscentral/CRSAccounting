@@ -2,11 +2,20 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
-import { resolveReportPeriod, formatDate } from '../lib/fiscalYear'
+import { getAmcActiveMonths, getAmcMonthsInView, resolveReportPeriod, formatDate } from '../lib/fiscalYear'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
+
+
+function getAmcOverlapUsd(r, fyStart, rangeFrom, rangeTo) {
+  const activeMonths = getAmcActiveMonths(r.start_year, r.start_month, fyStart).totalMonths;
+  const amount = Number(r.annual_amount_usd || 0);
+  const monthlyAmount = activeMonths > 0 ? amount / activeMonths : 0;
+  const overlapMonths = getAmcMonthsInView(r.start_year, r.start_month, fyStart, rangeFrom, rangeTo);
+  return monthlyAmount * overlapMonths;
+}
 
 export default function Transactions() {
   const { activeCompany, activeProduct } = useAuth()
@@ -53,7 +62,7 @@ export default function Transactions() {
       const isMonth = cp.periodProps.periodType.includes('MONTH') || cp.periodProps.periodType === 'LAST_30_DAYS' || (new Date(cp.range.to) - new Date(cp.range.from)) <= 35 * 24 * 60 * 60 * 1000
       amc.forEach(r => {
         if (isMonth) {
-          combined.push({ id: `amc-${r.id}`, date: cp.range.from, type: 'AMC Contract', desc: `${r.contract_name || 'AMC Contract'} - Amortized AMC (Monthly)`, amount_usd: Number(r.annual_amount_usd)/12, amount: Number(r.annual_amount || r.annual_amount_usd)/12, currency: r.currency || 'USD', direction: 'out' })
+          combined.push({ id: `amc-${r.id}`, date: cp.range.from, type: 'AMC Contract', desc: `${r.contract_name || 'AMC Contract'} - Amortized AMC (Monthly)`, amount_usd: Number(r.annual_amount_usd) / (getAmcActiveMonths(r.start_year, r.start_month, activeCompany.fiscal_year_start_month || 1).totalMonths || 1), amount: Number(r.annual_amount || r.annual_amount_usd) / (getAmcActiveMonths(r.start_year, r.start_month, activeCompany.fiscal_year_start_month || 1).totalMonths || 1), currency: r.currency || 'USD', direction: 'out' })
         } else {
           const dStr = r.start_year ? `${r.start_year}-${String(r.start_month).padStart(2, '0')}-01` : (r.created_at || '').split('T')[0] || cp.range.from
           combined.push({ id: `amc-${r.id}`, date: dStr >= cp.range.from && dStr <= cp.range.to ? dStr : cp.range.from, type: 'AMC Contract', desc: r.contract_name || 'AMC Contract', amount_usd: r.annual_amount_usd, amount: r.annual_amount || r.annual_amount_usd, currency: r.currency || 'USD', direction: 'out' })
@@ -111,7 +120,7 @@ export default function Transactions() {
       const isMonth = selections.period.includes('MONTH') || selections.period === 'LAST_30_DAYS' || (new Date(range.to) - new Date(range.from)) <= 35 * 24 * 60 * 60 * 1000
       amc.forEach(r => {
         if (isMonth) {
-          combined.push({ date: range.from, type: 'AMC Contract', desc: `${r.contract_name || 'AMC Contract'} - Amortized AMC (Monthly)`, amount: fmt(Number(r.annual_amount_usd)/12), direction: '-' })
+          combined.push({ date: range.from, type: 'AMC Contract', desc: `${r.contract_name || 'AMC Contract'} - Amortized AMC (Monthly)`, amount: fmt(Number(r.annual_amount_usd) / (getAmcActiveMonths(r.start_year, r.start_month, activeCompany.fiscal_year_start_month || 1).totalMonths || 1)), direction: '-' })
         } else {
           const dStr = r.start_year ? `${r.start_year}-${String(r.start_month).padStart(2, '0')}-01` : (r.created_at || '').split('T')[0] || range.from
           combined.push({ date: dStr >= range.from && dStr <= range.to ? dStr : range.from, type: 'AMC Contract', desc: r.contract_name || 'AMC Contract', amount: fmt(r.annual_amount_usd), direction: '-' })

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { getAmcActiveMonths, getAmcMonthsInView, useEffect, useState } from 'react'
 import { ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
@@ -10,6 +10,15 @@ import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exp
 
 const DA_INTEREST_NAMES = ['Depreciation & Amortization', 'Loan Interest']
 const now = new Date()
+
+
+function getAmcOverlapUsd(r, fyStart, rangeFrom, rangeTo) {
+  const activeMonths = getAmcActiveMonths(r.start_year, r.start_month, fyStart).totalMonths;
+  const amount = Number(r.annual_amount_usd || 0);
+  const monthlyAmount = activeMonths > 0 ? amount / activeMonths : 0;
+  const overlapMonths = getAmcMonthsInView(r.start_year, r.start_month, fyStart, rangeFrom, rangeTo);
+  return monthlyAmount * overlapMonths;
+}
 
 export default function Comparison() {
   const { activeCompany, activeProduct } = useAuth()

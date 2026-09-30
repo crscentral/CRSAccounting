@@ -40,6 +40,15 @@ class ErrorBoundary extends React.Component {
 }
 
 
+
+function getAmcOverlapUsd(r, fyStart, rangeFrom, rangeTo, isPaid = false) {
+  const activeMonths = getAmcActiveMonths(r.start_year, r.start_month, fyStart).totalMonths;
+  const amount = isPaid ? Number(r.paid_amount_usd || 0) : Number(r.annual_amount_usd || 0);
+  const monthlyAmount = activeMonths > 0 ? amount / activeMonths : 0;
+  const overlapMonths = getAmcMonthsInView(r.start_year, r.start_month, fyStart, rangeFrom, rangeTo);
+  return monthlyAmount * overlapMonths;
+}
+
 export default function HotelExpenses() {
   return <ErrorBoundary><HotelExpensesInner /></ErrorBoundary>;
 }
@@ -136,8 +145,8 @@ function HotelExpensesInner() {
     const start = new Date(range.from)
     const end = new Date(range.to)
     const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
-    const amcMonthlyTotalUsd = amcContracts.reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0)
-    const amcTotalForView = amcMonthlyTotalUsd * monthsInView
+    const fyStart = activeCompany.fiscal_year_start_month || 1;
+    const amcTotalForView = amcContracts.reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, range.from, range.to), 0)
     
     let totalView = 0
     let expenseRows = []
@@ -186,29 +195,25 @@ function HotelExpensesInner() {
   const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
   const daysInView = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1)
   const availableRoomNights = totalRooms * daysInView
+  const fyStart = activeCompany.fiscal_year_start_month || 1;
 
-  const amcMonthlyTotalUsd = amcContracts.reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0)
-  const amcTotalForView = amcMonthlyTotalUsd * monthsInView
+  const amcTotalForView = amcContracts.reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, cp.range.from, cp.range.to), 0)
 
   const entriesTotalUsd = entries.reduce((s, r) => s + Number(r.amount_usd), 0)
-  
   const entriesTotal = entries.reduce((s, r) => s + Number(r.amount_usd), 0)
-
   const piTotalUsd = purchaseInvoices.reduce((s, r) => s + Number(r.amount_usd), 0)
   const totalExpenses = entriesTotalUsd + amcTotalForView + piTotalUsd
 
   const totalHotelExpenses = entries.filter(e => e.product === 'hotel').reduce((s, r) => s + Number(r.amount_usd), 0)
-    + amcContracts.filter(e => e.product === 'hotel').reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0) * monthsInView
+    + amcContracts.filter(e => e.product === 'hotel').reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, cp.range.from, cp.range.to), 0)
     + purchaseInvoices.filter(e => e.product === 'hotel').reduce((s, r) => s + Number(r.amount_usd), 0);
 
   const totalRestExpenses = entries.filter(e => e.product === 'restaurant').reduce((s, r) => s + Number(r.amount_usd), 0)
-    + amcContracts.filter(e => e.product === 'restaurant').reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0) * monthsInView
+    + amcContracts.filter(e => e.product === 'restaurant').reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, cp.range.from, cp.range.to), 0)
     + purchaseInvoices.filter(e => e.product === 'restaurant').reduce((s, r) => s + Number(r.amount_usd), 0);
 
-
   const entriesTotalPaidUsd = entries.reduce((s, r) => s + Number(r.paid_amount_usd || 0), 0)
-  const amcMonthlyPaidUsd = amcContracts.reduce((s, r) => s + (Number(r.paid_amount_usd || 0) / 12), 0)
-  const amcTotalPaidForView = amcMonthlyPaidUsd * monthsInView
+  const amcTotalPaidForView = amcContracts.reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, cp.range.from, cp.range.to, true), 0)
   const piTotalPaidUsd = purchaseInvoices.reduce((s, r) => s + (r.status === 'Paid' ? Number(r.amount_usd) : 0), 0)
 
 
@@ -315,11 +320,17 @@ function HotelExpensesInner() {
   })
 
   const groupedAmcMap = {}
+  
   amcContracts.forEach(r => {
     const key = r.contract_name || 'Unknown'
-    if (!groupedAmcMap[key]) groupedAmcMap[key] = { isGroupHeader: true, name: key, annual_amount_usd: 0, paid_amount_usd: 0, transactions: [] }
+    if (!groupedAmcMap[key]) groupedAmcMap[key] = { isGroupHeader: true, name: key, annual_amount_usd: 0, paid_amount_usd: 0, monthly_amount_usd: 0, monthly_paid_usd: 0, transactions: [] }
     groupedAmcMap[key].annual_amount_usd += Number(r.annual_amount_usd)
     groupedAmcMap[key].paid_amount_usd += Number(r.paid_amount_usd || 0)
+    
+    const activeMonths = getAmcActiveMonths(r.start_year, r.start_month, fyStart).totalMonths || 1;
+    groupedAmcMap[key].monthly_amount_usd += Number(r.annual_amount_usd) / activeMonths;
+    groupedAmcMap[key].monthly_paid_usd += Number(r.paid_amount_usd || 0) / activeMonths;
+    
     groupedAmcMap[key].transactions.push(r)
   })
   const flattenedAmc = []
@@ -524,9 +535,9 @@ function HotelExpensesInner() {
           { key: 'annual_amount_usd', label: 'Annual Amount', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.annual_amount_usd)}</span> },
           { key: 'annual_paid', label: 'Paid (Yr)', render: r => <span className="text-emerald-600 font-medium">{cp.fmt(r.paid_amount_usd || 0)}</span> },
           { key: 'annual_pending', label: 'Pending (Yr)', render: r => <span className="text-rose-600 font-medium">{cp.fmt(Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0))}</span> },
-          { key: 'monthly', label: 'Monthly', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.annual_amount_usd / 12)}</span> },
-          { key: 'monthly_paid', label: 'Paid (Mo)', render: r => <span className="text-emerald-600 font-medium">{cp.fmt((r.paid_amount_usd || 0) / 12)}</span> },
-          { key: 'monthly_pending', label: 'Pending (Mo)', render: r => <span className="text-rose-600 font-medium">{cp.fmt((Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0)) / 12)}</span> }, 
+          { key: 'monthly', label: 'Monthly', render: r => <span className="font-medium text-slate-700">{cp.fmt(r.isGroupHeader ? r.monthly_amount_usd : Number(r.annual_amount_usd) / (getAmcActiveMonths(r.start_year, r.start_month, activeCompany.fiscal_year_start_month || 1).totalMonths || 1))}</span> },
+          { key: 'monthly_paid', label: 'Paid (Mo)', render: r => <span className="text-emerald-600 font-medium">{cp.fmt(r.isGroupHeader ? r.monthly_paid_usd : Number(r.paid_amount_usd || 0) / (getAmcActiveMonths(r.start_year, r.start_month, activeCompany.fiscal_year_start_month || 1).totalMonths || 1))}</span> },
+          { key: 'monthly_pending', label: 'Pending (Mo)', render: r => <span className="text-rose-600 font-medium">{cp.fmt(r.isGroupHeader ? (r.monthly_amount_usd - r.monthly_paid_usd) : (Number(r.annual_amount_usd) - Number(r.paid_amount_usd || 0)) / (getAmcActiveMonths(r.start_year, r.start_month, activeCompany.fiscal_year_start_month || 1).totalMonths || 1))}</span> }, 
           { key: 'start', label: 'Starts', render: r => r.isGroupHeader ? '—' : `${MONTH_NAMES[r.start_month - 1]} ${r.start_year}` },
           ...(can(['owner', 'admin', 'accountant']) ? [{ key: 'actions', label: '', render: r => r.isGroupHeader ? null : <div className="flex gap-2">
       <button onClick={() => { setEditingRow(r); setAmcModalOpen(true); }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
@@ -730,7 +741,7 @@ function AmcContractFormModal({ companyId, product, editingRow, onClose, onSaved
     <Modal title={editingRow ? "Edit AMC Contract" : "New AMC Contract"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg p-3">
-          Enter the annual contract value once — it automatically posts as 12 equal monthly expense entries starting from the month you choose.
+          Enter the contract value — it automatically amortizes evenly across the remaining months of the financial year starting from the month you choose.
         </p>
         <Field label="Contract Name / Type *">
           <input required value={contractName} onChange={e => setContractName(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. Elevator AMC, HVAC AMC" />

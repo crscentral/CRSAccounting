@@ -4,7 +4,7 @@ import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveCo
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
-import { resolveReportPeriod } from '../lib/fiscalYear'
+import { getAmcActiveMonths, getAmcMonthsInView, resolveReportPeriod } from '../lib/fiscalYear'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
 import KpiCard from '../components/KpiCard'
 import PageHeader from '../components/PageHeader'
@@ -21,6 +21,15 @@ const CARD_STYLES = [
   { bg: 'bg-amber-50', border: 'border-amber-100', accent: 'bg-amber-600', text: 'text-amber-700', hex: '#d97706' },
   { bg: 'bg-rose-50', border: 'border-rose-100', accent: 'bg-rose-600', text: 'text-rose-700', hex: '#e11d48' },
 ]
+
+
+function getAmcOverlapUsd(r, fyStart, rangeFrom, rangeTo) {
+  const activeMonths = getAmcActiveMonths(r.start_year, r.start_month, fyStart).totalMonths;
+  const amount = Number(r.annual_amount_usd || 0);
+  const monthlyAmount = activeMonths > 0 ? amount / activeMonths : 0;
+  const overlapMonths = getAmcMonthsInView(r.start_year, r.start_month, fyStart, rangeFrom, rangeTo);
+  return monthlyAmount * overlapMonths;
+}
 
 export default function PortfolioDashboard() {
   const { companies } = useAuth()
@@ -85,7 +94,8 @@ export default function PortfolioDashboard() {
       const start = new Date(range.from)
       const end = new Date(range.to)
       const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
-      const e_amc = (amc || []).reduce((s, r) => s + (Number(r.annual_amount_usd) / 12), 0) * (isNaN(monthsInView)?12:monthsInView)
+      const fyStart = comp?.fiscal_year_start_month || 1;
+      const e_amc = (amc || []).reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, range.from, range.to), 0)
       const e_hee = (hee || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
       const e_pur = (pur || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
       

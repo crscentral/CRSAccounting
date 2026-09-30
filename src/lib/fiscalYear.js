@@ -138,3 +138,49 @@ export function formatDate(d) {
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${parseInt(day, 10)} ${months[parseInt(m, 10) - 1]}, ${y}`;
 }
+
+/**
+ * Calculates the active month range for an AMC contract based on the company's fiscal year.
+ * The contract is bounded strictly to the end of the financial year it was posted in.
+ * Returns the total number of months the contract is valid for, and its end year/month.
+ */
+export function getAmcActiveMonths(startYear, startMonth, fyStartMonth = 1) {
+  let endYear = startYear;
+  let endMonth = fyStartMonth - 1;
+  if (endMonth === 0) endMonth = 12;
+  
+  if (startMonth < fyStartMonth) {
+    endYear = startYear;
+  } else {
+    if (fyStartMonth === 1) {
+      endYear = startYear;
+    } else {
+      endYear = startYear + 1;
+    }
+  }
+  
+  const totalMonths = (endYear - startYear) * 12 + (endMonth - startMonth) + 1;
+  return { startYear, startMonth, endYear, endMonth, totalMonths };
+}
+
+/**
+ * Calculates how much of an AMC contract applies to a specific view period (rangeFrom -> rangeTo).
+ * Given a range (from string YYYY-MM-DD, to string YYYY-MM-DD), it counts how many months of that range
+ * fall within the contract's active months [startYear/startMonth -> endYear/endMonth].
+ */
+export function getAmcMonthsInView(startYear, startMonth, fyStartMonth, rangeFrom, rangeTo) {
+  const contract = getAmcActiveMonths(startYear, startMonth, fyStartMonth);
+  const contractStartId = contract.startYear * 12 + contract.startMonth;
+  const contractEndId = contract.endYear * 12 + contract.endMonth;
+  
+  const dFrom = new Date(rangeFrom);
+  const dTo = new Date(rangeTo);
+  const viewStartId = dFrom.getFullYear() * 12 + (dFrom.getMonth() + 1);
+  const viewEndId = dTo.getFullYear() * 12 + (dTo.getMonth() + 1);
+  
+  const overlapStartId = Math.max(contractStartId, viewStartId);
+  const overlapEndId = Math.min(contractEndId, viewEndId);
+  
+  if (overlapStartId > overlapEndId) return 0;
+  return overlapEndId - overlapStartId + 1;
+}
