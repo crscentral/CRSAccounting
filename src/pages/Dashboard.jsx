@@ -115,7 +115,19 @@ export default function Dashboard() {
     ;(stats || []).forEach(s => {
       if (dailyTrendMap[s.stat_date]) {
         dailyTrendMap[s.stat_date].Actual += Number(s.room_revenue_usd || 0)
-      } else {
+    
+    // Sync the Company Overview cards perfectly with the Top KPIs if the dropdown matches their ranges
+    if (cp.range.from === ytdRange.from && cp.range.to === ytdRange.to) {
+      ytdRevenue = totalBilled;
+      ytdExpenses = totalExpenses;
+    }
+    if (cp.range.from === '2000-01-01') {
+      allTimeRevenue = totalBilled;
+      allTimeExpenses = totalExpenses;
+    }
+    
+  } else {
+
         const [y, m] = s.stat_date.split('-')
         const dailyBudget = budgetByMonth[`${y}-${Number(m)}`] || 0
         dailyTrendMap[s.stat_date] = { date: s.stat_date, Actual: Number(s.room_revenue_usd || 0), Budget: dailyBudget }
@@ -415,6 +427,7 @@ export default function Dashboard() {
     collected = totalBilled - outstanding
     expensesMade = purchases.reduce((sum, i) => sum + (i.status === 'Paid' ? Number(i.amount_usd) : 0), 0)
   }
+
 
   const netProfit = totalBilled - totalExpenses
   const actualProfit = collected - expensesMade
