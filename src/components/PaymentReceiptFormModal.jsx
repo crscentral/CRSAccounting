@@ -147,7 +147,22 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
         </Field>
 
         <Field label="Customer Name">
-          <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Customer name" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-navy-500 focus:ring-1 focus:ring-navy-500 outline-none" />
+          <select
+            value={contactId}
+            onChange={e => {
+              setContactId(e.target.value)
+              if (e.target.value) setCustomerName('')
+            }}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-navy-500 focus:ring-1 focus:ring-navy-500 outline-none mb-2"
+          >
+            <option value="">-- Select Existing Customer --</option>
+            {contacts.filter(c => c.type === 'customer').map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          {!contactId && (
+            <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Or type one-off customer name..." className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-navy-500 focus:ring-1 focus:ring-navy-500 outline-none" />
+          )}
         </Field>
 
         <div className="grid grid-cols-2 gap-4">
