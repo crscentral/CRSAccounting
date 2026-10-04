@@ -46,6 +46,7 @@ export default function Dashboard() {
   const [receipts, setReceipts] = useState([])
   const [allSales, setAllSales] = useState([])
   const [allPurchases, setAllPurchases] = useState([])
+  const [allReceipts, setAllReceipts] = useState([])
   const [allHotelRoomStats, setAllHotelRoomStats] = useState([])
   const [allHotelGuestInvoices, setAllHotelGuestInvoices] = useState([])
   const [allHotelExpenseEntries, setAllHotelExpenseEntries] = useState([])
@@ -155,6 +156,7 @@ export default function Dashboard() {
       supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
       supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter),
       supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter),
+      supabase.from('payment_receipts').select('amount_usd, receipt_date').eq('company_id', activeCompany.id).in('product', prodFilter),
       supabase.from('accounts').select('id, type, name').eq('company_id', activeCompany.id).in('product', prodFilter),
       supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to) : Promise.resolve({ data: [] }),
@@ -181,7 +183,7 @@ export default function Dashboard() {
     
     const results = await Promise.all(queries)
     const [
-      { data: s }, { data: p }, { data: r }, { data: allS }, { data: allP }, { data: accs }, { data: led },
+      { data: s }, { data: p }, { data: r }, { data: allS }, { data: allP }, { data: allR }, { data: accs }, { data: led },
       { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }, { data: hPi },
       { data: aHrs }, { data: aHgi }, { data: aHee }, { data: aHre }, { data: aRdr }, { data: aHotelPi },
       { data: recentS }, { data: recentP }, { data: recentR },
@@ -210,6 +212,7 @@ export default function Dashboard() {
     setReceipts(r || [])
     setAllSales(allS || [])
     setAllPurchases(allP || [])
+    setAllReceipts(allR || [])
 
     const combined = [
       ...(recentS || []).map(r => ({ date: r.invoice_date, label: r.contact?.name || r.invoice_number, amount: r.amount, currency: r.currency })),
@@ -242,6 +245,7 @@ export default function Dashboard() {
       supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
       supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter),
       supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter),
+      supabase.from('payment_receipts').select('amount_usd, receipt_date').eq('company_id', activeCompany.id).in('product', prodFilter),
       supabase.from('accounts').select('id, type, name').eq('company_id', activeCompany.id).in('product', prodFilter),
       supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to) : Promise.resolve({ data: [] }),
@@ -520,12 +524,9 @@ export default function Dashboard() {
     allTimeRevenue = Object.values(monthlyMap).reduce((s, m) => s + m.Revenue, 0)
     allTimeExpenses = Object.values(monthlyMap).reduce((s, m) => s + m.Expenses, 0)
     
-    const ytdSales = allSales.filter(i => i.invoice_date >= ytdRange.from && i.invoice_date <= ytdRange.to)
-    const ytdPurchases = allPurchases.filter(i => i.invoice_date >= ytdRange.from && i.invoice_date <= ytdRange.to)
-    ytdRevenue = ytdSales.reduce((s, i) => s + Number(i.amount_usd), 0)
-    ytdExpenses = ytdPurchases.reduce((s, i) => s + Number(i.amount_usd), 0)
-    
-    sales.forEach(i => {
+  } else {
+    // Basic product
+    allSales.forEach(i => {
       const key = (i.invoice_date || '').slice(0, 7)
       if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
@@ -533,20 +534,29 @@ export default function Dashboard() {
       monthlyMap[key].Outstanding += (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd))
     })
     
-    purchases.forEach(i => {
+    allPurchases.forEach(i => {
       const key = (i.invoice_date || '').slice(0, 7)
       if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
       monthlyMap[key].Expenses += Number(i.amount_usd)
     })
     
-    receipts.forEach(r => {
+    allReceipts.forEach(r => {
       const key = (r.receipt_date || '').slice(0, 7)
       if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
       monthlyMap[key].Collected += Number(r.amount_usd)
     })
+
+    const ytdSales = allSales.filter(i => i.invoice_date >= ytdRange.from && i.invoice_date <= ytdRange.to)
+    const ytdPurchases = allPurchases.filter(i => i.invoice_date >= ytdRange.from && i.invoice_date <= ytdRange.to)
+    ytdRevenue = ytdSales.reduce((s, i) => s + Number(i.amount_usd), 0)
+    ytdExpenses = ytdPurchases.reduce((s, i) => s + Number(i.amount_usd), 0)
+    
+    allTimeRevenue = allSales.reduce((s, i) => s + Number(i.amount_usd), 0)
+    allTimeExpenses = allPurchases.reduce((s, i) => s + Number(i.amount_usd), 0)
   }
+
   const chartData = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
     .map(m => ({ ...m, Profit: m.Revenue - m.Expenses }))
 

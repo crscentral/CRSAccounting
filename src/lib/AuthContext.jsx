@@ -24,8 +24,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!session) { setCompanies([]); return }
-    loadCompanies()
-  }, [session])
+    if (companies.length === 0) loadCompanies()
+  }, [session?.user?.id])
 
   async function loadCompanies() {
     setLoadingCompanies(true)
