@@ -420,8 +420,9 @@ export default function Dashboard() {
 
   const netProfit = totalBilled - totalExpenses
   const actualProfit = collected - expensesMade
-  const draftInvoices = ['hotel', 'restaurant'].includes(activeProduct) 
-    ? hotelGuestInvoices.filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)).map(i => ({
+  let draftInvoices = [];
+  if (['hotel', 'restaurant'].includes(activeProduct)) {
+    const guestInvoices = hotelGuestInvoices.filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)).map(i => ({
         ...i,
         contact: { name: i.guest_name || 'Guest' },
         balance_due: Number(i.invoice_amount_usd) - Number(i.collected_amount_usd),
@@ -430,8 +431,65 @@ export default function Dashboard() {
         due_date: i.invoice_date,
         status: 'Pending',
         invoice_number: i.id ? i.id.slice(0, 8).toUpperCase() : '—'
-      }))
-    : sales.filter(i => i.status !== 'Paid')
+    }));
+
+    const uncollectedRooms = hotelRoomStats
+        .filter(r => Number(r.room_revenue_usd || 0) > (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected || 0)))
+        .map(r => {
+            const bal = Number(r.room_revenue_usd || 0) - (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected || 0));
+            return {
+                invoice_number: 'ROOM REV',
+                contact: { name: 'Daily Room Revenue' },
+                due_date: r.stat_date,
+                balance_due: bal,
+                amount: bal,
+                amount_usd: bal,
+                currency: cp.displayCurrency,
+                status: 'Uncollected'
+            };
+        });
+
+    const uncollectedAncillary = hotelRevenueEntries
+        .filter(r => Number(r.amount_usd || 0) > Number(r.collected_usd || 0))
+        .map(r => {
+            const bal = Number(r.amount_usd || 0) - Number(r.collected_usd || 0);
+            return {
+                invoice_number: 'ANC REV',
+                contact: { name: r.account?.name || 'Ancillary Revenue' },
+                due_date: r.entry_date,
+                balance_due: bal,
+                amount: bal,
+                amount_usd: bal,
+                currency: cp.displayCurrency,
+                status: 'Uncollected'
+            };
+        });
+
+    const uncollectedRestaurant = restaurantRevenue
+        .filter(r => {
+            const tot = Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0));
+            return tot > Number(r.collected_usd || 0);
+        })
+        .map(r => {
+            const tot = Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0));
+            const bal = tot - Number(r.collected_usd || 0);
+            return {
+                invoice_number: 'F&B REV',
+                contact: { name: r.meal_period + ' F&B Revenue' },
+                due_date: r.revenue_date,
+                balance_due: bal,
+                amount: bal,
+                amount_usd: bal,
+                currency: cp.displayCurrency,
+                status: 'Uncollected'
+            };
+        });
+
+    draftInvoices = [...guestInvoices, ...uncollectedRooms, ...uncollectedAncillary, ...uncollectedRestaurant];
+  } else {
+    draftInvoices = sales.filter(i => i.status !== 'Paid');
+  }
+
   const draftExpenses = activeProduct === 'hotel' ? [] : purchases.filter(i => i.status === 'Draft')
 
   // YTD & All-Time logic + Charts
@@ -645,7 +703,7 @@ export default function Dashboard() {
         <KpiCard label="Total Revenue" value={cp.fmt(totalBilled)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'total accrued revenue' : 'sales invoices'} icon={TrendingUp} tone="green" />
         <KpiCard label="Total Expenses" value={cp.fmt(totalExpenses)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'total accrued expenses' : 'purchase invoices'} icon={TrendingDown} tone="red" />
         <KpiCard label={['hotel', 'restaurant'].includes(activeProduct) ? 'Accrued Net Profit' : 'Expected Net Profit'} value={cp.fmt(netProfit)} sublabel="revenue minus expenses" icon={DollarSign} tone={netProfit >= 0 ? 'green' : 'red'} />
-        <KpiCard label="Outstanding" value={cp.fmt(outstanding)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'unpaid invoices' : 'pending + overdue'} icon={AlertCircle} tone="slate" />
+        <KpiCard label="Outstanding" value={cp.fmt(outstanding)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'uncollected revenue' : 'pending + overdue'} icon={AlertCircle} tone="slate" />
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
