@@ -115,18 +115,7 @@ export default function Dashboard() {
     ;(stats || []).forEach(s => {
       if (dailyTrendMap[s.stat_date]) {
         dailyTrendMap[s.stat_date].Actual += Number(s.room_revenue_usd || 0)
-    
-    // Sync the Company Overview cards perfectly with the Top KPIs if the dropdown matches their ranges
-    if (cp.range.from === ytdRange.from && cp.range.to === ytdRange.to) {
-      ytdRevenue = totalBilled;
-      ytdExpenses = totalExpenses;
-    }
-    if (cp.range.from === '2000-01-01') {
-      allTimeRevenue = totalBilled;
-      allTimeExpenses = totalExpenses;
-    }
-    
-  } else {
+} else {
 
         const [y, m] = s.stat_date.split('-')
         const dailyBudget = budgetByMonth[`${y}-${Number(m)}`] || 0
@@ -532,6 +521,7 @@ export default function Dashboard() {
       allHotelPurchaseInvoices.filter(r => r.invoice_date >= ytdRange.from && r.invoice_date <= ytdRange.to).reduce((s, r) => s + Number(r.amount_usd || 0), 0) +
       hotelAmc.reduce((s, r) => s + getAmcOverlapUsd(r, activeCompany.fiscal_year_start_month || 1, ytdRange.from, ytdRange.to), 0);
       
+
     // Calculate All-Time directly from raw records
     allTimeRevenue = 
       allHotelRoomStats.reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0) +
@@ -543,6 +533,18 @@ export default function Dashboard() {
       allHotelExpenseEntries.reduce((s, r) => s + Number(r.amount_usd || 0), 0) +
       allHotelPurchaseInvoices.reduce((s, r) => s + Number(r.amount_usd || 0), 0) +
       hotelAmc.reduce((s, r) => s + getAmcOverlapUsd(r, activeCompany.fiscal_year_start_month || 1, '2000-01-01', todayStr), 0);
+
+    if (cp.range.from === ytdRange.from && cp.range.to === ytdRange.to) {
+      ytdRevenue = totalBilled;
+      ytdExpenses = totalExpenses;
+    }
+    
+    // For All-Time, cp.range.from is usually '2000-01-01'
+    if (cp.range.from === '2000-01-01') {
+      allTimeRevenue = totalBilled;
+      allTimeExpenses = totalExpenses;
+    }
+
 
     
   } else {
