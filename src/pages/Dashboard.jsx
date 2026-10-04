@@ -159,19 +159,23 @@ export default function Dashboard() {
       supabase.from('payment_receipts').select('amount_usd, receipt_date').eq('company_id', activeCompany.id).in('product', prodFilter),
       supabase.from('accounts').select('id, type, name').eq('company_id', activeCompany.id).in('product', prodFilter),
       supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
+      // Filtered lists for the active period
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('invoice_date, amount_usd, currency, status, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }).limit(10) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to) : Promise.resolve({ data: [] }),
+      
+      // All-time lists for YTD and All-Time cards
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd, manual_room_revenue_collected_usd, invoiced_room_revenue_collected').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_guest_invoices').select('invoice_date, invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('expense_date, amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('restaurant_daily_revenue').select('revenue_date, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('restaurant_daily_revenue').select('revenue_date, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('invoice_date, amount_usd, status').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
+
       supabase.from('sales_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(5),
       supabase.from('purchase_invoices').select('invoice_number, invoice_date, amount_usd, currency, amount, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }).limit(5),
       supabase.from('payment_receipts').select('receipt_date, amount_usd, currency, amount').eq('company_id', activeCompany.id).in('product', prodFilter).order('receipt_date', { ascending: false }).limit(5),
@@ -436,14 +440,12 @@ export default function Dashboard() {
   let allTimeExpenses = 0
   const monthlyMap = {}
   
+
   if (['hotel', 'restaurant'].includes(activeProduct)) {
-    // Build monthlyMap using ALL historical data for accurate Charts, YTD, and All-Time.
+    // Build monthlyMap using the exact same filtered lists as Top KPIs to ensure perfect alignment
     const uniqueMonths = new Set()
     
-    // We NO LONGER use allHotelGuestInvoices for Revenue or Outstanding as it causes duplicates and confusion.
-    // We use Stats, Revenue Entries, and Restaurant Revenue.
-    
-    allHotelRoomStats.forEach(r => {
+    hotelRoomStats.forEach(r => {
       const key = (r.stat_date || '').slice(0, 7)
       uniqueMonths.add(key)
       if (!key) return
@@ -452,7 +454,7 @@ export default function Dashboard() {
       monthlyMap[key].Collected += Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected || 0)
     })
     
-    allHotelRevenueEntries.forEach(r => {
+    hotelRevenueEntries.forEach(r => {
       const key = (r.entry_date || '').slice(0, 7)
       uniqueMonths.add(key)
       if (!key) return
@@ -461,7 +463,7 @@ export default function Dashboard() {
       monthlyMap[key].Collected += Number(r.collected_usd || 0)
     })
     
-    allRestaurantRevenue.forEach(r => {
+    restaurantRevenue.forEach(r => {
       const key = (r.revenue_date || '').slice(0, 7)
       uniqueMonths.add(key)
       if (!key) return
@@ -471,12 +473,11 @@ export default function Dashboard() {
       monthlyMap[key].Collected += Number(r.collected_usd || 0)
     })
 
-    // Calculate Outstanding per month: Revenue - Collected
     Object.values(monthlyMap).forEach(m => {
       m.Outstanding = m.Revenue - m.Collected
     })
     
-    allHotelExpenseEntries.forEach(r => {
+    hotelExpenseEntries.forEach(r => {
       const key = (r.expense_date || '').slice(0, 7)
       uniqueMonths.add(key)
       if (!key) return
@@ -484,7 +485,7 @@ export default function Dashboard() {
       monthlyMap[key].Expenses += Number(r.amount_usd || 0)
     })
     
-    allHotelPurchaseInvoices.forEach(r => {
+    hotelPurchaseInvoices.forEach(r => {
       const key = (r.invoice_date || '').slice(0, 7)
       uniqueMonths.add(key)
       if (!key) return
@@ -492,7 +493,7 @@ export default function Dashboard() {
       monthlyMap[key].Expenses += Number(r.amount_usd || 0)
     })
     
-    // For AMC, compute exact overlap for each month
+    // For AMC, compute exact overlap for each month inside the current period
     const fyStart = activeCompany.fiscal_year_start_month || 1;
     hotelAmc.forEach(r => {
        Object.keys(monthlyMap).forEach(k => {
@@ -504,25 +505,32 @@ export default function Dashboard() {
           monthlyMap[k].Expenses += overlap;
        });
     });
+
     
-    // Now calculate YTD from the map
-    ytdRevenue = Object.values(monthlyMap).filter(m => {
-      if (!m.month) return false
-      const [y, mo] = m.month.split('-')
-      const d = new Date(Number(y), Number(mo)-1, 15).toISOString().split('T')[0]
-      return d >= ytdRange.from && d <= ytdRange.to
-    }).reduce((s, m) => s + m.Revenue, 0)
-    
-    ytdExpenses = Object.values(monthlyMap).filter(m => {
-      if (!m.month) return false
-      const [y, mo] = m.month.split('-')
-      const d = new Date(Number(y), Number(mo)-1, 15).toISOString().split('T')[0]
-      return d >= ytdRange.from && d <= ytdRange.to
-    }).reduce((s, m) => s + m.Expenses, 0)
-    
-    // Calculate All-Time from the map
-    allTimeRevenue = Object.values(monthlyMap).reduce((s, m) => s + m.Revenue, 0)
-    allTimeExpenses = Object.values(monthlyMap).reduce((s, m) => s + m.Expenses, 0)
+
+    // Now calculate YTD directly from the raw records for accuracy
+    ytdRevenue = 
+      allHotelRoomStats.filter(r => r.stat_date >= ytdRange.from && r.stat_date <= ytdRange.to).reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0) +
+      allHotelRevenueEntries.filter(r => r.entry_date >= ytdRange.from && r.entry_date <= ytdRange.to).reduce((s, r) => s + Number(r.amount_usd || 0), 0) +
+      allRestaurantRevenue.filter(r => r.revenue_date >= ytdRange.from && r.revenue_date <= ytdRange.to).reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0);
+      
+    ytdExpenses = 
+      allHotelExpenseEntries.filter(r => r.expense_date >= ytdRange.from && r.expense_date <= ytdRange.to).reduce((s, r) => s + Number(r.amount_usd || 0), 0) +
+      allHotelPurchaseInvoices.filter(r => r.invoice_date >= ytdRange.from && r.invoice_date <= ytdRange.to).reduce((s, r) => s + Number(r.amount_usd || 0), 0) +
+      hotelAmc.reduce((s, r) => s + getAmcOverlapUsd(r, activeCompany.fiscal_year_start_month || 1, ytdRange.from, ytdRange.to), 0);
+      
+    // Calculate All-Time directly from raw records
+    allTimeRevenue = 
+      allHotelRoomStats.reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0) +
+      allHotelRevenueEntries.reduce((s, r) => s + Number(r.amount_usd || 0), 0) +
+      allRestaurantRevenue.reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0);
+      
+    const todayStr = new Date().toISOString().split('T')[0]
+    allTimeExpenses = 
+      allHotelExpenseEntries.reduce((s, r) => s + Number(r.amount_usd || 0), 0) +
+      allHotelPurchaseInvoices.reduce((s, r) => s + Number(r.amount_usd || 0), 0) +
+      hotelAmc.reduce((s, r) => s + getAmcOverlapUsd(r, activeCompany.fiscal_year_start_month || 1, '2000-01-01', todayStr), 0);
+
     
   } else {
     // Basic product
