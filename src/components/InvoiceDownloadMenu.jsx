@@ -22,12 +22,24 @@ export default function InvoiceDownloadMenu({ type, company, role, getData, icon
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
-  async function run(fn) {
+  async function run(exportType) {
     setLoading(true)
     setOpen(false)
     try {
       const { invoice, items, contact } = await getData()
-      await fn({ type, invoice, items, company, contact })
+      const args = { type, invoice, items, company, contact }
+      
+      if (type === 'receipt') {
+        if (exportType === 'pdf') await exportReceiptPDF(args)
+        if (exportType === 'excel') await exportInvoiceExcel(args)
+        if (exportType === 'word') await exportReceiptWord(args)
+        if (exportType === 'preview') await exportReceiptPDF({ ...args, preview: true })
+      } else {
+        if (exportType === 'pdf') await exportInvoicePDF(args)
+        if (exportType === 'excel') await exportInvoiceExcel(args)
+        if (exportType === 'word') await exportInvoiceWord(args)
+        if (exportType === 'preview') await exportInvoicePDF({ ...args, preview: true })
+      }
     } catch (err) {
       alert('Download failed: ' + err.message)
     } finally {
@@ -38,10 +50,10 @@ export default function InvoiceDownloadMenu({ type, company, role, getData, icon
   if (pdfOnly) {
     return (
       <div className="flex items-center gap-2">
-        <button onClick={() => run(async (args) => exportInvoicePDF({ ...args, preview: true }))} disabled={loading} className={triggerClassName || 'text-slate-400 hover:text-navy-600 disabled:opacity-50'} title="Preview Invoice">
+        <button onClick={() => run('preview')} disabled={loading} className={triggerClassName || 'text-slate-400 hover:text-navy-600 disabled:opacity-50'} title="Preview Invoice">
           <Eye size={15} />
         </button>
-        <button onClick={() => run(exportInvoicePDF)} disabled={loading} className={triggerClassName || 'text-slate-400 hover:text-navy-600 disabled:opacity-50'} title="Download PDF">
+        <button onClick={() => run('pdf')} disabled={loading} className={triggerClassName || 'text-slate-400 hover:text-navy-600 disabled:opacity-50'} title="Download PDF">
           {loading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
         </button>
       </div>
@@ -50,7 +62,7 @@ export default function InvoiceDownloadMenu({ type, company, role, getData, icon
 
   return (
     <div className="flex items-center gap-2">
-      <button onClick={() => run(async (args) => exportInvoicePDF({ ...args, preview: true }))} disabled={loading} className={triggerClassName || 'text-slate-400 hover:text-navy-600 disabled:opacity-50'} title="Preview Invoice">
+      <button onClick={() => run('preview')} disabled={loading} className={triggerClassName || 'text-slate-400 hover:text-navy-600 disabled:opacity-50'} title="Preview Invoice">
         <Eye size={15} />
       </button>
       <div className="relative" ref={ref}>
@@ -59,13 +71,13 @@ export default function InvoiceDownloadMenu({ type, company, role, getData, icon
       </button>
       {open && (
         <div className="absolute z-30 mt-1 right-0 w-44 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
-          <button onClick={() => run(exportInvoicePDF)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-navy-50">
+          <button onClick={() => run('pdf')} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-navy-50">
             <FileText size={15} className="text-red-500" /> PDF
           </button>
-          <button onClick={() => run(exportInvoiceExcel)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-navy-50">
+          <button onClick={() => run('excel')} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-navy-50">
             <FileSpreadsheet size={15} className="text-emerald-600" /> Excel
           </button>
-          <button onClick={() => run(exportInvoiceWord)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-navy-50">
+          <button onClick={() => run('word')} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-navy-50">
             <FileType size={15} className="text-blue-600" /> Word
           </button>
         </div>
