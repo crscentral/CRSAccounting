@@ -532,7 +532,7 @@ export default function Dashboard() {
     allTimeExpenses = 
       allHotelExpenseEntries.reduce((s, r) => s + Number(r.amount_usd || 0), 0) +
       allHotelPurchaseInvoices.reduce((s, r) => s + Number(r.amount_usd || 0), 0) +
-      hotelAmc.reduce((s, r) => s + getAmcOverlapUsd(r, activeCompany.fiscal_year_start_month || 1, '2000-01-01', todayStr), 0);
+      hotelAmc.reduce((s, r) => s + getAmcOverlapUsd(r, activeCompany.fiscal_year_start_month || 1, '1970-01-01', '2100-12-31'), 0);
 
     if (cp.range.from === ytdRange.from && cp.range.to === ytdRange.to) {
       ytdRevenue = totalBilled;
