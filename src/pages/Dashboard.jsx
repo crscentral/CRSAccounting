@@ -568,6 +568,36 @@ export default function Dashboard() {
     'Profit Expected': m.Revenue - m.Expenses,
   }))
 
+
+  // Before rendering, compute the actual variance based on totalBilled to ensure exact matches
+  let actualVsBudgetBase = null;
+  let actualVsBudgetUsd = null;
+  
+  if (hotelStats) {
+    // Re-calculate the pie chart values using totalBilled to perfectly match the top KPI
+    const totalBilledUsdNum = Number(totalBilled) || 0;
+    const totalBudgetUsdNum = Number(hotelStats.totalBudgetUsd) || 0;
+    const totalVarianceUsdNum = totalBilledUsdNum - totalBudgetUsdNum;
+    
+    // We can deduce the baseRate used when hotelStats was set
+    const baseRate = hotelStats.totalRevenue ? (hotelStats.totalRevenueBase / hotelStats.totalRevenue) : 1;
+    
+    const totalBilledBaseNum = totalBilledUsdNum * baseRate;
+    const totalVarianceBaseNum = totalVarianceUsdNum * baseRate;
+    
+    actualVsBudgetUsd = {
+      actual: totalBilledUsdNum,
+      budget: totalBudgetUsdNum,
+      variance: totalVarianceUsdNum
+    };
+    
+    actualVsBudgetBase = {
+      actual: totalBilledBaseNum,
+      budget: hotelStats.totalBudgetBase,
+      variance: totalVarianceBaseNum
+    };
+  }
+
   const reportColumns = [
     { label: 'Invoice #', key: 'invoice_number' }, { label: 'Customer', key: 'customerName' },
     { label: 'Due Date', key: 'due_date' }, { label: 'Balance Due (USD)', key: 'balanceLabel' }, { label: 'Status', key: 'status' },
@@ -718,9 +748,9 @@ export default function Dashboard() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={[
-                        { name: 'Actual', value: Math.abs(hotelStats.totalRevenueBase), realValue: hotelStats.totalRevenueBase, fill: '#1B3A6B' },
-                        { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetBase), realValue: hotelStats.totalBudgetBase, fill: '#C9A84C' },
-                        { name: 'Variance', value: Math.abs(hotelStats.totalVarianceBase), realValue: hotelStats.totalVarianceBase, fill: hotelStats.totalVarianceBase >= 0 ? '#10B981' : '#EF4444' }
+                        { name: 'Actual', value: Math.abs(actualVsBudgetBase.actual), realValue: actualVsBudgetBase.actual, fill: '#1B3A6B' },
+                        { name: 'Budgeted', value: Math.abs(actualVsBudgetBase.budget), realValue: actualVsBudgetBase.budget, fill: '#C9A84C' },
+                        { name: 'Variance', value: Math.abs(actualVsBudgetBase.variance), realValue: actualVsBudgetBase.variance, fill: actualVsBudgetBase.variance >= 0 ? '#10B981' : '#EF4444' }
                       ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} label={false}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
@@ -729,9 +759,9 @@ export default function Dashboard() {
                   </ResponsiveContainer>
                 </div>
                 <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center text-sm mt-2 text-slate-600 w-full">
-                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#1B3A6B'}}></span> Actual: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(hotelStats.totalRevenueBase)}</div>
-                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#C9A84C'}}></span> Budgeted: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(hotelStats.totalBudgetBase)}</div>
-                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: hotelStats.totalVarianceBase >= 0 ? '#10B981' : '#EF4444'}}></span> Variance: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(hotelStats.totalVarianceBase)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#1B3A6B'}}></span> Actual: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(actualVsBudgetBase.actual)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#C9A84C'}}></span> Budgeted: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(actualVsBudgetBase.budget)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: actualVsBudgetBase.variance >= 0 ? '#10B981' : '#EF4444'}}></span> Variance: {new Intl.NumberFormat('en-US', { style: 'currency', currency: hotelStats.budgetCurrency }).format(actualVsBudgetBase.variance)}</div>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col items-center">
@@ -740,9 +770,9 @@ export default function Dashboard() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={[
-                        { name: 'Actual', value: Math.abs(hotelStats.totalRevenue), realValue: hotelStats.totalRevenue, fill: '#1B3A6B' },
-                        { name: 'Budgeted', value: Math.abs(hotelStats.totalBudgetUsd), realValue: hotelStats.totalBudgetUsd, fill: '#C9A84C' },
-                        { name: 'Variance', value: Math.abs(hotelStats.totalVarianceUsd), realValue: hotelStats.totalVarianceUsd, fill: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444' }
+                        { name: 'Actual', value: Math.abs(actualVsBudgetUsd.actual), realValue: actualVsBudgetUsd.actual, fill: '#1B3A6B' },
+                        { name: 'Budgeted', value: Math.abs(actualVsBudgetUsd.budget), realValue: actualVsBudgetUsd.budget, fill: '#C9A84C' },
+                        { name: 'Variance', value: Math.abs(actualVsBudgetUsd.variance), realValue: actualVsBudgetUsd.variance, fill: actualVsBudgetUsd.variance >= 0 ? '#10B981' : '#EF4444' }
                       ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} label={false}>
                         { [1,2,3].map((_, i) => <Cell key={i} />) }
                       </Pie>
@@ -751,9 +781,9 @@ export default function Dashboard() {
                   </ResponsiveContainer>
                 </div>
                 <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center text-sm mt-2 text-slate-600 w-full">
-                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#1B3A6B'}}></span> Actual: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(hotelStats.totalRevenue)}</div>
-                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#C9A84C'}}></span> Budgeted: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(hotelStats.totalBudgetUsd)}</div>
-                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: hotelStats.totalVarianceUsd >= 0 ? '#10B981' : '#EF4444'}}></span> Variance: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(hotelStats.totalVarianceUsd)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#1B3A6B'}}></span> Actual: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(actualVsBudgetUsd.actual)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#C9A84C'}}></span> Budgeted: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(actualVsBudgetUsd.budget)}</div>
+                   <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: actualVsBudgetUsd.variance >= 0 ? '#10B981' : '#EF4444'}}></span> Variance: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(actualVsBudgetUsd.variance)}</div>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 lg:col-span-2">
