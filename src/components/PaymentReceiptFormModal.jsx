@@ -8,13 +8,14 @@ import { CURRENCY_LIST } from '../lib/currencies'
 
 const PAYMENT_METHODS = ['Bank Transfer', 'Cash', 'Card', 'Cheque', 'Other']
 
-export default function PaymentReceiptFormModal({ open, onClose, companyId, product, initialData, onSuccess, invoices }) {
+export default function PaymentReceiptFormModal({ open, onClose, companyId, product, initialData, onSuccess, invoices, contacts = [] }) {
   const [saving, setSaving] = useState(false)
 
   const [receiptNumber, setReceiptNumber] = useState('')
   const [receiptDate, setReceiptDate] = useState('')
   const [invoiceId, setInvoiceId] = useState('')
   const [customerName, setCustomerName] = useState('')
+  const [contactId, setContactId] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('USD')
   const [fxRate, setFxRate] = useState('')
@@ -27,6 +28,7 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
         setReceiptNumber(initialData.receipt_number || '')
         setReceiptDate(initialData.receipt_date || '')
         setInvoiceId(initialData.sales_invoice_id || '')
+        setContactId(initialData.contact_id || '')
         setCustomerName(initialData.customer_name_freeform || initialData.contact?.name || '')
         setAmount(initialData.amount || '')
         setCurrency(initialData.currency || 'USD')
@@ -37,6 +39,7 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
         setReceiptNumber(`RCP-${Math.floor(Math.random() * 1000000)}`)
         setReceiptDate(getLocalDate())
         setInvoiceId('')
+        setContactId('')
         setCustomerName('')
         setAmount('')
         setCurrency('USD')
@@ -52,7 +55,8 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
     if (val) {
       const inv = invoices.find(i => i.id === val)
       if (inv) {
-        if (!customerName) setCustomerName(inv.contact?.name || '')
+        if (!contactId && inv.contact_id) setContactId(inv.contact_id)
+        if (!customerName && !inv.contact_id) setCustomerName(inv.contact?.name || '')
         setCurrency(inv.currency)
         // Auto-sync the exact conversion rate from the invoice
         const invRate = inv.fx_rate_locked || (inv.amount && inv.amount_usd && inv.currency !== 'USD' ? (inv.amount / inv.amount_usd).toFixed(2) : '')
@@ -86,7 +90,8 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
         receipt_number: receiptNumber.trim() || null,
         receipt_date: receiptDate,
         sales_invoice_id: invoiceId || null,
-        customer_name_freeform: customerName.trim() || null,
+        contact_id: contactId || null,
+        customer_name_freeform: contactId ? null : (customerName.trim() || null),
         currency,
         amount: amt,
         amount_usd: Math.round(amountUsd * 100) / 100,

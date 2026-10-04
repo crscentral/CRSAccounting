@@ -198,7 +198,8 @@ export default function SalesInvoices() {
                       type="sales" company={activeCompany} role={activeRole}
                       getData={async () => {
                         const { data: items } = await supabase.from('sales_invoice_items').select('*').eq('sales_invoice_id', r.id).order('sort_order')
-                        return { invoice: r, items: items || [], contact: r.contact }
+                        const fullContact = contacts.find(c => c.id === r.contact_id) || r.contact
+                        return { invoice: r, items: items || [], contact: fullContact }
                       }}
                     />
                     {can(['owner', 'admin', 'accountant']) && (
@@ -232,7 +233,8 @@ export default function SalesInvoices() {
                     <InvoiceDownloadMenu
                       type="receipt" company={activeCompany} role={activeRole}
                       getData={async () => {
-                        return { invoice: r, items: [{ description: 'Payment Received', amount: r.amount }], contact: r.contact }
+                        const fullContact = contacts.find(c => c.id === r.contact_id) || r.contact
+                        return { invoice: r, items: [{ description: 'Payment Received', amount: r.amount }], contact: fullContact }
                       }}
                     />
                     {can(['owner', 'admin', 'accountant']) && (
@@ -272,6 +274,7 @@ export default function SalesInvoices() {
           initialData={editingReceipt}
           onSuccess={loadData}
           invoices={invoices}
+          contacts={contacts}
         />
       )}
 
