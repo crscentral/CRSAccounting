@@ -210,6 +210,7 @@ function loadImageAsDataUrl(url) {
 export async function exportInvoicePDF({ type, invoice, items, company, contact, itemDescription, preview = false }) {
   const doc = new jsPDF()
   const isSales = type === 'sales'
+  const isReceipt = type === 'receipt'
   const pageWidth = doc.internal.pageSize.getWidth()
   const rightX = pageWidth - 14
 
@@ -222,10 +223,11 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const isProforma = isSales && invoice.invoice_type === 'proforma'
   let docHeading = 'Invoice'
   if (isProforma) docHeading = 'Proforma Invoice'
-  if (!isSales) docHeading = 'Purchase Invoice'
+  if (!isSales && !isReceipt) docHeading = 'Purchase Invoice'
+  if (isReceipt) docHeading = 'Payment Receipt'
   doc.text(docHeading, 14, 22)
 
-  const status = invoice.status || 'Draft'
+  const status = isReceipt ? 'Received' : (invoice.status || 'Draft')
   const statusColors = {
     Paid: [16, 150, 100], Draft: [148, 163, 184], Overdue: [220, 38, 38], Cancelled: [148, 163, 184],
   }
@@ -248,7 +250,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.setFontSize(9)
   doc.setTextColor(90)
   doc.setFont(undefined, 'bold')
-  doc.text(isSales ? (isProforma ? 'PROFORMA INVOICE' : 'TAX INVOICE') : 'PURCHASE INVOICE', pageWidth / 2, y, { align: 'center' })
+  doc.text(isReceipt ? 'PAYMENT RECEIPT' : isSales ? (isProforma ? 'PROFORMA INVOICE' : 'TAX INVOICE') : 'PURCHASE INVOICE', pageWidth / 2, y, { align: 'center' })
   y += 5
   doc.setFont(undefined, 'normal')
   doc.setFontSize(8)
@@ -273,12 +275,12 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.setFont(undefined, 'bold')
   doc.setTextColor(20)
   
-  const fromName = isSales ? (company?.name || '') : (contact?.name || invoice.supplier_name_freeform || '')
-  const toName = isSales ? (contact?.name || invoice.customer_name_freeform || '') : (company?.name || '')
+  const fromName = (isSales || isReceipt) ? (company?.name || '') : (contact?.name || invoice.supplier_name_freeform || '')
+  const toName = (isSales || isReceipt) ? (contact?.name || invoice.customer_name_freeform || invoice.customer_name || '') : (company?.name || '')
   
   const fromNameWrapped = doc.splitTextToSize(fromName, 60)
   const toNameWrapped = doc.splitTextToSize(toName, 62)
-  const docNameWrapped = doc.splitTextToSize(invoice.invoice_number || '', 46)
+  const docNameWrapped = doc.splitTextToSize((isReceipt ? invoice.receipt_number : invoice.invoice_number) || '', 46)
 
   doc.text(fromNameWrapped, col1, y)
   doc.text(toNameWrapped, col2, y)
@@ -342,10 +344,15 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   y = Math.max(endY1, endY2, endY3) + 6
 
   // Line items -- two-line description like the original (bold name + gray subtitle)
-  const tableColumns = isSales
-    ? ['Item', 'Qty', 'Price', 'Tax %', 'Total']
-    : ['Product', 'HSN/SAC', 'Qty', 'Unit Price', 'Tax %', 'Total']
+  const tableColumns = isReceipt 
+    ? ['Description', 'Amount']
+    : isSales
+      ? ['Item', 'Qty', 'Price', 'Tax %', 'Total']
+      : ['Product', 'HSN/SAC', 'Qty', 'Unit Price', 'Tax %', 'Total']
   const tableRows = (items || []).map(it => {
+    if (isReceipt) {
+      return [it.description || 'Payment Received', Number(it.amount || invoice.amount).toFixed(2)]
+    }
     const mainLabel = isSales ? (it.description || '') : (it.product_name || '')
     const subtitle = isSales && itemDescription ? itemDescription : null
     const label = subtitle ? `${mainLabel}\n${subtitle}` : mainLabel
@@ -475,34 +482,46 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
 /** Exports a single invoice as a formatted Excel workbook (header info + line items + summary). */
 export function exportInvoiceExcel({ type, invoice, items, company, contact }) {
   const isSales = type === 'sales'
+  const isReceipt = type === 'receipt'
   const rows = []
   const isProformaXl = isSales && invoice.invoice_type === 'proforma'
-  rows.push([isProformaXl ? 'PROFORMA INVOICE' : 'INVOICE', invoice.invoice_number, '', 'Status:', invoice.status || 'Draft'])
+  const docHeading = isReceipt ? 'PAYMENT RECEIPT' : (isProformaXl ? 'PROFORMA INVOICE' : 'INVOICE')
+  
+  rows.push([docHeading, isReceipt ? invoice.receipt_number : invoice.invoice_number, '', 'Status:', isReceipt ? 'Received' : (invoice.status || 'Draft')])
   rows.push([])
-  rows.push(['From', company?.name || '', '', isSales ? 'Bill To' : 'Supplier', contact?.name || invoice.supplier_name_freeform || ''])
+  rows.push(['From', company?.name || '', '', isReceipt ? 'To' : (isSales ? 'Bill To' : 'Supplier'), contact?.name || invoice.customer_name_freeform || invoice.supplier_name_freeform || invoice.customer_name || ''])
   rows.push(['', company?.address || '', '', '', invoice.customer_address || invoice.supplier_address || ''])
   rows.push(['', company?.email || '', '', '', invoice.customer_email || invoice.supplier_email || ''])
   rows.push([])
-  rows.push(['Issue Date', invoice.invoice_date, '', 'Due Date', invoice.due_date || ''])
+  rows.push(['Issue Date', isReceipt ? invoice.receipt_date : invoice.invoice_date, '', isReceipt ? 'Payment Method' : 'Due Date', isReceipt ? invoice.method : (invoice.due_date || '')])
   rows.push(['Currency', invoice.currency, '', isSales ? 'Terms' : 'GSTIN', isSales ? (invoice.billing_terms || '') : (invoice.supplier_gstin || '')])
   rows.push([])
-  rows.push(isSales ? ['Item', 'Qty', 'Price', 'Tax %', 'Total'] : ['Product', 'HSN/SAC', 'Qty', 'Unit Price', 'Tax %', 'Total'])
-  ;(items || []).forEach(it => {
-    rows.push(isSales
-      ? [it.description, it.qty, it.unit_price, `${it.tax_percent}%`, it.line_total]
-      : [it.product_name, it.hsn_sac || '', it.qty, it.unit_price, `${it.tax_percent}%`, it.line_total])
-  })
-  rows.push([])
-  rows.push(['', '', '', 'Subtotal', invoice.subtotal ?? invoice.amount])
-  if (isSales && invoice.discount_value) rows.push(['', '', '', 'Discount', -invoice.discount_value])
-  rows.push(['', '', '', 'Tax', invoice.tax_amount ?? 0])
-  if (isSales && invoice.bank_charges) rows.push(['', '', '', 'Bank Charges', invoice.bank_charges])
-  if (!isSales && invoice.tds_percent) rows.push(['', '', '', `TDS (${invoice.tds_percent}%)`, -(((invoice.subtotal || 0) + (invoice.tax_amount || 0)) * invoice.tds_percent / 100)])
-  rows.push(['', '', '', isSales ? 'Grand Total' : 'Net Payable', isSales ? invoice.amount : (invoice.net_payable ?? invoice.amount)])
-  if (isSales) {
-    rows.push(['', '', '', 'Paid', invoice.paid_amount || 0])
-    rows.push(['', '', '', 'Balance Due', Math.max(0, invoice.amount - (invoice.paid_amount || 0))])
+  
+  if (isReceipt) {
+    rows.push(['Description', 'Amount'])
+    ;(items || []).forEach(it => rows.push([it.description || 'Payment Received', invoice.amount]))
+    rows.push([])
+    rows.push(['', 'Total Amount', invoice.amount])
+  } else {
+    rows.push(isSales ? ['Item', 'Qty', 'Price', 'Tax %', 'Total'] : ['Product', 'HSN/SAC', 'Qty', 'Unit Price', 'Tax %', 'Total'])
+    ;(items || []).forEach(it => {
+      rows.push(isSales
+        ? [it.description, it.qty, it.unit_price, `${it.tax_percent}%`, it.line_total]
+        : [it.product_name, it.hsn_sac || '', it.qty, it.unit_price, `${it.tax_percent}%`, it.line_total])
+    })
+    rows.push([])
+    rows.push(['', '', '', 'Subtotal', invoice.subtotal ?? invoice.amount])
+    if (isSales && invoice.discount_value) rows.push(['', '', '', 'Discount', -invoice.discount_value])
+    rows.push(['', '', '', 'Tax', invoice.tax_amount ?? 0])
+    if (isSales && invoice.bank_charges) rows.push(['', '', '', 'Bank Charges', invoice.bank_charges])
+    if (!isSales && invoice.tds_percent) rows.push(['', '', '', `TDS (${invoice.tds_percent}%)`, -(((invoice.subtotal || 0) + (invoice.tax_amount || 0)) * invoice.tds_percent / 100)])
+    rows.push(['', '', '', isSales ? 'Grand Total' : 'Net Payable', isSales ? invoice.amount : (invoice.net_payable ?? invoice.amount)])
+    if (isSales) {
+      rows.push(['', '', '', 'Paid', invoice.paid_amount || 0])
+      rows.push(['', '', '', 'Balance Due', Math.max(0, invoice.amount - (invoice.paid_amount || 0))])
+    }
   }
+
   const lutInfoXl = resolveLutInfo(invoice, company)
   if (isSales && lutInfoXl.number) {
     rows.push([])
@@ -520,21 +539,31 @@ export function exportInvoiceExcel({ type, invoice, items, company, contact }) {
 
   const ws = XLSX.utils.aoa_to_sheet(rows)
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, invoice.invoice_number.slice(0, 31))
-  XLSX.writeFile(wb, `${invoice.invoice_number}.xlsx`)
+  const sheetName = String(isReceipt ? invoice.receipt_number : invoice.invoice_number).slice(0, 31) || 'Sheet1'
+  XLSX.utils.book_append_sheet(wb, ws, sheetName)
+  XLSX.writeFile(wb, `${sheetName}.xlsx`)
 }
 
 /** Exports a single invoice as a Word-compatible (.doc) file matching the same layout. */
 export function exportInvoiceWord({ type, invoice, items, company, contact }) {
   const isSales = type === 'sales'
+  const isReceipt = type === 'receipt'
   const isProformaDoc = isSales && invoice.invoice_type === 'proforma'
   const esc = (s) => escapeHtml(String(s ?? ''))
-  const itemRows = (items || []).map(it => isSales
-    ? `<tr><td style="padding:6px;border:1px solid #ddd;">${esc(it.description)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.qty)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.unit_price).toFixed(2))}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.tax_percent)}%</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.line_total).toFixed(2))}</td></tr>`
-    : `<tr><td style="padding:6px;border:1px solid #ddd;">${esc(it.product_name)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.hsn_sac || '')}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.qty)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.unit_price).toFixed(2))}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.tax_percent)}%</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.line_total).toFixed(2))}</td></tr>`
-  ).join('')
-  const headerCells = (isSales ? ['Item', 'Qty', 'Price', 'Tax %', 'Total'] : ['Product', 'HSN/SAC', 'Qty', 'Unit Price', 'Tax %', 'Total'])
-    .map(c => `<th style="background:#1B3A6B;color:#fff;padding:6px;text-align:left;">${esc(c)}</th>`).join('')
+  
+  const itemRows = (items || []).map(it => {
+    if (isReceipt) {
+      return `<tr><td style="padding:6px;border:1px solid #ddd;">${esc(it.description || 'Payment Received')}</td><td style="padding:6px;border:1px solid #ddd;text-align:right;">${esc(Number(it.amount || invoice.amount).toFixed(2))}</td></tr>`
+    }
+    return isSales
+      ? `<tr><td style="padding:6px;border:1px solid #ddd;">${esc(it.description)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.qty)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.unit_price).toFixed(2))}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.tax_percent)}%</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.line_total).toFixed(2))}</td></tr>`
+      : `<tr><td style="padding:6px;border:1px solid #ddd;">${esc(it.product_name)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.hsn_sac || '')}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.qty)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.unit_price).toFixed(2))}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.tax_percent)}%</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.line_total).toFixed(2))}</td></tr>`
+  }).join('')
+  
+  const headerCells = isReceipt 
+    ? ['Description', 'Amount'].map(c => `<th style="background:#1B3A6B;color:#fff;padding:6px;text-align:${c === 'Amount' ? 'right' : 'left'};">${esc(c)}</th>`).join('')
+    : (isSales ? ['Item', 'Qty', 'Price', 'Tax %', 'Total'] : ['Product', 'HSN/SAC', 'Qty', 'Unit Price', 'Tax %', 'Total'])
+        .map(c => `<th style="background:#1B3A6B;color:#fff;padding:6px;text-align:left;">${esc(c)}</th>`).join('')
 
   const grandTotal = Number(isSales ? invoice.amount : (invoice.net_payable ?? invoice.amount))
   const bankHtml = isSales && company?.bank_account_number ? `
@@ -542,33 +571,38 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
     <p>Bank: ${esc(company.bank_name)}<br/>Account Holder: ${esc(company.bank_account_holder)}<br/>Account Number: ${esc(company.bank_account_number)}<br/>Branch: ${esc(company.bank_branch)}<br/>SWIFT: ${esc(company.bank_swift_code)}</p>
   ` : ''
 
+  const docHeading = isReceipt ? 'Payment Receipt' : (isProformaDoc ? 'Proforma Invoice' : 'Invoice')
+  const toName = isReceipt ? (contact?.name || invoice.customer_name_freeform || invoice.customer_name) : (isSales ? (contact?.name || invoice.customer_name_freeform) : (invoice.supplier_name_freeform))
+  
   const html = `
     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-    <head><meta charset="utf-8"><title>${esc(invoice.invoice_number)}</title></head>
+    <head><meta charset="utf-8"><title>${esc(isReceipt ? invoice.receipt_number : invoice.invoice_number)}</title></head>
     <body style="font-family:Arial,sans-serif;color:#333;">
-      <h1 style="margin-bottom:0;">${isProformaDoc ? 'Proforma Invoice' : 'Invoice'}</h1>
-      <p style="color:#666;text-transform:uppercase;font-size:12px;">${esc(invoice.status || 'Draft')}</p>
+      <h1 style="margin-bottom:0;">${docHeading}</h1>
+      <p style="color:#666;text-transform:uppercase;font-size:12px;">${esc(isReceipt ? 'Received' : (invoice.status || 'Draft'))}</p>
       <table style="width:100%;margin-bottom:16px;"><tr>
         <td style="vertical-align:top;width:33%;">
           <p style="color:#999;font-size:11px;">FROM</p>
           <p><strong>${esc(company?.name)}</strong><br/>${esc(company?.legal_name)}<br/>${esc(company?.address)}<br/>${esc(company?.email)}<br/>${company?.tax_id ? 'Tax ID: ' + esc(company.tax_id) : ''}</p>
         </td>
         <td style="vertical-align:top;width:33%;">
-          <p style="color:#999;font-size:11px;">${isSales ? 'BILL TO' : 'SUPPLIER'}</p>
-          <p><strong>${esc(contact?.name || invoice.supplier_name_freeform)}</strong><br/>${esc(invoice.customer_address || invoice.supplier_address)}<br/>${esc(invoice.customer_email || invoice.supplier_email)}</p>
+          <p style="color:#999;font-size:11px;">${isReceipt ? 'TO' : (isSales ? 'BILL TO' : 'SUPPLIER')}</p>
+          <p><strong>${esc(toName)}</strong><br/>${esc(invoice.customer_address || invoice.supplier_address)}<br/>${esc(invoice.customer_email || invoice.supplier_email)}</p>
         </td>
         <td style="vertical-align:top;width:33%;">
           <p style="color:#999;font-size:11px;">DOCUMENT</p>
-          <p><strong>${esc(invoice.invoice_number)}</strong><br/>Issue: ${esc(invoice.invoice_date)}<br/>Due: ${esc(invoice.due_date || '—')}<br/>Currency: ${esc(invoice.currency)}</p>
+          <p><strong>${esc(isReceipt ? invoice.receipt_number : invoice.invoice_number)}</strong><br/>${isReceipt ? 'Date' : 'Issue'}: ${esc(isReceipt ? invoice.receipt_date : invoice.invoice_date)}<br/>${isReceipt ? 'Method: ' + esc(invoice.method || '—') : 'Due: ' + esc(invoice.due_date || '—')}<br/>Currency: ${esc(invoice.currency)}</p>
         </td>
       </tr></table>
       <table style="border-collapse:collapse;width:100%;"><thead><tr>${headerCells}</tr></thead><tbody>${itemRows}</tbody></table>
       <table style="width:100%;margin-top:12px;"><tr><td style="width:70%;"></td><td>
-        <p>Subtotal: ${esc((invoice.subtotal ?? invoice.amount)?.toFixed(2))} ${esc(invoice.currency)}</p>
-        ${isSales && invoice.discount_value ? `<p>Discount: -${esc(Number(invoice.discount_value).toFixed(2))} ${esc(invoice.currency)}</p>` : ''}
-        <p>Tax: ${esc(Number(invoice.tax_amount ?? 0).toFixed(2))} ${esc(invoice.currency)}</p>
-        <p><strong>${isSales ? 'Grand Total' : 'Net Payable'}: ${esc(grandTotal.toFixed(2))} ${esc(invoice.currency)}</strong></p>
-        ${isSales ? `<p>Paid: ${esc(Number(invoice.paid_amount || 0).toFixed(2))} ${esc(invoice.currency)}</p><p><strong>Balance Due: ${esc(Math.max(0, grandTotal - (invoice.paid_amount || 0)).toFixed(2))} ${esc(invoice.currency)}</strong></p>` : ''}
+        ${isReceipt ? '' : `
+          <p>Subtotal: ${esc((invoice.subtotal ?? invoice.amount)?.toFixed(2))} ${esc(invoice.currency)}</p>
+          ${isSales && invoice.discount_value ? `<p>Discount: -${esc(Number(invoice.discount_value).toFixed(2))} ${esc(invoice.currency)}</p>` : ''}
+          <p>Tax: ${esc(Number(invoice.tax_amount ?? 0).toFixed(2))} ${esc(invoice.currency)}</p>
+        `}
+        <p><strong>${isReceipt ? 'Total Amount' : (isSales ? 'Grand Total' : 'Net Payable')}: ${esc(Number(invoice.amount).toFixed(2))} ${esc(invoice.currency)}</strong></p>
+        ${(isSales && !isReceipt) ? `<p>Paid: ${esc(Number(invoice.paid_amount || 0).toFixed(2))} ${esc(invoice.currency)}</p><p><strong>Balance Due: ${esc(Math.max(0, grandTotal - (invoice.paid_amount || 0)).toFixed(2))} ${esc(invoice.currency)}</strong></p>` : ''}
       </td></tr></table>
       ${(() => { const l = resolveLutInfo(invoice, company); return isSales && l.number ? `<p style="font-size:11px;color:#666;">The LUT acknowledgement number is ${esc(l.number)}${l.date ? ' dated ' + esc(l.date) : ''}</p>` : '' })()}
       <p style="font-size:11px;color:#666;">${esc(invoice.payment_terms || '')} ${esc(invoice.notes || '')}</p>
@@ -577,8 +611,9 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
     </body>
     </html>
   `
-  const blob = new Blob(['\ufeff', html], { type: 'application/msword' })
-  downloadBlob(blob, `${invoice.invoice_number}.doc`)
+  const blob = new Blob(['﻿', html], { type: 'application/msword' })
+  const fileName = String(isReceipt ? invoice.receipt_number : invoice.invoice_number) || 'document'
+  downloadBlob(blob, `${fileName}.doc`)
 }
 
 /**

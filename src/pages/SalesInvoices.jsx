@@ -229,6 +229,12 @@ export default function SalesInvoices() {
               {
                 key: 'actions', label: '', render: r => (
                   <div className="flex gap-2 justify-end md:justify-start">
+                    <InvoiceDownloadMenu
+                      type="receipt" company={activeCompany} role={activeRole}
+                      getData={async () => {
+                        return { invoice: r, items: [{ description: 'Payment Received', amount: r.amount }], contact: r.contact }
+                      }}
+                    />
                     {can(['owner', 'admin', 'accountant']) && (
                       <>
                         <button onClick={() => { setEditingReceipt(r); setReceiptModalOpen(true) }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
