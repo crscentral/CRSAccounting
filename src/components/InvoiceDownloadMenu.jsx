@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Download, FileText, FileSpreadsheet, FileType, Loader2, Eye } from 'lucide-react'
-import { exportInvoicePDF, exportInvoiceExcel, exportInvoiceWord } from '../lib/exportUtils'
+import { exportInvoicePDF, exportInvoiceExcel, exportInvoiceWord, exportReceiptPDF, exportReceiptWord } from '../lib/exportUtils'
 
 /**
  * Renders invoice download options, gated by role:

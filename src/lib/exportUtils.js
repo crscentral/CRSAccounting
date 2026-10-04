@@ -861,3 +861,282 @@ export function exportMultiSectionWord({ title, subtitle, sections, filename, lo
   const blob = new Blob(['\ufeff', html], { type: 'application/msword' })
   downloadBlob(blob, `${filename}.doc`)
 }
+
+export async function exportReceiptPDF({ invoice: receipt, company, contact, preview = false }) {
+  const doc = new jsPDF()
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const rightX = pageWidth - 14
+  
+  const logo = await loadImageAsDataUrl(company?.logo_url)
+  
+  // Top Right: PAYMENT RECEIPT
+  doc.setFontSize(22)
+  doc.setTextColor(16, 185, 129) // emerald-500
+  doc.setFont(undefined, 'bold')
+  doc.text('PAYMENT RECEIPT', rightX, 22, { align: 'right' })
+  
+  // Receipt details below PAYMENT RECEIPT
+  doc.setFontSize(10)
+  doc.setTextColor(90)
+  doc.setFont(undefined, 'normal')
+  let currentRightY = 32
+  doc.text(`Receipt #:`, rightX - 35, currentRightY, { align: 'right' })
+  doc.setTextColor(20)
+  doc.setFont(undefined, 'bold')
+  doc.text(String(receipt.receipt_number || ''), rightX, currentRightY, { align: 'right' })
+  
+  currentRightY += 6
+  doc.setTextColor(90)
+  doc.setFont(undefined, 'normal')
+  doc.text(`Date:`, rightX - 35, currentRightY, { align: 'right' })
+  doc.setTextColor(20)
+  doc.setFont(undefined, 'bold')
+  doc.text(String(receipt.receipt_date || ''), rightX, currentRightY, { align: 'right' })
+  
+  if (receipt.invoice?.invoice_number || receipt.invoice_link) {
+    currentRightY += 6
+    doc.setTextColor(90)
+    doc.setFont(undefined, 'normal')
+    doc.text(`Invoice Ref:`, rightX - 35, currentRightY, { align: 'right' })
+    doc.setTextColor(20)
+    doc.setFont(undefined, 'bold')
+    const ref = receipt.invoice?.invoice_number || receipt.invoice_link || ''
+    // Handle JSON object link to invoice if applicable
+    let refStr = typeof ref === 'string' ? ref : (ref.invoice_number || '')
+    doc.text(refStr, rightX, currentRightY, { align: 'right' })
+  }
+
+  // Top Left: Logo and Company Details
+  let currentLeftY = 14
+  if (logo?.dataUrl) {
+    const logoH = 12
+    const logoW = logoH * logo.ratio
+    doc.addImage(logo.dataUrl, 'PNG', 14, currentLeftY, logoW, logoH)
+    currentLeftY += logoH + 8
+  } else {
+    currentLeftY += 8
+  }
+
+  doc.setFontSize(14)
+  doc.setTextColor(20)
+  doc.setFont(undefined, 'bold')
+  doc.text(company?.name || '', 14, currentLeftY)
+  currentLeftY += 6
+  
+  doc.setFontSize(9)
+  doc.setFont(undefined, 'normal')
+  doc.setTextColor(90)
+  const companyLines = [
+    (company?.legal_name || '').trim(),
+    (company?.address || '').trim(),
+    [company?.city, company?.country].filter(Boolean).join(', ').trim(),
+    (company?.email || '').trim(), 
+    (company?.phone || '').trim(), 
+    (company?.website || '').trim(),
+    company?.tax_id ? `GSTIN: ${company.tax_id}` : null,
+  ].filter(Boolean)
+  
+  companyLines.forEach(line => {
+    doc.text(line, 14, currentLeftY)
+    currentLeftY += 5
+  })
+  
+  // LUT Info if present
+  const lutInfo = resolveLutInfo(receipt, company)
+  if (lutInfo.number) {
+    doc.text(`LUT: ${lutInfo.number}`, 14, currentLeftY)
+    currentLeftY += 5
+  }
+
+  // Green separator line
+  let y = Math.max(currentLeftY, currentRightY) + 8
+  doc.setDrawColor(16, 185, 129)
+  doc.setLineWidth(0.5)
+  doc.line(14, y, rightX, y)
+  y += 10
+  
+  // RECEIVED FROM section
+  doc.setFontSize(9)
+  doc.setTextColor(150)
+  doc.setFont(undefined, 'bold')
+  doc.text('RECEIVED FROM', 14, y)
+  y += 6
+  
+  doc.setFontSize(11)
+  doc.setTextColor(20)
+  const customerName = contact?.name || receipt.customer_name_freeform || receipt.customer_name || ''
+  doc.text(customerName, 14, y)
+  y += 5
+  
+  doc.setFontSize(9)
+  doc.setTextColor(90)
+  doc.setFont(undefined, 'normal')
+  const address = receipt.customer_address || contact?.address || ''
+  if (address) {
+    const wrappedAddress = doc.splitTextToSize(`Address: ${address}`, rightX - 14)
+    doc.text(wrappedAddress, 14, y)
+    y += wrappedAddress.length * 4.5
+  }
+  
+  const email = receipt.customer_email || contact?.email || ''
+  const phone = receipt.customer_phone || contact?.phone || ''
+  const parts = []
+  if (email) parts.push(`Email: ${email}`)
+  if (phone) parts.push(`Phone: ${phone}`)
+  if (parts.length > 0) {
+    doc.text(parts.join('    '), 14, y)
+    y += 5
+  }
+  
+  y += 6
+
+  // Table
+  const tableRows = [
+    [
+      `Payment received${(receipt.invoice?.invoice_number || typeof receipt.invoice_link === 'string') ? ` for Invoice ${receipt.invoice?.invoice_number || receipt.invoice_link}` : ''}`,
+      receipt.method || 'Bank Transfer',
+      `${Number(receipt.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${receipt.currency}`
+    ]
+  ]
+
+  autoTable(doc, {
+    startY: y,
+    head: [['DESCRIPTION', 'PAYMENT METHOD', 'AMOUNT']],
+    body: tableRows,
+    headStyles: { fillColor: [248, 250, 252], textColor: [100, 116, 139], fontSize: 9, fontStyle: 'bold' },
+    bodyStyles: { fontSize: 10, textColor: [20, 20, 20] },
+    columnStyles: { 
+      0: { cellWidth: 90 },
+      2: { halign: 'right', fontStyle: 'bold' }
+    },
+    theme: 'plain',
+    margin: { left: 14, right: 14 }
+  })
+  
+  let finalY = doc.lastAutoTable.finalY + 2
+  
+  // Total Amount Received Row (Green background)
+  doc.setFillColor(236, 253, 245) // emerald-50
+  doc.rect(14, finalY, pageWidth - 28, 12, 'F')
+  doc.setFontSize(11)
+  doc.setFont(undefined, 'bold')
+  doc.setTextColor(20, 20, 20)
+  doc.text('Total Amount Received', 18, finalY + 8)
+  
+  doc.setTextColor(16, 185, 129) // emerald-500
+  doc.text(`${Number(receipt.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${receipt.currency}`, rightX - 4, finalY + 8, { align: 'right' })
+  
+  finalY += 40
+  
+  // Signatory
+  doc.setDrawColor(0)
+  doc.setLineWidth(0.3)
+  doc.line(rightX - 50, finalY, rightX, finalY)
+  finalY += 5
+  doc.setFontSize(9)
+  doc.setFont(undefined, 'normal')
+  doc.setTextColor(100, 116, 139)
+  doc.text('Authorized Signatory', rightX - 25, finalY, { align: 'center' })
+  finalY += 5
+  doc.setFontSize(10)
+  doc.setFont(undefined, 'bold')
+  doc.setTextColor(20, 20, 20)
+  doc.text(company?.name || '', rightX - 25, finalY, { align: 'center' })
+  
+  // Footer
+  doc.setFontSize(8)
+  doc.setFont(undefined, 'normal')
+  doc.setTextColor(148, 163, 184)
+  doc.text('This is a computer-generated receipt and is valid without a physical signature.', pageWidth / 2, doc.internal.pageSize.getHeight() - 15, { align: 'center' })
+
+  if (preview) {
+    window.open(doc.output('bloburl'), '_blank')
+  } else {
+    doc.save(`${receipt.receipt_number || 'Receipt'}.pdf`)
+  }
+}
+
+export function exportReceiptWord({ invoice: receipt, company, contact }) {
+  const esc = (s) => escapeHtml(String(s ?? ''))
+  const customerName = contact?.name || receipt.customer_name_freeform || receipt.customer_name || ''
+  const address = receipt.customer_address || contact?.address || ''
+  const email = receipt.customer_email || contact?.email || ''
+  const phone = receipt.customer_phone || contact?.phone || ''
+  
+  let refStr = ''
+  if (receipt.invoice?.invoice_number || receipt.invoice_link) {
+    const ref = receipt.invoice?.invoice_number || receipt.invoice_link || ''
+    refStr = typeof ref === 'string' ? ref : (ref.invoice_number || '')
+  }
+
+  const html = `
+    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head><meta charset="utf-8"><title>${esc(receipt.receipt_number)}</title></head>
+    <body style="font-family:Arial,sans-serif;color:#333;">
+      <table style="width:100%;margin-bottom:20px;"><tr>
+        <td style="vertical-align:top;width:60%;">
+          <h2 style="margin:0;color:#333;">${esc(company?.name)}</h2>
+          <p style="color:#666;font-size:12px;margin:4px 0;">${esc(company?.legal_name)}<br/>${esc(company?.address)}<br/>${esc(company?.email)}<br/>${company?.tax_id ? 'GSTIN: ' + esc(company.tax_id) : ''}</p>
+        </td>
+        <td style="vertical-align:top;width:40%;text-align:right;">
+          <h1 style="margin:0;color:#10B981;">PAYMENT RECEIPT</h1>
+          <p style="color:#666;font-size:12px;margin:4px 0;">
+            Receipt #: <strong>${esc(receipt.receipt_number)}</strong><br/>
+            Date: <strong>${esc(receipt.receipt_date)}</strong>
+            ${refStr ? `<br/>Invoice Ref: <strong>${esc(refStr)}</strong>` : ''}
+          </p>
+        </td>
+      </tr></table>
+      
+      <hr style="border:none;border-top:2px solid #10B981;margin:20px 0;" />
+      
+      <p style="color:#999;font-size:12px;font-weight:bold;margin-bottom:4px;">RECEIVED FROM</p>
+      <h3 style="margin:0;">${esc(customerName)}</h3>
+      ${address ? `<p style="margin:4px 0;font-size:12px;color:#666;">Address: ${esc(address)}</p>` : ''}
+      <p style="margin:4px 0;font-size:12px;color:#666;">
+        ${email ? `Email: ${esc(email)} &nbsp;&nbsp;&nbsp;` : ''}
+        ${phone ? `Phone: ${esc(phone)}` : ''}
+      </p>
+      
+      <table style="border-collapse:collapse;width:100%;margin-top:20px;">
+        <thead>
+          <tr style="background:#f8fafc;color:#64748b;">
+            <th style="padding:10px;text-align:left;">DESCRIPTION</th>
+            <th style="padding:10px;text-align:left;">PAYMENT METHOD</th>
+            <th style="padding:10px;text-align:right;">AMOUNT</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:10px;border-bottom:1px solid #e2e8f0;">Payment received${refStr ? ` for Invoice ${esc(refStr)}` : ''}</td>
+            <td style="padding:10px;border-bottom:1px solid #e2e8f0;">${esc(receipt.method || 'Bank Transfer')}</td>
+            <td style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:bold;">${esc(Number(receipt.amount).toFixed(2))} ${esc(receipt.currency)}</td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <table style="width:100%;margin-top:20px;background:#ecfdf5;">
+        <tr>
+          <td style="padding:15px;font-weight:bold;font-size:14px;">Total Amount Received</td>
+          <td style="padding:15px;text-align:right;font-weight:bold;font-size:14px;color:#10B981;">${esc(Number(receipt.amount).toFixed(2))} ${esc(receipt.currency)}</td>
+        </tr>
+      </table>
+      
+      <table style="width:100%;margin-top:60px;">
+        <tr>
+          <td style="width:60%;"></td>
+          <td style="width:40%;text-align:center;">
+            <hr style="border:none;border-top:1px solid #000;margin-bottom:5px;" />
+            <p style="margin:0;color:#64748b;font-size:12px;">Authorized Signatory</p>
+            <p style="margin:5px 0 0 0;font-weight:bold;font-size:14px;">${esc(company?.name)}</p>
+          </td>
+        </tr>
+      </table>
+      
+      <p style="text-align:center;color:#94a3b8;font-size:11px;margin-top:40px;">This is a computer-generated receipt and is valid without a physical signature.</p>
+    </body>
+    </html>
+  `
+  const blob = new Blob(['﻿', html], { type: 'application/msword' })
+  downloadBlob(blob, `${receipt.receipt_number || 'Receipt'}.doc`)
+}
