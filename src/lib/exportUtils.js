@@ -408,14 +408,22 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
 
   doc.setDrawColor(220)
   doc.line(130, finalY - 2, rightX, finalY - 2)
+  
   doc.setFont(undefined, 'bold')
   doc.setFontSize(11)
+  doc.setTextColor(20)
   doc.text(isSales ? 'Grand total' : 'Net Payable', 130, finalY + 3)
+  doc.text(`${grandTotal.toFixed(2)} ${invoice.currency}`, rightX, finalY + 3, { align: 'right' })
   
-  let grandTotalText = `${grandTotal.toFixed(2)} ${invoice.currency}`
-  if (printUsd) grandTotalText += `  (USD ${usdGrandTotal.toFixed(2)})`
-  doc.text(grandTotalText, rightX, finalY + 3, { align: 'right' })
-  finalY += 9
+  if (printUsd) {
+    doc.setFont(undefined, 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(120)
+    doc.text(`(USD ${usdGrandTotal.toFixed(2)})`, rightX, finalY + 7, { align: 'right' })
+    finalY += 12
+  } else {
+    finalY += 9
+  }
 
   if (isSales) {
     doc.setFont(undefined, 'normal')
@@ -423,20 +431,32 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     doc.setTextColor(90)
     doc.text('Paid', 130, finalY)
     doc.setTextColor(20)
+    doc.text(`${paid.toFixed(2)} ${invoice.currency}`, rightX, finalY, { align: 'right' })
     
-    let paidText = `${paid.toFixed(2)} ${invoice.currency}`
-    if (printUsd) paidText += `  (USD ${usdPaid.toFixed(2)})`
-    doc.text(paidText, rightX, finalY, { align: 'right' })
-    finalY += 6
+    if (printUsd) {
+      doc.setFontSize(8)
+      doc.setTextColor(120)
+      doc.text(`(USD ${usdPaid.toFixed(2)})`, rightX, finalY + 4, { align: 'right' })
+      finalY += 9
+    } else {
+      finalY += 6
+    }
     
     doc.setFont(undefined, 'bold')
+    doc.setFontSize(9)
     doc.setTextColor(20)
     doc.text('Balance due', 130, finalY)
+    doc.text(`${Math.max(0, grandTotal - paid).toFixed(2)} ${invoice.currency}`, rightX, finalY, { align: 'right' })
     
-    let balText = `${Math.max(0, grandTotal - paid).toFixed(2)} ${invoice.currency}`
-    if (printUsd) balText += `  (USD ${usdBalance.toFixed(2)})`
-    doc.text(balText, rightX, finalY, { align: 'right' })
-    finalY += 6
+    if (printUsd) {
+      doc.setFont(undefined, 'normal')
+      doc.setFontSize(8)
+      doc.setTextColor(120)
+      doc.text(`(USD ${usdBalance.toFixed(2)})`, rightX, finalY + 4, { align: 'right' })
+      finalY += 9
+    } else {
+      finalY += 6
+    }
   }
 
   finalY += 6
