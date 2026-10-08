@@ -128,14 +128,14 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
             </div>
           )}
 
-          {isSales && company?.bank_account_number && (
+          {isSales && (invoice.bank_account_choice === 'bank2' ? company?.bank2_account_number : company?.bank_account_number) && (
             <div className="border-t border-slate-100 pt-4 mb-4 text-xs text-slate-500">
               <div className="font-semibold text-slate-400 uppercase text-[11px] mb-1">Bank Details</div>
-              <p>Bank: {company.bank_name}</p>
-              <p>Account Holder: {company.bank_account_holder}</p>
-              <p>Account Number: {company.bank_account_number}</p>
-              <p>Branch: {company.bank_branch}</p>
-              <p>SWIFT: {company.bank_swift_code}</p>
+              <p>Bank: {invoice.bank_account_choice === 'bank2' ? company.bank2_name : company.bank_name}</p>
+              <p>Account Holder: {invoice.bank_account_choice === 'bank2' ? company.bank2_account_holder : company.bank_account_holder}</p>
+              <p>Account Number: {invoice.bank_account_choice === 'bank2' ? company.bank2_account_number : company.bank_account_number}</p>
+              <p>Branch: {invoice.bank_account_choice === 'bank2' ? company.bank2_branch : company.bank_branch}</p>
+              <p>SWIFT: {invoice.bank_account_choice === 'bank2' ? company.bank2_swift_code : company.bank_swift_code}</p>
             </div>
           )}
 

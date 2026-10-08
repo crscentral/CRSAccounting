@@ -29,6 +29,7 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
   const [billingTerms, setBillingTerms] = useState(invoice?.billing_terms || 'Monthly')
   const [servicePeriod, setServicePeriod] = useState(invoice?.service_period || '')
   const [status, setStatus] = useState(invoice?.status || 'Draft')
+  const [bankAccountChoice, setBankAccountChoice] = useState(invoice?.bank_account_choice || 'bank1')
   const [isExportLut, setIsExportLut] = useState(invoice ? invoice.is_export_lut : !!company?.lut_ack_number)
   const [lutAckNumber, setLutAckNumber] = useState(invoice?.lut_ack_number ?? company?.lut_ack_number ?? '')
   const [lutDate, setLutDate] = useState(invoice?.lut_date ?? company?.lut_expiry_date ?? '')
