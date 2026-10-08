@@ -474,7 +474,10 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     finalY = renderRichText(doc, combined, 14, finalY, pageWidth - 28)
   }
 
-  if (isSales && company?.bank_account_number) {
+  const isBank2 = invoice.bank_account_choice === 'bank2'
+  const bankNum = isBank2 ? company?.bank2_account_number : company?.bank_account_number
+  
+  if (isSales && bankNum) {
     finalY += 6
     doc.setDrawColor(220)
     doc.line(14, finalY - 4, rightX, finalY - 4)
@@ -484,12 +487,15 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     finalY += 5
     doc.setTextColor(60)
     const bankLines = [
-      `Bank: ${company.bank_name || ''}`,
-      `Account Holder: ${company.bank_account_holder || ''}`,
-      `Account Number: ${company.bank_account_number || ''}`,
-      `Branch: ${company.bank_branch || ''}`,
-      `SWIFT Code: ${company.bank_swift_code || ''}`,
+      `Bank: ${isBank2 ? company.bank2_name : company.bank_name || ''}`,
+      `Account Holder: ${isBank2 ? company.bank2_account_holder : company.bank_account_holder || ''}`,
+      `Account Number: ${bankNum}`,
+      `Branch: ${isBank2 ? company.bank2_branch : company.bank_branch || ''}`,
+      `SWIFT Code: ${isBank2 ? company.bank2_swift_code : company.bank_swift_code || ''}`,
     ]
+    const ifsc = isBank2 ? company?.bank2_ifsc_code : company?.bank_ifsc_code
+    if (ifsc) bankLines.push(`IFSC: ${ifsc}`)
+
     bankLines.forEach(line => { doc.text(line, 14, finalY); finalY += 4.5 })
   }
 
