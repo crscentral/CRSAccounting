@@ -1,49 +1,72 @@
-import re
-
-with open('src/lib/exportUtils.js', 'r') as f:
+with open("src/lib/exportUtils.js", "r") as f:
     content = f.read()
 
-# 1. Remove cleanPhone definition
-content = re.sub(r'function cleanPhone\(p\) \{.*?\}\n', '', content, flags=re.DOTALL)
+import re
 
-# 2. Remove cleanPhone usage
-content = content.replace('cleanPhone(company?.phone)', 'company?.phone')
-content = content.replace('cleanPhone(invoice.customer_phone || contact?.phone || invoice.supplier_phone)', 'invoice.customer_phone || contact?.phone || invoice.supplier_phone')
+old_block = """  doc.setDrawColor(220)
+  doc.line(130, finalY - 2, rightX, finalY - 2)
+  doc.setFont(undefined, 'bold')
+  doc.setFontSize(11)
+  doc.text(isSales ? 'Grand total' : 'Net Payable', 130, finalY + 3)
+  doc.text(`${grandTotal.toFixed(2)} ${invoice.currency}`, rightX, finalY + 3, { align: 'right' })
+  finalY += 9
 
-# 3. Add trim() to address lines
-old_contact_lines = """  const contactLines = [
-    invoice.customer_address || contact?.address || invoice.supplier_address,
-    invoice.customer_email || contact?.email || invoice.supplier_email,
-    invoice.customer_phone || contact?.phone || invoice.supplier_phone,
-    invoice.supplier_gstin ? `GSTIN: ${invoice.supplier_gstin}` : null,
-  ].filter(Boolean)"""
+  if (isSales) {
+    doc.setFont(undefined, 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(90)
+    doc.text('Paid', 130, finalY)
+    doc.setTextColor(20)
+    doc.text(`${paid.toFixed(2)} ${invoice.currency}`, rightX, finalY, { align: 'right' })
+    finalY += 6
+    doc.setFont(undefined, 'bold')
+    doc.setTextColor(20)
+    doc.text('Balance due', 130, finalY)
+    doc.text(`${Math.max(0, grandTotal - paid).toFixed(2)} ${invoice.currency}`, rightX, finalY, { align: 'right' })
+    finalY += 6
+  }"""
 
-new_contact_lines = """  const contactLines = [
-    (invoice.customer_address || contact?.address || invoice.supplier_address || '').trim(),
-    (invoice.customer_email || contact?.email || invoice.supplier_email || '').trim(),
-    (invoice.customer_phone || contact?.phone || invoice.supplier_phone || '').trim(),
-    invoice.supplier_gstin ? `GSTIN: ${invoice.supplier_gstin}` : null,
-  ].filter(Boolean)"""
-content = content.replace(old_contact_lines, new_contact_lines)
+new_block = """  const fxRate = Number(invoice.fx_rate_locked) || (invoice.amount ? (Number(invoice.amount) / Number(invoice.amount_usd)) : 1)
+  const usdGrandTotal = Number(invoice.amount_usd) || grandTotal / (fxRate || 1)
+  const usdPaid = paid / (fxRate || 1)
+  const usdBalance = Math.max(0, grandTotal - paid) / (fxRate || 1)
+  const printUsd = invoice.currency && invoice.currency !== 'USD'
 
-old_company_lines = """  const companyLines = [
-    company?.legal_name,
-    company?.address,
-    [company?.city, company?.country].filter(Boolean).join(', '),
-    company?.email, company?.phone, company?.website,
-    company?.tax_id ? `Tax ID: ${company.tax_id}` : null,
-  ].filter(Boolean)"""
+  doc.setDrawColor(220)
+  doc.line(130, finalY - 2, rightX, finalY - 2)
+  doc.setFont(undefined, 'bold')
+  doc.setFontSize(11)
+  doc.text(isSales ? 'Grand total' : 'Net Payable', 130, finalY + 3)
+  
+  let grandTotalText = `${grandTotal.toFixed(2)} ${invoice.currency}`
+  if (printUsd) grandTotalText += `  (USD ${usdGrandTotal.toFixed(2)})`
+  doc.text(grandTotalText, rightX, finalY + 3, { align: 'right' })
+  finalY += 9
 
-new_company_lines = """  const companyLines = [
-    (company?.legal_name || '').trim(),
-    (company?.address || '').trim(),
-    [company?.city, company?.country].filter(Boolean).join(', ').trim(),
-    (company?.email || '').trim(), 
-    (company?.phone || '').trim(), 
-    (company?.website || '').trim(),
-    company?.tax_id ? `Tax ID: ${company.tax_id}` : null,
-  ].filter(Boolean)"""
-content = content.replace(old_company_lines, new_company_lines)
+  if (isSales) {
+    doc.setFont(undefined, 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(90)
+    doc.text('Paid', 130, finalY)
+    doc.setTextColor(20)
+    
+    let paidText = `${paid.toFixed(2)} ${invoice.currency}`
+    if (printUsd) paidText += `  (USD ${usdPaid.toFixed(2)})`
+    doc.text(paidText, rightX, finalY, { align: 'right' })
+    finalY += 6
+    
+    doc.setFont(undefined, 'bold')
+    doc.setTextColor(20)
+    doc.text('Balance due', 130, finalY)
+    
+    let balText = `${Math.max(0, grandTotal - paid).toFixed(2)} ${invoice.currency}`
+    if (printUsd) balText += `  (USD ${usdBalance.toFixed(2)})`
+    doc.text(balText, rightX, finalY, { align: 'right' })
+    finalY += 6
+  }"""
 
-with open('src/lib/exportUtils.js', 'w') as f:
+content = content.replace(old_block, new_block)
+
+with open("src/lib/exportUtils.js", "w") as f:
     f.write(content)
+
