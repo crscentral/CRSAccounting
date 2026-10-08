@@ -136,6 +136,9 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
               <p>Account Number: {invoice.bank_account_choice === 'bank2' ? company.bank2_account_number : company.bank_account_number}</p>
               <p>Branch: {invoice.bank_account_choice === 'bank2' ? company.bank2_branch : company.bank_branch}</p>
               <p>SWIFT: {invoice.bank_account_choice === 'bank2' ? company.bank2_swift_code : company.bank_swift_code}</p>
+              {(invoice.bank_account_choice === 'bank2' ? company.bank2_ifsc_code : company.bank_ifsc_code) && (
+                <p>IFSC: {invoice.bank_account_choice === 'bank2' ? company.bank2_ifsc_code : company.bank_ifsc_code}</p>
+              )}
             </div>
           )}
 

@@ -13,8 +13,8 @@ const emptyForm = {
   name: '', legal_name: '', industry: 'Revenue Management', address: '', city: '', country: '',
   email: '', website: '', phone: '', tax_id: '', logo_url: '',
   base_currency: 'USD', fiscal_year_start_month: 1,
-  bank_name: '', bank_account_holder: '', bank_account_number: '', bank_branch: '', bank_swift_code: '',
-  bank2_name: '', bank2_account_holder: '', bank2_account_number: '', bank2_branch: '', bank2_swift_code: '',
+  bank_name: '', bank_account_holder: '', bank_account_number: '', bank_branch: '', bank_swift_code: '', bank_ifsc_code: '',
+  bank2_name: '', bank2_account_holder: '', bank2_account_number: '', bank2_branch: '', bank2_swift_code: '', bank2_ifsc_code: '',
   default_payment_terms: '', default_notes: '', default_thank_you_note: '',
   lut_ack_number: '', lut_expiry_date: '', products: [],
 }
@@ -280,7 +280,10 @@ export default function Companies() {
                       <Field label="Account Number"><input value={form.bank_account_number} onChange={e => update('bank_account_number', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
                       <Field label="SWIFT Code"><input value={form.bank_swift_code} onChange={e => update('bank_swift_code', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
                     </div>
-                    <Field label="Branch"><input value={form.bank_branch} onChange={e => update('bank_branch', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Branch"><input value={form.bank_branch} onChange={e => update('bank_branch', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
+                      <Field label="IFSC Code (Optional)"><input value={form.bank_ifsc_code} onChange={e => update('bank_ifsc_code', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
+                    </div>
                   </div>
 
                   <div className="bg-slate-50 border border-slate-100 p-3 rounded-lg">
@@ -291,7 +294,10 @@ export default function Companies() {
                       <Field label="Account Number"><input value={form.bank2_account_number} onChange={e => update('bank2_account_number', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
                       <Field label="SWIFT Code"><input value={form.bank2_swift_code} onChange={e => update('bank2_swift_code', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
                     </div>
-                    <Field label="Branch"><input value={form.bank2_branch} onChange={e => update('bank2_branch', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Branch"><input value={form.bank2_branch} onChange={e => update('bank2_branch', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
+                      <Field label="IFSC Code (Optional)"><input value={form.bank2_ifsc_code} onChange={e => update('bank2_ifsc_code', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
+                    </div>
                   </div>
                 </>
 
