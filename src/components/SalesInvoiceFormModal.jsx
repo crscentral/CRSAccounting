@@ -112,6 +112,7 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
       service_period: servicePeriod || null, billing_terms: billingTerms,
       customer_email: customerEmail || null, customer_phone: customerPhone || null, customer_address: customerAddress || null,
       revenue_account_id: product === 'basic' ? null : (revenueAccountId || null),
+      bank_account_choice: bankAccountChoice,
     }
   }
 
