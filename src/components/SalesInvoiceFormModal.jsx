@@ -226,16 +226,22 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
           <Field label="Due Date"><input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Field label="Billing Terms">
-            <select value={billingTerms} onChange={e => setBillingTerms(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={billingTerms} onChange={e => setBillingTerms(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-navy-500 outline-none">
               {['Monthly', 'One-time', 'Quarterly', 'Annual'].map(t => <option key={t}>{t}</option>)}
             </select>
           </Field>
-          <Field label="Service Period"><input value={servicePeriod} onChange={e => setServicePeriod(e.target.value)} placeholder="e.g. August 2026" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
+          <Field label="Service Period"><input value={servicePeriod} onChange={e => setServicePeriod(e.target.value)} placeholder="e.g. August 2026" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-navy-500 outline-none" /></Field>
           <Field label="Status">
-            <select value={status} onChange={e => setStatus(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={status} onChange={e => setStatus(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-navy-500 outline-none">
               {['Draft', 'Paid', 'Overdue', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </Field>
+          <Field label="Bank (On PDF)">
+            <select value={bankAccountChoice} onChange={e => setBankAccountChoice(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm font-medium focus:outline-none bg-emerald-50 border-emerald-200 text-emerald-800">
+              <option value="bank1">Bank 1 {company?.bank_name ? `(${company.bank_name})` : ''}</option>
+              {(company?.bank2_account_number || company?.bank2_name) && <option value="bank2">Bank 2 {company?.bank2_name ? `(${company.bank2_name})` : ''}</option>}
             </select>
           </Field>
         </div>
