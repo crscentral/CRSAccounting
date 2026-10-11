@@ -31,13 +31,15 @@ async function fetchAndProcessEntries(targetAccountId, rangeFrom, rangeTo, compa
   if (selectedAccounts.length === 0) return combined.sort((a, b) => a.entry_date.localeCompare(b.entry_date));
 
   const [
-    { data: oCont }, { data: oDiv }, { data: lTake }, { data: lRepay },
+    { data: oCont }, { data: oDiv }, { data: lTake }, { data: lRepay }, { data: sGiven }, { data: sRepay },
     { data: hrs }, { data: rdr }, { data: hre }, { data: hee }, { data: amc }, { data: hgi }
   ] = await Promise.all([
     supabase.from('owner_contributions').select('*').eq('company_id', companyId).eq('product', product).gte('payment_date', rangeFrom).lte('payment_date', rangeTo),
     supabase.from('owner_dividends').select('*').eq('company_id', companyId).eq('product', product).gte('payment_date', rangeFrom).lte('payment_date', rangeTo),
     supabase.from('loans_taken').select('*').eq('company_id', companyId).eq('product', product).gte('payment_date', rangeFrom).lte('payment_date', rangeTo),
     supabase.from('loan_principal_payments').select('*').eq('company_id', companyId).eq('product', product).gte('payment_date', rangeFrom).lte('payment_date', rangeTo),
+    supabase.from('staff_loans_given').select('*').eq('company_id', companyId).eq('product', product).gte('payment_date', rangeFrom).lte('payment_date', rangeTo),
+    supabase.from('staff_loan_repayments').select('*').eq('company_id', companyId).eq('product', product).gte('payment_date', rangeFrom).lte('payment_date', rangeTo),
     ['hotel', 'restaurant'].includes(product) ? supabase.from('hotel_room_stats').select('*').eq('company_id', companyId).eq('product', product).gte('stat_date', rangeFrom).lte('stat_date', rangeTo) : Promise.resolve({ data: [] }),
     ['hotel', 'restaurant'].includes(product) ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', companyId).gte('revenue_date', rangeFrom).lte('revenue_date', rangeTo) : Promise.resolve({ data: [] }),
     ['hotel', 'restaurant'].includes(product) ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', companyId).eq('product', product).gte('entry_date', rangeFrom).lte('entry_date', rangeTo) : Promise.resolve({ data: [] }),
@@ -75,8 +77,24 @@ async function fetchAndProcessEntries(targetAccountId, rangeFrom, rangeTo, compa
     
     ;(lRepay || []).forEach(r => {
       if (Number(r.amount_usd) > 0) {
-        if (selectedAccount.id === r.loan_account_id) combined.push({ id: `lr-l-${r.id}-${selectedAccount.id}`, entry_date: r.payment_date, description: `Loan Repayment: ${r.lender_name}`, currency: r.currency || 'USD', debit_usd: r.amount_usd, credit_usd: 0, account_id: selectedAccount.id })
-        if ((r.cash_account_id && selectedAccount.id === r.cash_account_id) || (!r.cash_account_id && isCash)) combined.push({ id: `lr-c-${r.id}-${selectedAccount.id}`, entry_date: r.payment_date, description: `Loan Repayment: ${r.lender_name}`, currency: r.currency || 'USD', debit_usd: 0, credit_usd: r.amount_usd, account_id: selectedAccount.id })
+        if (selectedAccount.id === r.loan_account_id) combined.push({ id: `lr-l-${r.id}-${selectedAccount.id}`, entry_date: r.payment_date, description: `Loan Repayment: ${r.owner_name || r.lender_name || 'Owner'}`, currency: r.currency || 'USD', debit_usd: r.amount_usd, credit_usd: 0, account_id: selectedAccount.id })
+        if ((r.cash_account_id && selectedAccount.id === r.cash_account_id) || (!r.cash_account_id && isCash)) combined.push({ id: `lr-c-${r.id}-${selectedAccount.id}`, entry_date: r.payment_date, description: `Loan Repayment: ${r.owner_name || r.lender_name || 'Owner'}`, currency: r.currency || 'USD', debit_usd: 0, credit_usd: r.amount_usd, account_id: selectedAccount.id })
+      }
+    })
+
+    ;(sGiven || []).forEach(r => {
+      if (Number(r.amount_usd) > 0) {
+        if ((r.cash_account_id && selectedAccount.id === r.cash_account_id) || (!r.cash_account_id && isCash)) {
+          combined.push({ id: `sg-c-${r.id}-${selectedAccount.id}`, entry_date: r.payment_date, description: `Loan Given to Staff: ${r.staff_name}`, currency: r.currency || 'USD', debit_usd: 0, credit_usd: r.amount_usd, account_id: selectedAccount.id })
+        }
+      }
+    })
+
+    ;(sRepay || []).forEach(r => {
+      if (Number(r.amount_usd) > 0) {
+        if ((r.cash_account_id && selectedAccount.id === r.cash_account_id) || (!r.cash_account_id && isCash)) {
+          combined.push({ id: `sr-c-${r.id}-${selectedAccount.id}`, entry_date: r.payment_date, description: `Loan Repayment From Staff: ${r.staff_name}`, currency: r.currency || 'USD', debit_usd: r.amount_usd, credit_usd: 0, account_id: selectedAccount.id })
+        }
       }
     })
     

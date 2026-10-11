@@ -48,11 +48,13 @@ export default function Reports() {
     const eqDivAcc = (accs || []).find(a => ((a.name || '').toLowerCase().includes('dividend') || (a.name || '').toLowerCase().includes('draw') || (a.name || '').toLowerCase().includes('retained')) && a.type === 'Equity')
     const capCashAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('cash on hand') || (a.name || '').toLowerCase().includes('cash'))
     
-    const [{ data: oCont }, { data: oDiv }, { data: lTake }, { data: lRepay }] = await Promise.all([
+    const [{ data: oCont }, { data: oDiv }, { data: lTake }, { data: lRepay }, { data: sGiven }, { data: sRepay }] = await Promise.all([
       supabase.from('owner_contributions').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
       supabase.from('owner_dividends').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
       supabase.from('loans_taken').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('loan_principal_payments').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
+      supabase.from('loan_principal_payments').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+      supabase.from('staff_loans_given').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+      supabase.from('staff_loan_repayments').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
     ])
     
     ;(oCont || []).forEach(r => {
@@ -84,6 +86,20 @@ export default function Reports() {
         if (liabAcc) combined.push({ account_id: liabAcc.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.payment_date, accounts: { type: liabAcc.type } })
         const cashA = (accs || []).find(a => a.id === r.cash_account_id) || capCashAcc
         if (cashA) combined.push({ account_id: cashA.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.payment_date, accounts: { type: cashA.type } })
+      }
+    })
+
+    ;(sGiven || []).forEach(r => {
+      if (Number(r.amount_usd) > 0) {
+        const cashA = (accs || []).find(a => a.id === r.cash_account_id) || capCashAcc
+        if (cashA) combined.push({ account_id: cashA.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.payment_date, accounts: { type: cashA.type } })
+      }
+    })
+
+    ;(sRepay || []).forEach(r => {
+      if (Number(r.amount_usd) > 0) {
+        const cashA = (accs || []).find(a => a.id === r.cash_account_id) || capCashAcc
+        if (cashA) combined.push({ account_id: cashA.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.payment_date, accounts: { type: cashA.type } })
       }
     })
     
