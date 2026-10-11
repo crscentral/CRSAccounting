@@ -4,7 +4,7 @@ import { Plus, Trash2, Pencil, FileCheck, CheckCircle2, AlertTriangle, ArrowRigh
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
-import { getMTDRange, getYTDRange } from '../lib/fiscalYear'
+import { getMTDRange, getYTDRange, MONTH_NAMES } from '../lib/fiscalYear'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
 import { CURRENCY_LIST } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
@@ -105,8 +105,16 @@ export default function HotelGuestInvoices() {
   const todayPend = pendingRange(today, today)
   const todayCount = rows.filter(r => r.invoice_date === today || (r.checkin_date <= today && r.checkout_date > today)).length
 
-  const mtdRev = sumRangeRev(mtd.from, mtd.to)
-  const mtdPend = pendingRange(mtd.from, mtd.to)
+  const selectedMonthNum = cp.periodProps?.selectedMonth || (new Date().getMonth() + 1)
+  const monthName = MONTH_NAMES[selectedMonthNum - 1] || 'Month'
+
+  const isMonthOrMtd = cp.periodProps?.periodType === 'MTD' || cp.periodProps?.periodType === 'MONTH'
+  const periodLabel = isMonthOrMtd ? `${monthName} Generated` : 'Period Generated'
+  const periodPendLabel = isMonthOrMtd ? `${monthName} Pending` : 'Period Pending'
+
+  // Calculate directly for the actively selected date range
+  const periodRev = sumRangeRev(cp.range.from, cp.range.to)
+  const periodPend = pendingRange(cp.range.from, cp.range.to)
 
   const ytdRev = sumRangeRev(ytd.from, ytd.to)
   const ytdPend = pendingRange(ytd.from, ytd.to)
@@ -169,10 +177,12 @@ export default function HotelGuestInvoices() {
         <KpiCard label="Pending" value={fmt(todayPend)} icon={AlertTriangle} tone="red" />
       </div>
 
-      <h3 className="text-xs font-semibold text-slate-400 uppercase mb-2">MTD / YTD</h3>
+      <h3 className="text-xs font-semibold text-slate-400 uppercase mb-2">
+        {isMonthOrMtd ? `${monthName} / YTD` : 'Period / YTD'}
+      </h3>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <KpiCard label="MTD Generated" value={fmt(mtdRev)} tone="slate" />
-        <KpiCard label="MTD Pending" value={fmt(mtdPend)} tone="amber" />
+        <KpiCard label={periodLabel} value={fmt(periodRev)} tone="slate" />
+        <KpiCard label={periodPendLabel} value={fmt(periodPend)} tone="amber" />
         <KpiCard label="YTD Generated" value={fmt(ytdRev)} tone="slate" />
         <KpiCard label="YTD Pending" value={fmt(ytdPend)} tone="amber" />
       </div>

@@ -241,7 +241,7 @@ export default function Dashboard() {
     let allHrs = [], allHgi = [], allHee = [], allHre = [], allRdr = [], allHPi = [];
     if (['hotel', 'restaurant'].includes(activeProduct)) {
       const [{ data: aHrs }, { data: aHgi }, { data: aHee }, { data: aHre }, { data: aRdr }, { data: aHotelPi }] = await Promise.all([
-        supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd, manual_room_revenue_collected_usd, invoiced_room_revenue_collected').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd, manual_room_revenue_collected_usd, invoiced_room_revenue_collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
         supabase.from('hotel_guest_invoices').select('invoice_date, invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
         supabase.from('hotel_expense_entries').select('expense_date, amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
         supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
@@ -373,7 +373,7 @@ export default function Dashboard() {
     totalExpenses = directExpenses + amcTotal + piExpenses
     
     // Collected = Room Revenue Collected + Ancillary Collected + Restaurant Collected
-    const roomCollected = hotelRoomStats.reduce((s, r) => s + Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected || 0), 0)
+    const roomCollected = hotelRoomStats.reduce((s, r) => s + Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0), 0)
     const ancillaryCollected = hotelRevenueEntries.reduce((s, r) => s + Number(r.collected_usd || 0), 0)
     const restRevCollected = restaurantRevenue.reduce((s, r) => s + Number(r.collected_usd || 0), 0)
     collected = roomCollected + ancillaryCollected + restRevCollected
@@ -410,9 +410,9 @@ export default function Dashboard() {
     }));
 
     const uncollectedRooms = hotelRoomStats
-        .filter(r => Number(r.room_revenue_usd || 0) > (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected || 0)))
+        .filter(r => Number(r.room_revenue_usd || 0) > (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0)))
         .map(r => {
-            const bal = Number(r.room_revenue_usd || 0) - (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected || 0));
+            const bal = Number(r.room_revenue_usd || 0) - (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0));
             return {
                 invoice_number: 'ROOM REV',
                 contact: { name: 'Daily Room Revenue' },
@@ -487,7 +487,7 @@ export default function Dashboard() {
       if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
       monthlyMap[key].Revenue += Number(r.room_revenue_usd || 0)
-      monthlyMap[key].Collected += Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected || 0)
+      monthlyMap[key].Collected += Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0)
     })
     
     hotelRevenueEntries.forEach(r => {
