@@ -216,7 +216,7 @@ export default function Companies() {
                     <Field label="Industry"><input value={form.industry} onChange={e => update('industry', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
                     <Field label="Base Currency *">
                       <select value={form.base_currency} onChange={e => update('base_currency', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                        {CURRENCY_LIST.slice(0, 20).map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+                        {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
                       </select>
                     </Field>
                   </div>

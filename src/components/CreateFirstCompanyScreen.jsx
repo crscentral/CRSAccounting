@@ -85,7 +85,7 @@ export default function CreateFirstCompanyScreen() {
                 <label className="text-xs font-medium text-slate-500">Base Currency</label>
                 <select value={form.base_currency} onChange={e => update('base_currency', e.target.value)}
                   className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                  {CURRENCY_LIST.slice(0, 20).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+                  {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
                 </select>
               </div>
               <div>

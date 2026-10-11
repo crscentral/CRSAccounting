@@ -521,7 +521,7 @@ function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
 
         <Field label="Room Night Currency">
           <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium">
-            {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+            {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
           </select>
         </Field>
 
@@ -579,7 +579,7 @@ function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
                 }}
                 className="w-24 border border-slate-300 rounded py-1 px-2 text-sm bg-white font-medium text-slate-700"
               >
-                {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+                {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
               </select>
 
               <input
