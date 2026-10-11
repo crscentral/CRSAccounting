@@ -21,11 +21,13 @@ export default function CapitalTransactions() {
   const [dividends, setDividends] = useState([])
   const [ownerContributions, setOwnerContributions] = useState([])
   const [loansTaken, setLoansTaken] = useState([])
+  const [owners, setOwners] = useState([])
   
   const [loanModalOpen, setLoanModalOpen] = useState(false)
   const [dividendModalOpen, setDividendModalOpen] = useState(false)
   const [contributionModalOpen, setContributionModalOpen] = useState(false)
   const [loanTakenModalOpen, setLoanTakenModalOpen] = useState(false)
+  const [ownerManagerOpen, setOwnerManagerOpen] = useState(false)
   
   const [editItem, setEditItem] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
@@ -33,18 +35,29 @@ export default function CapitalTransactions() {
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadAll() {
-    const [{ data: acc }, { data: loans }, { data: divs }, { data: contribs }, { data: taken }] = await Promise.all([
+    const [{ data: acc }, { data: loans }, { data: divs }, { data: contribs }, { data: taken }, { data: dbOwners }] = await Promise.all([
       supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('code'),
       supabase.from('loan_principal_payments').select('*, loan_account:accounts!loan_principal_payments_loan_account_id_fkey(name, code)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', cp.range.from).lte('payment_date', cp.range.to).order('payment_date', { ascending: false }),
       supabase.from('owner_dividends').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', cp.range.from).lte('payment_date', cp.range.to).order('payment_date', { ascending: false }),
       supabase.from('owner_contributions').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', cp.range.from).lte('payment_date', cp.range.to).order('payment_date', { ascending: false }),
       supabase.from('loans_taken').select('*, loan_account:accounts!loans_taken_loan_account_id_fkey(name, code)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', cp.range.from).lte('payment_date', cp.range.to).order('payment_date', { ascending: false }),
+      supabase.from('company_owners').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('name'),
     ])
     setAccounts(acc || [])
     setLoanPayments(loans || [])
     setDividends(divs || [])
     setOwnerContributions(contribs || [])
     setLoansTaken(taken || [])
+
+    // Collect all owners from DB + any historical names in transactions
+    const ownerMap = new Map()
+    ;(dbOwners || []).forEach(o => { if (o.name?.trim()) ownerMap.set(o.name.trim(), o) })
+    ;[...(contribs || []), ...(divs || []), ...(loans || []), ...(taken || [])].forEach(r => {
+      if (r.owner_name?.trim() && !ownerMap.has(r.owner_name.trim())) {
+        ownerMap.set(r.owner_name.trim(), { name: r.owner_name.trim() })
+      }
+    })
+    setOwners(Array.from(ownerMap.values()).sort((a, b) => a.name.localeCompare(b.name)))
   }
 
   async function handleDelete(table, id) {
@@ -75,8 +88,8 @@ export default function CapitalTransactions() {
         .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
       sections.push({
         heading: 'Loans Taken',
-        columns: ['Date', 'Loan Account', 'Amount', `Amount (${selections.currency})`, 'Notes'],
-        rows: (data || []).map(r => [r.payment_date, r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
+        columns: ['Date', 'Owner', 'Loan Account', 'Amount', `Amount (${selections.currency})`, 'Notes'],
+        rows: (data || []).map(r => [r.payment_date, r.owner_name || '—', r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
       })
     }
     if (selections.sections.includes('Loan Principal Repayments')) {
@@ -84,8 +97,8 @@ export default function CapitalTransactions() {
         .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
       sections.push({
         heading: 'Loan Principal Repayments',
-        columns: ['Date', 'Loan Account', 'Amount', `Amount (${selections.currency})`, 'Notes'],
-        rows: (data || []).map(r => [r.payment_date, r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
+        columns: ['Date', 'Owner', 'Loan Account', 'Amount', `Amount (${selections.currency})`, 'Notes'],
+        rows: (data || []).map(r => [r.payment_date, r.owner_name || '—', r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
       })
     }
     if (selections.sections.includes('Owner Dividends')) {
@@ -145,6 +158,14 @@ export default function CapitalTransactions() {
             <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-4 py-2 rounded-lg hover:border-navy-400">
               Download Report
             </button>
+            {can(['owner', 'admin']) && (
+              <button
+                onClick={() => setOwnerManagerOpen(true)}
+                className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-4 py-2 rounded-lg hover:border-navy-400"
+              >
+                <Users size={16} /> Manage Owners
+              </button>
+            )}
             {can(['owner', 'admin']) && (
               <button
                 onClick={() => { setEditItem(null); if (tab === 'equity') setContributionModalOpen(true); else if (tab === 'loans_taken') setLoanTakenModalOpen(true); else if (tab === 'dividends') setDividendModalOpen(true); else setLoanModalOpen(true); }}
@@ -225,6 +246,7 @@ export default function CapitalTransactions() {
           <DataTable
             columns={[
               { key: 'payment_date', label: 'Date' },
+              { key: 'owner_name', label: 'Owner', render: r => r.owner_name || '—' },
               { key: 'loan_account', label: 'Loan Account', render: r => r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—' },
               { key: 'amount', label: 'Amount', render: r => `${Number(r.amount).toLocaleString()} ${r.currency}` },
               { key: 'amount_usd', label: `Amount (${cp.displayCurrency})`, render: r => cp.fmt(r.amount_usd) },
@@ -248,6 +270,7 @@ export default function CapitalTransactions() {
           <DataTable
             columns={[
               { key: 'payment_date', label: 'Date' },
+              { key: 'owner_name', label: 'Owner', render: r => r.owner_name || '—' },
               { key: 'loan_account', label: 'Loan Account', render: r => r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—' },
               { key: 'amount', label: 'Amount', render: r => `${Number(r.amount).toLocaleString()} ${r.currency}` },
               { key: 'amount_usd', label: `Amount (${cp.displayCurrency})`, render: r => cp.fmt(r.amount_usd) },
@@ -298,17 +321,64 @@ export default function CapitalTransactions() {
 
 
 
+      {ownerManagerOpen && (
+        <ManageOwnersModal
+          companyId={activeCompany.id}
+          product={activeProduct}
+          owners={owners}
+          onClose={() => setOwnerManagerOpen(false)}
+          onRefresh={loadAll}
+        />
+      )}
       {contributionModalOpen && (
-        <OwnerEquityFormModal companyId={activeCompany.id} product={activeProduct} initialData={editItem} cashAccounts={cashAccounts} onClose={() => setContributionModalOpen(false)} onSaved={loadAll} />
+        <OwnerEquityFormModal
+          companyId={activeCompany.id}
+          product={activeProduct}
+          initialData={editItem}
+          cashAccounts={cashAccounts}
+          owners={owners}
+          onOwnerAdded={(name) => { setOwners(prev => prev.some(o => o.name === name) ? prev : [...prev, { name }].sort((a,b)=>a.name.localeCompare(b.name))) }}
+          onClose={() => { setContributionModalOpen(false); setEditItem(null); }}
+          onSaved={loadAll}
+        />
       )}
       {loanTakenModalOpen && (
-        <LoanTakenFormModal companyId={activeCompany.id} product={activeProduct} initialData={editItem} liabilityAccounts={liabilityAccounts} cashAccounts={cashAccounts} onClose={() => setLoanTakenModalOpen(false)} onSaved={loadAll} />
+        <LoanTakenFormModal
+          companyId={activeCompany.id}
+          product={activeProduct}
+          initialData={editItem}
+          liabilityAccounts={liabilityAccounts}
+          cashAccounts={cashAccounts}
+          owners={owners}
+          onOwnerAdded={(name) => { setOwners(prev => prev.some(o => o.name === name) ? prev : [...prev, { name }].sort((a,b)=>a.name.localeCompare(b.name))) }}
+          onClose={() => { setLoanTakenModalOpen(false); setEditItem(null); }}
+          onSaved={loadAll}
+        />
       )}
       {loanModalOpen && (
-        <LoanRepaymentFormModal companyId={activeCompany.id} product={activeProduct} initialData={editItem} liabilityAccounts={liabilityAccounts} cashAccounts={cashAccounts} onClose={() => setLoanModalOpen(false)} onSaved={loadAll} />
+        <LoanRepaymentFormModal
+          companyId={activeCompany.id}
+          product={activeProduct}
+          initialData={editItem}
+          liabilityAccounts={liabilityAccounts}
+          cashAccounts={cashAccounts}
+          owners={owners}
+          onOwnerAdded={(name) => { setOwners(prev => prev.some(o => o.name === name) ? prev : [...prev, { name }].sort((a,b)=>a.name.localeCompare(b.name))) }}
+          onClose={() => { setLoanModalOpen(false); setEditItem(null); }}
+          onSaved={loadAll}
+        />
       )}
       {dividendModalOpen && (
-        <DividendFormModal companyId={activeCompany.id} product={activeProduct} initialData={editItem} cashAccounts={cashAccounts} onClose={() => setDividendModalOpen(false)} onSaved={loadAll} />
+        <DividendFormModal
+          companyId={activeCompany.id}
+          product={activeProduct}
+          initialData={editItem}
+          cashAccounts={cashAccounts}
+          owners={owners}
+          onOwnerAdded={(name) => { setOwners(prev => prev.some(o => o.name === name) ? prev : [...prev, { name }].sort((a,b)=>a.name.localeCompare(b.name))) }}
+          onClose={() => { setDividendModalOpen(false); setEditItem(null); }}
+          onSaved={loadAll}
+        />
       )}
       {reportModalOpen && (
         <ReportOptionsModal
@@ -322,39 +392,212 @@ export default function CapitalTransactions() {
           onClose={() => setReportModalOpen(false)}
         />
       )}
-
-
-      {dividendModalOpen && (
-        <DividendFormModal
-          companyId={activeCompany.id}
-          product={activeProduct}
-          onClose={() => setDividendModalOpen(false)}
-          onSaved={loadAll}
-        />
-      )}
-
-      {reportModalOpen && (
-        <ReportOptionsModal
-          title="Capital & Loans"
-          fields={[
-            { type: 'checkboxGroup', key: 'sections', label: 'Include Sections', options: ['Loan Principal Repayments', 'Owner Dividends'], default: ['Loan Principal Repayments', 'Owner Dividends'] },
-            { type: 'currency', key: 'currency', default: cp.displayCurrency },
-            { type: 'period', key: 'period', default: 'ALL_TIME' },
-          ]}
-          onGenerate={generateCapitalReport}
-          onClose={() => setReportModalOpen(false)}
-        />
-      )}
     </div>
   )
 }
 
-function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAccounts, initialData, onClose, onSaved }) {
+function OwnerSelectField({ value, onChange, owners = [], companyId, product, onOwnerAdded }) {
+  const [isAdding, setIsAdding] = useState(false)
+  const [newOwnerName, setNewOwnerName] = useState('')
+  const [savingOwner, setSavingOwner] = useState(false)
+
+  async function handleAddOwner(e) {
+    if (e) e.preventDefault()
+    const trimmed = newOwnerName.trim()
+    if (!trimmed) return
+    setSavingOwner(true)
+    try {
+      const { error } = await supabase.from('company_owners').insert({
+        company_id: companyId,
+        product,
+        name: trimmed,
+      })
+      if (error && !error.message.includes('unique')) throw error
+      if (onOwnerAdded) onOwnerAdded(trimmed)
+      onChange(trimmed)
+      setNewOwnerName('')
+      setIsAdding(false)
+    } catch (err) {
+      alert('Error adding owner: ' + err.message)
+    } finally {
+      setSavingOwner(false)
+    }
+  }
+
+  const allOwners = [...owners]
+  if (value && !allOwners.some(o => o.name === value)) {
+    allOwners.unshift({ name: value })
+  }
+
+  return (
+    <Field label="Owner Name *">
+      {isAdding ? (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            required
+            autoFocus
+            placeholder="Enter owner name…"
+            value={newOwnerName}
+            onChange={e => setNewOwnerName(e.target.value)}
+            className="flex-1 h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          />
+          <button
+            type="button"
+            disabled={savingOwner}
+            onClick={handleAddOwner}
+            className="px-3 h-10 bg-navy-600 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold whitespace-nowrap"
+          >
+            {savingOwner ? 'Adding…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsAdding(false)}
+            className="px-3 h-10 border border-slate-300 hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-semibold whitespace-nowrap bg-white"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <select
+            required
+            value={value}
+            onChange={e => {
+              if (e.target.value === '__add_new__') {
+                setIsAdding(true)
+              } else {
+                onChange(e.target.value)
+              }
+            }}
+            className="flex-1 h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          >
+            <option value="">Select owner…</option>
+            {allOwners.map(o => (
+              <option key={o.id || o.name} value={o.name}>{o.name}</option>
+            ))}
+            <option value="__add_new__">+ Add New Owner…</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setIsAdding(true)}
+            className="px-3 h-10 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 whitespace-nowrap bg-white"
+          >
+            <Plus size={14} /> New Owner
+          </button>
+        </div>
+      )}
+    </Field>
+  )
+}
+
+function ManageOwnersModal({ companyId, product, owners = [], onClose, onRefresh }) {
+  const [newOwner, setNewOwner] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
+
+  async function handleAdd(e) {
+    e.preventDefault()
+    if (!newOwner.trim()) return
+    setSaving(true)
+    try {
+      const { error } = await supabase.from('company_owners').insert({
+        company_id: companyId,
+        product,
+        name: newOwner.trim()
+      })
+      if (error && !error.message.includes('unique')) throw error
+      setNewOwner('')
+      onRefresh()
+    } catch (err) {
+      alert('Error adding owner: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteOwner(owner) {
+    if (!confirm(`Delete owner "${owner.name}"?`)) return
+    if (!owner.id) {
+      alert('This owner was inferred from transactions and cannot be deleted until transaction records are updated.')
+      return
+    }
+    setDeletingId(owner.id)
+    try {
+      const { error } = await supabase.from('company_owners').delete().eq('id', owner.id)
+      if (error) throw error
+      onRefresh()
+    } catch (err) {
+      alert('Error deleting owner: ' + err.message)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  return (
+    <Modal title="Manage Owners" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-xs text-slate-500">
+          Add and manage company owners. Owners can be linked across Owner's Equity, Loans Taken, Loan Repayments, and Dividends.
+        </p>
+
+        <form onSubmit={handleAdd} className="flex gap-2">
+          <input
+            type="text"
+            required
+            placeholder="New owner name…"
+            value={newOwner}
+            onChange={e => setNewOwner(e.target.value)}
+            className="flex-1 h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          />
+          <button
+            type="submit"
+            disabled={saving}
+            className="bg-navy-600 hover:bg-navy-700 text-white text-sm font-semibold px-4 h-10 rounded-lg disabled:opacity-50 flex items-center gap-1 whitespace-nowrap"
+          >
+            <Plus size={16} /> Add Owner
+          </button>
+        </form>
+
+        <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-60 overflow-y-auto">
+          {owners.length === 0 ? (
+            <div className="p-4 text-center text-sm text-slate-400">No owners created yet.</div>
+          ) : (
+            owners.map(o => (
+              <div key={o.name} className="flex items-center justify-between p-3 text-sm">
+                <span className="font-medium text-slate-700">{o.name}</span>
+                {o.id && (
+                  <button
+                    onClick={() => handleDeleteOwner(o)}
+                    disabled={deletingId === o.id}
+                    className="text-slate-400 hover:text-red-600 p-1"
+                    title="Delete owner"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="pt-2">
+          <button type="button" onClick={onClose} className="w-full border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 bg-white">
+            Close
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAccounts, initialData, owners, onOwnerAdded, onClose, onSaved }) {
+  const [ownerName, setOwnerName] = useState(initialData?.owner_name || '')
   const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
   const [loanAccountId, setLoanAccountId] = useState(initialData?.loan_account_id || liabilityAccounts[0]?.id || '')
   const [cashAccountId, setCashAccountId] = useState(initialData?.cash_account_id || cashAccounts[0]?.id || '')
   const [currency, setCurrency] = useState(initialData?.currency || 'USD')
-  const [amount, setAmount] = useState(initialData?.amount || '')
+  const [amount, setAmount] = useState(initialData?.amount ?? '')
   const [notes, setNotes] = useState(initialData?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -368,6 +611,7 @@ function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAcc
       const fxRate = currency === 'USD' ? 1 : (await getLatestRate(currency)) || 1
       const payload = {
         company_id: companyId, product, payment_date: paymentDate,
+        owner_name: ownerName?.trim() || null,
         loan_account_id: loanAccountId, cash_account_id: cashAccountId,
         currency, fx_rate_locked: fxRate, amount: Number(amount), amount_usd: Math.round(Number(amount) / fxRate * 100) / 100,
         notes: notes || null,
@@ -387,7 +631,6 @@ function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAcc
     }
   }
 
-
   return (
     <Modal title={initialData ? "Edit Loan Principal Repayment" : "New Loan Principal Repayment"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -395,36 +638,44 @@ function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAcc
           This records only the principal portion of an EMI/loan payment — it reduces the loan balance and your cash, but is NOT an expense. If your payment also includes interest, record that separately as a normal expense (e.g. via a Purchase Invoice against a "Loan Interest" account).
         </p>
         <Field label="Date *">
-          <input type="date" required value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <input type="date" required value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
         </Field>
+        <OwnerSelectField
+          value={ownerName}
+          onChange={setOwnerName}
+          owners={owners}
+          companyId={companyId}
+          product={product}
+          onOwnerAdded={onOwnerAdded}
+        />
         <Field label="Loan Account (Liability) *">
-          <select required value={loanAccountId} onChange={e => setLoanAccountId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          <select required value={loanAccountId} onChange={e => setLoanAccountId(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Select loan account…</option>
             {liabilityAccounts.map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
           </select>
         </Field>
         <Field label="Paid From (Cash/Bank Account) *">
-          <select required value={cashAccountId} onChange={e => setCashAccountId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          <select required value={cashAccountId} onChange={e => setCashAccountId(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Select cash account…</option>
             {cashAccounts.map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
           </select>
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Currency">
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
               {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
             </select>
           </Field>
           <Field label="Principal Amount *">
-            <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
           </Field>
         </div>
         <Field label="Notes">
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
         </Field>
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex gap-2 pt-2">
-          <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600">Cancel</button>
+          <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600 bg-white hover:bg-slate-50">Cancel</button>
           <button type="submit" disabled={saving} className="flex-1 bg-navy-600 hover:bg-navy-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60">{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </form>
@@ -432,12 +683,11 @@ function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAcc
   )
 }
 
-
-function DividendFormModal({ companyId, product, initialData, onClose, onSaved }) {
+function DividendFormModal({ companyId, product, initialData, owners, onOwnerAdded, onClose, onSaved }) {
   const [ownerName, setOwnerName] = useState(initialData?.owner_name || '')
   const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
   const [currency, setCurrency] = useState(initialData?.currency || 'USD')
-  const [amount, setAmount] = useState(initialData?.amount || '')
+  const [amount, setAmount] = useState(initialData?.amount ?? '')
   const [notes, setNotes] = useState(initialData?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -469,7 +719,6 @@ function DividendFormModal({ companyId, product, initialData, onClose, onSaved }
     }
   }
 
-
   return (
     <Modal title={initialData ? "Edit Owner Dividend" : "New Owner Dividend"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -477,27 +726,32 @@ function DividendFormModal({ companyId, product, initialData, onClose, onSaved }
           This records a dividend/withdrawal paid to an owner. It reduces Retained Earnings (Equity) and reduces Cash (Asset). It is NOT an expense.
         </p>
         <Field label="Date *">
-          <input type="date" required value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <input type="date" required value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
         </Field>
-        <Field label="Owner Name *">
-          <input type="text" required value={ownerName} onChange={e => setOwnerName(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        </Field>
+        <OwnerSelectField
+          value={ownerName}
+          onChange={setOwnerName}
+          owners={owners}
+          companyId={companyId}
+          product={product}
+          onOwnerAdded={onOwnerAdded}
+        />
         <div className="grid grid-cols-2 gap-3">
           <Field label="Currency">
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
               {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
             </select>
           </Field>
           <Field label="Amount *">
-            <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
           </Field>
         </div>
         <Field label="Notes">
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
         </Field>
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex gap-2 pt-2">
-          <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600">Cancel</button>
+          <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600 bg-white hover:bg-slate-50">Cancel</button>
           <button type="submit" disabled={saving} className="flex-1 bg-navy-600 hover:bg-navy-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60">{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </form>
@@ -505,12 +759,11 @@ function DividendFormModal({ companyId, product, initialData, onClose, onSaved }
   )
 }
 
-
-function OwnerEquityFormModal({ companyId, product, cashAccounts, initialData, onClose, onSaved }) {
+function OwnerEquityFormModal({ companyId, product, cashAccounts, initialData, owners, onOwnerAdded, onClose, onSaved }) {
   const [ownerName, setOwnerName] = useState(initialData?.owner_name || '')
   const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
   const [currency, setCurrency] = useState(initialData?.currency || 'USD')
-  const [amount, setAmount] = useState(initialData?.amount || '')
+  const [amount, setAmount] = useState(initialData?.amount ?? '')
   const [notes, setNotes] = useState(initialData?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -544,7 +797,6 @@ function OwnerEquityFormModal({ companyId, product, cashAccounts, initialData, o
     }
   }
 
-
   return (
     <Modal title={initialData ? "Edit Owner's Equity" : "New Owner's Equity (Contribution)"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -552,27 +804,32 @@ function OwnerEquityFormModal({ companyId, product, cashAccounts, initialData, o
           Record capital contributions from owners. This increases Cash (Asset) and increases Owner's Contribution (Equity).
         </p>
         <Field label="Date *">
-          <input type="date" required value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <input type="date" required value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
         </Field>
-        <Field label="Owner Name *">
-          <input type="text" required value={ownerName} onChange={e => setOwnerName(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        </Field>
+        <OwnerSelectField
+          value={ownerName}
+          onChange={setOwnerName}
+          owners={owners}
+          companyId={companyId}
+          product={product}
+          onOwnerAdded={onOwnerAdded}
+        />
         <div className="grid grid-cols-2 gap-3">
           <Field label="Currency">
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
               {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
             </select>
           </Field>
           <Field label="Amount *">
-            <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
           </Field>
         </div>
         <Field label="Notes">
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
         </Field>
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex gap-2 pt-2">
-          <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600">Cancel</button>
+          <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600 bg-white hover:bg-slate-50">Cancel</button>
           <button type="submit" disabled={saving} className="flex-1 bg-navy-600 hover:bg-navy-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60">{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </form>
@@ -580,12 +837,13 @@ function OwnerEquityFormModal({ companyId, product, cashAccounts, initialData, o
   )
 }
 
-function LoanTakenFormModal({ companyId, product, liabilityAccounts, cashAccounts, initialData, onClose, onSaved }) {
+function LoanTakenFormModal({ companyId, product, liabilityAccounts, cashAccounts, initialData, owners, onOwnerAdded, onClose, onSaved }) {
+  const [ownerName, setOwnerName] = useState(initialData?.owner_name || '')
   const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
   const [loanAccountId, setLoanAccountId] = useState(initialData?.loan_account_id || liabilityAccounts[0]?.id || '')
   const [cashAccountId, setCashAccountId] = useState(initialData?.cash_account_id || cashAccounts[0]?.id || '')
   const [currency, setCurrency] = useState(initialData?.currency || 'USD')
-  const [amount, setAmount] = useState(initialData?.amount || '')
+  const [amount, setAmount] = useState(initialData?.amount ?? '')
   const [notes, setNotes] = useState(initialData?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -599,6 +857,7 @@ function LoanTakenFormModal({ companyId, product, liabilityAccounts, cashAccount
       const fxRate = currency === 'USD' ? 1 : (await getLatestRate(currency)) || 1
       const payload = {
         company_id: companyId, product, payment_date: paymentDate,
+        owner_name: ownerName?.trim() || null,
         loan_account_id: loanAccountId, cash_account_id: cashAccountId,
         currency, fx_rate_locked: fxRate, amount: Number(amount), amount_usd: Math.round(Number(amount) / fxRate * 100) / 100,
         notes: notes || null,
@@ -620,7 +879,6 @@ function LoanTakenFormModal({ companyId, product, liabilityAccounts, cashAccount
     }
   }
 
-
   return (
     <Modal title={initialData ? "Edit Loan Taken" : "New Loan Taken"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -628,36 +886,44 @@ function LoanTakenFormModal({ companyId, product, liabilityAccounts, cashAccount
           Record bank loans received. This increases Cash (Asset) and increases Loan Balance (Liability).
         </p>
         <Field label="Date *">
-          <input type="date" required value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <input type="date" required value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
         </Field>
+        <OwnerSelectField
+          value={ownerName}
+          onChange={setOwnerName}
+          owners={owners}
+          companyId={companyId}
+          product={product}
+          onOwnerAdded={onOwnerAdded}
+        />
         <Field label="Loan Account (Liability) *">
-          <select required value={loanAccountId} onChange={e => setLoanAccountId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          <select required value={loanAccountId} onChange={e => setLoanAccountId(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Select loan account…</option>
             {liabilityAccounts.map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
           </select>
         </Field>
         <Field label="Received Into (Cash/Bank Account) *">
-          <select required value={cashAccountId} onChange={e => setCashAccountId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          <select required value={cashAccountId} onChange={e => setCashAccountId(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Select cash account…</option>
             {cashAccounts.map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
           </select>
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Currency">
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
               {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
             </select>
           </Field>
           <Field label="Amount *">
-            <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
           </Field>
         </div>
         <Field label="Notes">
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
         </Field>
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex gap-2 pt-2">
-          <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600">Cancel</button>
+          <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600 bg-white hover:bg-slate-50">Cancel</button>
           <button type="submit" disabled={saving} className="flex-1 bg-navy-600 hover:bg-navy-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60">{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </form>

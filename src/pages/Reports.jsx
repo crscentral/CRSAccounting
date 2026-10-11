@@ -207,6 +207,20 @@ export default function Reports() {
   const totalLiabilities = -sumType('Liabilities')
   const retainedEarnings = totalRevenue - totalExpenses
 
+  // Retained Earnings account on Balance Sheet incorporates cumulative operating Net Income (Revenue - Expenses)
+  const retainedEarningsAcc = (accounts || []).find(a => ((a.name || '').toLowerCase().includes('retained earnings') || a.code === '3020') && a.type === 'Equity') || (accounts || []).find(a => a.type === 'Equity')
+  const bsBalances = { ...balances }
+  if (retainedEarningsAcc) {
+    // Retained earnings is credit-normal (negative in debit-normal bal mapping)
+    // Credit Net Income (totalRevenue - totalExpenses) to Retained Earnings
+    bsBalances[retainedEarningsAcc.id] = (bsBalances[retainedEarningsAcc.id] || 0) - (totalRevenue - totalExpenses)
+  }
+  const sumBsType = (type) => byType(type).reduce((s, a) => s + (bsBalances[a.id] || 0), 0)
+  const totalBsEquity = sumBsType('Equity') * -1
+
+  // Trace total dividends paid for informational display
+  const totalDividends = Math.max(0, balances[retainedEarningsAcc?.id] || 0)
+
   // EBITDA waterfall: below-the-line accounts (subtype 'Below GOP' or 'Below EBITDA',
   // seeded for Hotel/Restaurant) split into "before EBITDA" items (Management Fees,
   // Property Tax, Insurance, Rent/Lease, License & Govt Fees, Occupancy) and the two
@@ -409,10 +423,15 @@ export default function Reports() {
     let sections = []
     const reportKey = selections.reportType
     if (reportKey === 'trial_balance') {
+      const totDeb = accounts.reduce((s, a) => s + ((bal[a.id] || 0) > 0 ? (bal[a.id] || 0) : 0), 0)
+      const totCred = accounts.reduce((s, a) => s + ((bal[a.id] || 0) < 0 ? -(bal[a.id] || 0) : 0), 0)
       sections = [{
         heading: 'Trial Balance',
         columns: ['Code', 'Account', 'Debit', 'Credit'],
-        rows: accounts.map(a => { const b = bal[a.id] || 0; return [a.code, a.name, b > 0 ? fmt(b) : '—', b < 0 ? fmt(-b) : '—'] }),
+        rows: [
+          ...accounts.map(a => { const b = bal[a.id] || 0; return [a.code, a.name, b > 0 ? fmt(b) : '—', b < 0 ? fmt(-b) : '—'] }),
+          ['', 'Total', fmt(totDeb), fmt(totCred)]
+        ],
       }]
     } else if (reportKey === 'income_statement') {
       sections = [
@@ -456,9 +475,15 @@ export default function Reports() {
         }
       ]
     } else {
+      const repRetainedAcc = (accounts || []).find(a => ((a.name || '').toLowerCase().includes('retained earnings') || a.code === '3020') && a.type === 'Equity') || (accounts || []).find(a => a.type === 'Equity')
+      const bsExportBal = { ...bal }
+      if (repRetainedAcc) {
+        bsExportBal[repRetainedAcc.id] = (bsExportBal[repRetainedAcc.id] || 0) - (rev - exp)
+      }
+      const sumBsExportType = (type) => by(type).reduce((s, a) => s + (bsExportBal[a.id] || 0), 0)
       sections = [
-        { heading: 'Assets', columns: ['Account', 'Amount'], rows: [...by('Assets').map(a => [`${a.code} - ${a.name}`, fmt(bal[a.id] || 0)]), ['Total Assets', fmt(assets)]] },
-        { heading: 'Liabilities & Equity', columns: ['Account', 'Amount'], rows: [...[...by('Liabilities'), ...by('Equity')].map(a => [`${a.code} - ${a.name}`, fmt(-(bal[a.id] || 0))]), ['Total Liabilities & Equity', fmt(liab + sum('Equity') * -1)]] },
+        { heading: 'Assets', columns: ['Account', 'Amount'], rows: [...by('Assets').map(a => [`${a.code} - ${a.name}`, fmt(bsExportBal[a.id] || 0)]), ['Total Assets', fmt(assets)]] },
+        { heading: 'Liabilities & Equity', columns: ['Account', 'Amount'], rows: [...[...by('Liabilities'), ...by('Equity')].map(a => [`${a.code} - ${a.name}`, fmt(-(bsExportBal[a.id] || 0))]), ['Total Liabilities & Equity', fmt(liab + sumBsExportType('Equity') * -1)]] },
       ]
     }
 
@@ -512,13 +537,13 @@ export default function Reports() {
         {report === 'balance_sheet' && (
           <div>
             <div className="bg-blue-50 text-blue-700 text-sm rounded-lg px-3 py-2 mb-4">
-              Retained Earnings include: Total Revenue {cp.fmt(totalRevenue)} − Total Expenses {cp.fmt(totalExpenses)} = {cp.fmt(retainedEarnings)}
+              Retained Earnings include: Operating Revenue {cp.fmt(totalRevenue)} − Operating Expenses {cp.fmt(totalExpenses)} = Net Income {cp.fmt(retainedEarnings)}{totalDividends > 0 ? ` − Dividends Paid ${cp.fmt(totalDividends)}` : ''} = Ending Retained Earnings {cp.fmt(totalBsEquity)}
             </div>
             <div className="grid sm:grid-cols-2 gap-6">
-              <AccountBlock title="ASSETS" color="emerald" accounts={byType('Assets')} balances={balances} fmt={cp.fmt} total={totalAssets} />
+              <AccountBlock title="ASSETS" color="emerald" accounts={byType('Assets')} balances={bsBalances} fmt={cp.fmt} total={totalAssets} />
               <AccountBlock title="LIABILITIES & EQUITY" color="rose"
-                accounts={[...byType('Liabilities'), ...byType('Equity')]} balances={balances} fmt={cp.fmt}
-                total={totalLiabilities + sumType('Equity') * -1} />
+                accounts={[...byType('Liabilities'), ...byType('Equity')]} balances={bsBalances} fmt={cp.fmt}
+                total={totalLiabilities + totalBsEquity} />
             </div>
           </div>
         )}
@@ -595,6 +620,14 @@ export default function Reports() {
                 )
               })}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-slate-300 font-bold text-slate-800">
+                <td className="py-3"></td>
+                <td className="py-3">Total</td>
+                <td className="py-3">{cp.fmt(accounts.reduce((s, a) => s + ((balances[a.id] || 0) > 0 ? (balances[a.id] || 0) : 0), 0))}</td>
+                <td className="py-3">{cp.fmt(accounts.reduce((s, a) => s + ((balances[a.id] || 0) < 0 ? -(balances[a.id] || 0) : 0), 0))}</td>
+              </tr>
+            </tfoot>
           </table>
         )}
       </div>
