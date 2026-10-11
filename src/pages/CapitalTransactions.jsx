@@ -83,6 +83,44 @@ export default function CapitalTransactions() {
         rows: (data || []).map(r => [r.payment_date, r.owner_name, `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
       })
     }
+    if (selections.sections.includes('Owner Loan Balance Summary')) {
+      const [{ data: takenAll }, { data: repaidAll }, { data: dbOwners }] = await Promise.all([
+        supabase.from('loans_taken').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to),
+        supabase.from('loan_principal_payments').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to),
+        supabase.from('company_owners').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('name')
+      ])
+
+      const summaryMap = {}
+      ;(dbOwners || []).forEach(o => { summaryMap[o.name] = { name: o.name, taken: 0, repaid: 0 } })
+      ;(takenAll || []).forEach(r => {
+        const n = r.owner_name?.trim() || 'Unknown Owner'
+        summaryMap[n] = summaryMap[n] || { name: n, taken: 0, repaid: 0 }
+        summaryMap[n].taken += Number(r.amount_usd || 0)
+      })
+      ;(repaidAll || []).forEach(r => {
+        const n = r.owner_name?.trim() || 'Unknown Owner'
+        summaryMap[n] = summaryMap[n] || { name: n, taken: 0, repaid: 0 }
+        summaryMap[n].repaid += Number(r.amount_usd || 0)
+      })
+
+      const rows = Object.values(summaryMap).map(s => {
+        const bal = s.taken - s.repaid
+        const status = bal > 0 ? 'To Be Paid' : bal < 0 ? 'Overpaid' : (s.taken > 0 || s.repaid > 0 ? 'Settled' : 'No Loans')
+        return [
+          s.name,
+          f(s.taken),
+          f(s.repaid),
+          status,
+          f(Math.abs(bal))
+        ]
+      })
+
+      sections.push({
+        heading: 'Owner Loan Balance Summary',
+        columns: ['Owner', `Total Loans Taken (${selections.currency})`, `Total Repaid (${selections.currency})`, 'Status', `Net Balance (${selections.currency})`],
+        rows,
+      })
+    }
     if (selections.sections.includes('Loans Taken')) {
       const { data } = await supabase.from('loans_taken').select('*, loan_account:accounts!loans_taken_loan_account_id_fkey(name, code)')
         .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
@@ -130,6 +168,36 @@ export default function CapitalTransactions() {
     byOwner[d.owner_name].total += Number(d.amount_usd)
   })
   const ownerBalances = Object.values(byOwner).sort((a, b) => b.total - a.total)
+
+  // Per-owner loan summary: Loans Taken (money owner lent to hotel) vs Loan Repayments (money hotel repaid to owner)
+  const ownerLoanMap = {}
+  owners.forEach(o => {
+    if (o.name) ownerLoanMap[o.name] = { name: o.name, taken: 0, repaid: 0 }
+  })
+  loansTaken.forEach(lt => {
+    const name = lt.owner_name?.trim() || 'Unknown Owner'
+    ownerLoanMap[name] = ownerLoanMap[name] || { name, taken: 0, repaid: 0 }
+    ownerLoanMap[name].taken += Number(lt.amount_usd || 0)
+  })
+  loanPayments.forEach(lp => {
+    const name = lp.owner_name?.trim() || 'Unknown Owner'
+    ownerLoanMap[name] = ownerLoanMap[name] || { name, taken: 0, repaid: 0 }
+    ownerLoanMap[name].repaid += Number(lp.amount_usd || 0)
+  })
+
+  const ownerLoanSummaries = Object.values(ownerLoanMap).map(s => {
+    const bal = s.taken - s.repaid
+    return {
+      ...s,
+      balance: bal,
+    }
+  }).sort((a, b) => {
+    const aActive = a.taken > 0 || a.repaid > 0
+    const bActive = b.taken > 0 || b.repaid > 0
+    if (aActive && !bActive) return -1
+    if (!aActive && bActive) return 1
+    return a.name.localeCompare(b.name)
+  })
 
   const currentList = tab === 'equity' ? ownerContributions :
                       tab === 'loans_taken' ? loansTaken :
@@ -242,6 +310,7 @@ export default function CapitalTransactions() {
 
       {tab === 'loans_taken' && (
         <>
+          <OwnerLoanCards summaries={ownerLoanSummaries} fmt={cp.fmt} />
           <p className="text-sm text-slate-500 mb-4 px-1">Record new loans received by the business.</p>
           <DataTable
             columns={[
@@ -266,7 +335,8 @@ export default function CapitalTransactions() {
 
       {tab === 'loans' && (
         <>
-          <p className="text-sm text-slate-500 mb-4 px-1">No loan principal repayments recorded. This tracks only the principal portion — record Loan Interest as a normal expense via Purchase Invoices instead, since interest (not principal) belongs in the P&L.</p>
+          <OwnerLoanCards summaries={ownerLoanSummaries} fmt={cp.fmt} />
+          <p className="text-sm text-slate-500 mb-4 px-1">Record loan principal repayments made by the business. This tracks only the principal portion — record Loan Interest as a normal expense via Purchase Invoices instead, since interest (not principal) belongs in the P&L.</p>
           <DataTable
             columns={[
               { key: 'payment_date', label: 'Date' },
@@ -384,7 +454,7 @@ export default function CapitalTransactions() {
         <ReportOptionsModal
           title="Capital & Loans"
           fields={[
-            { type: 'checkboxGroup', key: 'sections', label: 'Include Sections', options: ["Owner's Equity (Contributions)", 'Loans Taken', 'Loan Principal Repayments', 'Owner Dividends'], default: ["Owner's Equity (Contributions)", 'Loans Taken', 'Loan Principal Repayments', 'Owner Dividends'] },
+            { type: 'checkboxGroup', key: 'sections', label: 'Include Sections', options: ["Owner's Equity (Contributions)", 'Owner Loan Balance Summary', 'Loans Taken', 'Loan Principal Repayments', 'Owner Dividends'], default: ["Owner's Equity (Contributions)", 'Owner Loan Balance Summary', 'Loans Taken', 'Loan Principal Repayments', 'Owner Dividends'] },
             { type: 'currency', key: 'currency', default: cp.displayCurrency },
             { type: 'period', key: 'period', default: 'ALL_TIME' },
           ]}
@@ -392,6 +462,105 @@ export default function CapitalTransactions() {
           onClose={() => setReportModalOpen(false)}
         />
       )}
+    </div>
+  )
+}
+
+function OwnerLoanCards({ summaries = [], fmt }) {
+  if (!summaries || summaries.length === 0) return null
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-3 px-1">
+        <h4 className="font-semibold text-slate-800 text-sm">Owner Loan Balances</h4>
+        <span className="text-xs text-slate-400">Net balance per owner (Loans Taken − Repayments)</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {summaries.map(s => {
+          const isToBePaid = s.balance > 0
+          const isOverpaid = s.balance < 0
+          const isSettled = s.balance === 0 && (s.taken > 0 || s.repaid > 0)
+          const isNoActivity = s.taken === 0 && s.repaid === 0
+
+          return (
+            <div
+              key={s.name}
+              className={`bg-white border rounded-xl p-4 shadow-sm transition-all ${
+                isToBePaid
+                  ? 'border-emerald-200 bg-emerald-50/20'
+                  : isOverpaid
+                  ? 'border-rose-200 bg-rose-50/20'
+                  : 'border-slate-200'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-slate-800 text-sm truncate" title={s.name}>
+                  {s.name}
+                </span>
+                <span className="text-[10px] font-medium uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                  Owner
+                </span>
+              </div>
+
+              <div className="mt-2.5">
+                {isToBePaid && (
+                  <div>
+                    <div className="text-xl font-bold text-emerald-600">
+                      {fmt(s.balance)}
+                    </div>
+                    <div className="text-xs font-semibold text-emerald-700 mt-0.5 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                      To Be Paid
+                    </div>
+                  </div>
+                )}
+                {isOverpaid && (
+                  <div>
+                    <div className="text-xl font-bold text-rose-600">
+                      {fmt(Math.abs(s.balance))}
+                    </div>
+                    <div className="text-xs font-semibold text-rose-700 mt-0.5 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>
+                      Overpaid
+                    </div>
+                  </div>
+                )}
+                {isSettled && (
+                  <div>
+                    <div className="text-xl font-bold text-slate-700">
+                      {fmt(0)}
+                    </div>
+                    <div className="text-xs font-medium text-slate-500 mt-0.5">
+                      Fully Settled
+                    </div>
+                  </div>
+                )}
+                {isNoActivity && (
+                  <div>
+                    <div className="text-xl font-bold text-slate-400">
+                      {fmt(0)}
+                    </div>
+                    <div className="text-xs font-medium text-slate-400 mt-0.5">
+                      No Loans Recorded
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 pt-2.5 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs text-slate-500">
+                <div>
+                  <div className="text-[11px] text-slate-400">Loan Taken</div>
+                  <div className="font-medium text-slate-700">{fmt(s.taken)}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-slate-400">Repaid</div>
+                  <div className="font-medium text-slate-700">{fmt(s.repaid)}</div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
