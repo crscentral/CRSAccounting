@@ -105,10 +105,10 @@ export default function Reports() {
         supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
       ])
       
-      // 1. Hotel Room Stats (Daily Revenue)
+      // 1. Hotel Room Stats (Daily Room Revenue & Collections)
       ;(hrs || []).forEach(r => {
         const rev = Number(r.room_revenue_usd) || 0
-        const col = Number(r.manual_room_revenue_collected_usd) || rev // Default to full collection if not specified
+        const col = Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0)
         const uncol = Math.max(0, rev - col)
         if (rev > 0 && roomRevAcc) {
           combined.push({ account_id: roomRevAcc.id, debit_usd: 0, credit_usd: rev, entry_date: r.stat_date, accounts: { type: roomRevAcc.type } })
@@ -181,20 +181,6 @@ export default function Reports() {
         
         if (col > 0 && cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: col, credit_usd: 0, entry_date: r.revenue_date, accounts: { type: cashAcc.type } })
         if (uncol > 0 && arAcc) combined.push({ account_id: arAcc.id, debit_usd: uncol, credit_usd: 0, entry_date: r.revenue_date, accounts: { type: arAcc.type } })
-      })
-      
-      // 6. Hotel Guest Invoices
-      ;(hgi || []).forEach(r => {
-        const inv = Number(r.invoice_amount_usd) || 0
-        const col = Number(r.collected_amount_usd) || 0
-        if (inv > 0) {
-          if (roomRevAcc) combined.push({ account_id: roomRevAcc.id, debit_usd: 0, credit_usd: inv, entry_date: r.invoice_date, accounts: { type: roomRevAcc.type } })
-          if (arAcc) combined.push({ account_id: arAcc.id, debit_usd: inv, credit_usd: 0, entry_date: r.invoice_date, accounts: { type: arAcc.type } })
-        }
-        if (col > 0) {
-          if (arAcc) combined.push({ account_id: arAcc.id, debit_usd: 0, credit_usd: col, entry_date: r.invoice_date, accounts: { type: arAcc.type } })
-          if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: col, credit_usd: 0, entry_date: r.invoice_date, accounts: { type: cashAcc.type } })
-        }
       })
     }
     
@@ -319,10 +305,10 @@ export default function Reports() {
         supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
       ])
       
-      // 1. Hotel Room Stats (Daily Revenue)
+      // 1. Hotel Room Stats (Daily Room Revenue & Collections)
       ;(hrs || []).forEach(r => {
         const rev = Number(r.room_revenue_usd) || 0
-        const col = Number(r.manual_room_revenue_collected_usd) || rev // Default to full collection if not specified
+        const col = Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0)
         const uncol = Math.max(0, rev - col)
         if (rev > 0 && roomRevAcc) {
           combined.push({ account_id: roomRevAcc.id, debit_usd: 0, credit_usd: rev, entry_date: r.stat_date, accounts: { type: roomRevAcc.type } })
@@ -357,8 +343,8 @@ export default function Reports() {
       // 4. Hotel AMC Contracts
       if (mainAcc && amc && amc.length > 0) {
         const fyStart = activeCompany.fiscal_year_start_month || 1;
-        const start = new Date(cp.range.from < '2020-01-01' ? '2020-01-01' : cp.range.from)
-        const end = new Date(cp.range.to)
+        const start = new Date(range.from < '2020-01-01' ? '2020-01-01' : range.from)
+        const end = new Date(range.to)
         let cur = new Date(start.getFullYear(), start.getMonth(), 1)
         while (cur <= end) {
           const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
@@ -395,20 +381,6 @@ export default function Reports() {
         
         if (col > 0 && cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: col, credit_usd: 0, entry_date: r.revenue_date, accounts: { type: cashAcc.type } })
         if (uncol > 0 && arAcc) combined.push({ account_id: arAcc.id, debit_usd: uncol, credit_usd: 0, entry_date: r.revenue_date, accounts: { type: arAcc.type } })
-      })
-      
-      // 6. Hotel Guest Invoices
-      ;(hgi || []).forEach(r => {
-        const inv = Number(r.invoice_amount_usd) || 0
-        const col = Number(r.collected_amount_usd) || 0
-        if (inv > 0) {
-          if (roomRevAcc) combined.push({ account_id: roomRevAcc.id, debit_usd: 0, credit_usd: inv, entry_date: r.invoice_date, accounts: { type: roomRevAcc.type } })
-          if (arAcc) combined.push({ account_id: arAcc.id, debit_usd: inv, credit_usd: 0, entry_date: r.invoice_date, accounts: { type: arAcc.type } })
-        }
-        if (col > 0) {
-          if (arAcc) combined.push({ account_id: arAcc.id, debit_usd: 0, credit_usd: col, entry_date: r.invoice_date, accounts: { type: arAcc.type } })
-          if (cashAcc) combined.push({ account_id: cashAcc.id, debit_usd: col, credit_usd: 0, entry_date: r.invoice_date, accounts: { type: cashAcc.type } })
-        }
       })
     }
     
