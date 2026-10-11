@@ -7,8 +7,16 @@ import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
-import { resolveReportPeriod } from '../lib/fiscalYear'
+import { resolveReportPeriod, getAmcActiveMonths, getAmcMonthsInView } from '../lib/fiscalYear'
 import { DollarSign, TrendingDown, TrendingUp } from 'lucide-react'
+
+function getAmcOverlapUsd(r, fyStart, rangeFrom, rangeTo) {
+  const activeMonths = getAmcActiveMonths(r.start_year, r.start_month, fyStart).totalMonths;
+  const amount = Number(r.annual_amount_usd || 0);
+  const monthlyAmount = activeMonths > 0 ? amount / activeMonths : 0;
+  const overlapMonths = getAmcMonthsInView(r.start_year, r.start_month, fyStart, rangeFrom, rangeTo);
+  return monthlyAmount * overlapMonths;
+}
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -29,24 +37,127 @@ export default function FinancialPerformance() {
   useEffect(() => { if (activeCompany) loadForecast() }, [activeCompany, activeProduct, forecastYear])
 
   async function loadData() {
-    const [{ data: s }, { data: p }, { data: entries }, { data: accs }, { data: restRev }] = await Promise.all([
+    const isHotel = ['hotel', 'restaurant'].includes(activeProduct)
+    const prodFilter = activeProduct === 'hotel' ? ['hotel', 'restaurant'] : [activeProduct]
+
+    if (isHotel) {
+      const fyStart = activeCompany.fiscal_year_start_month || 1
+      const [
+        { data: s }, { data: p }, { data: accs },
+        { data: hrs }, { data: hre }, { data: hee }, { data: hamc }, { data: rdr }
+      ] = await Promise.all([
+        supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
+        supabase.from('purchase_invoices').select('amount_usd, account_id, account:accounts(id, code, name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
+        supabase.from('accounts').select('id, code, name, type').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('hotel_room_stats').select('room_revenue_usd').eq('company_id', activeCompany.id).in('product', prodFilter).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to),
+        supabase.from('hotel_revenue_entries').select('amount_usd, account_id, account:accounts(id, code, name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
+        supabase.from('hotel_expense_entries').select('amount_usd, account_id, account:accounts(id, code, name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to),
+        supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('restaurant_daily_revenue').select('meal_period, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
+      ])
+
+      setSales(s || [])
+      setPurchases(p || [])
+
+      const revMap = {}, expMap = {}
+      const accountsList = accs || []
+
+      // 1. Room Revenue from hotel_room_stats
+      const roomRevTotal = (hrs || []).reduce((sum, r) => sum + (Number(r.room_revenue_usd) || 0), 0)
+      if (roomRevTotal > 0) {
+        const roomAcc = accountsList.find(a => a.code === '4100' || a.name?.toLowerCase().includes('room revenue')) || { id: 'room-rev', code: '4100', name: 'Room Revenue' }
+        revMap[roomAcc.id] = { code: roomAcc.code, name: roomAcc.name, amount: (revMap[roomAcc.id]?.amount || 0) + roomRevTotal }
+      }
+
+      // 2. Ancillary Revenue from hotel_revenue_entries
+      ;(hre || []).forEach(r => {
+        const amt = Number(r.amount_usd) || 0
+        if (!amt) return
+        const accId = r.account_id || r.account?.id || 'anc-other'
+        const code = r.account?.code || '4200'
+        const name = r.account?.name || 'Other Revenue'
+        revMap[accId] = revMap[accId] || { code, name, amount: 0 }
+        revMap[accId].amount += amt
+      })
+
+      // 3. Restaurant Revenue from restaurant_daily_revenue
+      ;(rdr || []).forEach(r => {
+        const f = Number(r.food_amount_usd) || 0
+        const b = Number(r.beverage_amount_usd) || 0
+        const o = Number(r.other_amount_usd) || 0
+        const total = Number(r.total_amount_usd) || (f + b + o)
+
+        const accBreakfast = accountsList.find(a => a.name === 'Breakfast Revenue') || accountsList.find(a => a.name?.toLowerCase().includes('breakfast'))
+        const accBeverage = accountsList.find(a => a.name === 'Beverage Sales' || a.name === 'Beverage Revenue' || a.name === 'F&B Revenue')
+        const accOther = accountsList.find(a => a.name === 'Other F&B Revenue' || a.name?.toLowerCase().includes('f&b'))
+        const accFallback = accountsList.find(a => a.type === 'Revenue' && a.code !== '4100') || { id: 'fb-rev', code: '4010', name: 'Restaurant F&B Revenue' }
+
+        if (f > 0) {
+          const target = (r.meal_period === 'Breakfast' ? accBreakfast : null) || accFallback
+          revMap[target.id] = revMap[target.id] || { code: target.code, name: target.name, amount: 0 }
+          revMap[target.id].amount += f
+        }
+        if (b > 0) {
+          const target = accBeverage || accFallback
+          revMap[target.id] = revMap[target.id] || { code: target.code, name: target.name, amount: 0 }
+          revMap[target.id].amount += b
+        }
+        if (o > 0) {
+          const target = accOther || accFallback
+          revMap[target.id] = revMap[target.id] || { code: target.code, name: target.name, amount: 0 }
+          revMap[target.id].amount += o
+        }
+        if (f === 0 && b === 0 && o === 0 && total > 0) {
+          const target = accFallback
+          revMap[target.id] = revMap[target.id] || { code: target.code, name: target.name, amount: 0 }
+          revMap[target.id].amount += total
+        }
+      })
+
+      // 4. Hotel Direct Expenses from hotel_expense_entries
+      ;(hee || []).forEach(e => {
+        const amt = Number(e.amount_usd) || 0
+        if (!amt) return
+        const accId = e.account_id || e.account?.id || 'exp-other'
+        const code = e.account?.code || '5000'
+        const name = e.account?.name || 'General Expense'
+        expMap[accId] = expMap[accId] || { code, name, amount: 0 }
+        expMap[accId].amount += amt
+      })
+
+      // 5. AMC Amortized Overlap Expenses
+      const amcTotal = (hamc || []).reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, cp.range.from, cp.range.to), 0)
+      if (amcTotal > 0) {
+        const amcAcc = accountsList.find(a => a.name?.toLowerCase().includes('amc') || a.name?.toLowerCase().includes('maintenance')) || { id: 'amc-amortized', code: '5500', name: 'AMC Contracts (Amortized)' }
+        expMap[amcAcc.id] = expMap[amcAcc.id] || { code: amcAcc.code, name: amcAcc.name, amount: 0 }
+        expMap[amcAcc.id].amount += amcTotal
+      }
+
+      // 6. Purchase Invoices Expenses
+      ;(p || []).forEach(pi => {
+        const amt = Number(pi.amount_usd) || 0
+        if (!amt) return
+        const accId = pi.account_id || pi.account?.id || 'pi-expense'
+        const code = pi.account?.code || '5100'
+        const name = pi.account?.name || 'Purchase Invoices'
+        expMap[accId] = expMap[accId] || { code, name, amount: 0 }
+        expMap[accId].amount += amt
+      })
+
+      setRevenueByAccount(Object.values(revMap).sort((a, b) => b.amount - a.amount))
+      setExpensesByAccount(Object.values(expMap).sort((a, b) => b.amount - a.amount))
+      return
+    }
+
+    const [{ data: s }, { data: p }, { data: entries }] = await Promise.all([
       supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
-      supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
-      supabase.from('accounts').select('id, code, name, type').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('restaurant_daily_revenue').select('meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
+      supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to)
     ])
     
-    let salesData = s || []
-    if (restRev) {
-      restRev.forEach(r => {
-        const total = Number(r.total_amount_usd) || ((Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0) + (Number(r.other_amount_usd) || 0))
-        if (total > 0) salesData.push({ amount_usd: total })
-      })
-    }
-    setSales(salesData); setPurchases(p || [])
+    setSales(s || []); setPurchases(p || [])
 
-    // Breakdown by account, for the Revenue and Expenses tabs
+    // Breakdown by account, for the Revenue and Expenses tabs (Basic)
     const revMap = {}, expMap = {}
     ;(entries || []).forEach(e => {
       const acc = e.accounts
@@ -54,7 +165,7 @@ export default function FinancialPerformance() {
       const net = Number(e.debit_usd) - Number(e.credit_usd)
       if (acc.type === 'Revenue') {
         revMap[acc.id] = revMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }
-        revMap[acc.id].amount += -net // revenue is credit-normal
+        revMap[acc.id].amount += -net
       } else if (acc.type === 'Expenses') {
         expMap[acc.id] = expMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }
         expMap[acc.id].amount += net
@@ -128,51 +239,135 @@ export default function FinancialPerformance() {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
 
-    const [{ data: s }, { data: p }, { data: entries }, { data: accs }, { data: restRev }] = await Promise.all([
-      supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
-      supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
-      supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to),
-      supabase.from('accounts').select('id, code, name, type').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('restaurant_daily_revenue').select('meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to)
-    ])
-    
-    let salesData = s || []
-    if (restRev) {
-      restRev.forEach(r => {
-        const total = Number(r.total_amount_usd) || ((Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0) + (Number(r.other_amount_usd) || 0))
-        if (total > 0) salesData.push({ amount_usd: total })
-      })
-    }
-    const rev = salesData.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
-    const exp = (p || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
-    const gop = rev - exp
-    const marginPct = rev ? (gop / rev) * 100 : 0
+    const isHotel = ['hotel', 'restaurant'].includes(activeProduct)
+    const prodFilter = activeProduct === 'hotel' ? ['hotel', 'restaurant'] : [activeProduct]
+    const fyStart = activeCompany.fiscal_year_start_month || 1
 
+    let rev = 0, exp = 0
     const revMap = {}, expMap = {}
-    ;(entries || []).forEach(e => {
-      const acc = e.accounts
-      if (!acc) return
-      const net = Number(e.debit_usd) - Number(e.credit_usd)
-      if (acc.type === 'Revenue') { revMap[acc.id] = revMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; revMap[acc.id].amount += -net }
-      else if (acc.type === 'Expenses') { expMap[acc.id] = expMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; expMap[acc.id].amount += net }
-    })
-    
-    if (restRev && accs) {
-      restRev.forEach(r => {
+
+    if (isHotel) {
+      const [
+        { data: s }, { data: p }, { data: accs },
+        { data: hrs }, { data: hre }, { data: hee }, { data: hamc }, { data: rdr }
+      ] = await Promise.all([
+        supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', range.from).lte('invoice_date', range.to),
+        supabase.from('purchase_invoices').select('amount_usd, account_id, account:accounts(id, code, name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', range.from).lte('invoice_date', range.to),
+        supabase.from('accounts').select('id, code, name, type').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('hotel_room_stats').select('room_revenue_usd').eq('company_id', activeCompany.id).in('product', prodFilter).gte('stat_date', range.from).lte('stat_date', range.to),
+        supabase.from('hotel_revenue_entries').select('amount_usd, account_id, account:accounts(id, code, name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', range.from).lte('entry_date', range.to),
+        supabase.from('hotel_expense_entries').select('amount_usd, account_id, account:accounts(id, code, name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('expense_date', range.from).lte('expense_date', range.to),
+        supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('restaurant_daily_revenue').select('meal_period, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to)
+      ])
+
+      const accountsList = accs || []
+
+      // Room revenue
+      const roomRevTotal = (hrs || []).reduce((sum, r) => sum + (Number(r.room_revenue_usd) || 0), 0)
+      if (roomRevTotal > 0) {
+        const roomAcc = accountsList.find(a => a.code === '4100' || a.name?.toLowerCase().includes('room revenue')) || { id: 'room-rev', code: '4100', name: 'Room Revenue' }
+        revMap[roomAcc.id] = { code: roomAcc.code, name: roomAcc.name, amount: (revMap[roomAcc.id]?.amount || 0) + roomRevTotal }
+      }
+
+      // Ancillary revenue
+      ;(hre || []).forEach(r => {
+        const amt = Number(r.amount_usd) || 0
+        if (!amt) return
+        const accId = r.account_id || r.account?.id || 'anc-other'
+        const code = r.account?.code || '4200'
+        const name = r.account?.name || 'Other Revenue'
+        revMap[accId] = revMap[accId] || { code, name, amount: 0 }
+        revMap[accId].amount += amt
+      })
+
+      // Restaurant revenue
+      ;(rdr || []).forEach(r => {
         const f = Number(r.food_amount_usd) || 0
         const b = Number(r.beverage_amount_usd) || 0
         const o = Number(r.other_amount_usd) || 0
-        
-        if (activeProduct === 'hotel') {
-          const acc4016 = (accs || []).find(a => a.name === 'Breakfast Revenue'); const acc4011 = (accs || []).find(a => a.name === 'Beverage Sales');
-          const acc4020 = (accs || []).find(a => a.name === 'Beverage Revenue' || a.name === 'F&B Revenue'); const acc4021 = (accs || []).find(a => a.name === 'Other F&B Revenue');
-          if (f > 0) { const acc = r.meal_period === 'Breakfast' ? acc4016 : acc4011; if (acc) { revMap[acc.id] = revMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; revMap[acc.id].amount += f } }
-          if (b > 0 && acc4020) { revMap[acc4020.id] = revMap[acc4020.id] || { code: acc4020.code, name: acc4020.name, amount: 0 }; revMap[acc4020.id].amount += b }
-          if (o > 0 && acc4021) { revMap[acc4021.id] = revMap[acc4021.id] || { code: acc4021.code, name: acc4021.name, amount: 0 }; revMap[acc4021.id].amount += o }
+        const total = Number(r.total_amount_usd) || (f + b + o)
+
+        const accBreakfast = accountsList.find(a => a.name === 'Breakfast Revenue') || accountsList.find(a => a.name?.toLowerCase().includes('breakfast'))
+        const accBeverage = accountsList.find(a => a.name === 'Beverage Sales' || a.name === 'Beverage Revenue' || a.name === 'F&B Revenue')
+        const accOther = accountsList.find(a => a.name === 'Other F&B Revenue' || a.name?.toLowerCase().includes('f&b'))
+        const accFallback = accountsList.find(a => a.type === 'Revenue' && a.code !== '4100') || { id: 'fb-rev', code: '4010', name: 'Restaurant F&B Revenue' }
+
+        if (f > 0) {
+          const target = (r.meal_period === 'Breakfast' ? accBreakfast : null) || accFallback
+          revMap[target.id] = revMap[target.id] || { code: target.code, name: target.name, amount: 0 }
+          revMap[target.id].amount += f
         }
-        // Do not inject for restaurant because Table Revenue is already in ledger_entries.
+        if (b > 0) {
+          const target = accBeverage || accFallback
+          revMap[target.id] = revMap[target.id] || { code: target.code, name: target.name, amount: 0 }
+          revMap[target.id].amount += b
+        }
+        if (o > 0) {
+          const target = accOther || accFallback
+          revMap[target.id] = revMap[target.id] || { code: target.code, name: target.name, amount: 0 }
+          revMap[target.id].amount += o
+        }
+        if (f === 0 && b === 0 && o === 0 && total > 0) {
+          const target = accFallback
+          revMap[target.id] = revMap[target.id] || { code: target.code, name: target.name, amount: 0 }
+          revMap[target.id].amount += total
+        }
+      })
+
+      // Hotel Direct Expenses
+      ;(hee || []).forEach(e => {
+        const amt = Number(e.amount_usd) || 0
+        if (!amt) return
+        const accId = e.account_id || e.account?.id || 'exp-other'
+        const code = e.account?.code || '5000'
+        const name = e.account?.name || 'General Expense'
+        expMap[accId] = expMap[accId] || { code, name, amount: 0 }
+        expMap[accId].amount += amt
+      })
+
+      // AMC Amortized Overlap Expenses
+      const amcTotal = (hamc || []).reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, range.from, range.to), 0)
+      if (amcTotal > 0) {
+        const amcAcc = accountsList.find(a => a.name?.toLowerCase().includes('amc') || a.name?.toLowerCase().includes('maintenance')) || { id: 'amc-amortized', code: '5500', name: 'AMC Contracts (Amortized)' }
+        expMap[amcAcc.id] = expMap[amcAcc.id] || { code: amcAcc.code, name: amcAcc.name, amount: 0 }
+        expMap[amcAcc.id].amount += amcTotal
+      }
+
+      // Purchase Invoices Expenses
+      ;(p || []).forEach(pi => {
+        const amt = Number(pi.amount_usd) || 0
+        if (!amt) return
+        const accId = pi.account_id || pi.account?.id || 'pi-expense'
+        const code = pi.account?.code || '5100'
+        const name = pi.account?.name || 'Purchase Invoices'
+        expMap[accId] = expMap[accId] || { code, name, amount: 0 }
+        expMap[accId].amount += amt
+      })
+
+      rev = Object.values(revMap).reduce((s, a) => s + a.amount, 0)
+      exp = Object.values(expMap).reduce((s, a) => s + a.amount, 0)
+    } else {
+      const [{ data: s }, { data: p }, { data: entries }] = await Promise.all([
+        supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
+        supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to),
+        supabase.from('ledger_entries').select('debit_usd, credit_usd, entry_date, accounts!inner(id, code, name, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to)
+      ])
+
+      rev = (s || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
+      exp = (p || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
+
+      ;(entries || []).forEach(e => {
+        const acc = e.accounts
+        if (!acc) return
+        const net = Number(e.debit_usd) - Number(e.credit_usd)
+        if (acc.type === 'Revenue') { revMap[acc.id] = revMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; revMap[acc.id].amount += -net }
+        else if (acc.type === 'Expenses') { expMap[acc.id] = expMap[acc.id] || { code: acc.code, name: acc.name, amount: 0 }; expMap[acc.id].amount += net }
       })
     }
+
+    const gop = rev - exp
+    const marginPct = rev ? (gop / rev) * 100 : 0
 
     const sections = [
       {
@@ -247,7 +442,9 @@ export default function FinancialPerformance() {
       />
 
       <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2.5 text-sm text-blue-700 mb-5">
-        Revenue and Expenses are auto-calculated from Sales & Purchase Invoices. Revenue: {cp.fmt(revenue)} &nbsp; Expenses: {cp.fmt(expenses)}
+        {['hotel', 'restaurant'].includes(activeProduct)
+          ? `Revenue and Expenses are auto-calculated from Room Stats, Ancillary Revenue, Restaurant & Hotel Expenses. Revenue: ${cp.fmt(revenue)}   Expenses: ${cp.fmt(expenses)}`
+          : `Revenue and Expenses are auto-calculated from Sales & Purchase Invoices. Revenue: ${cp.fmt(revenue)}   Expenses: ${cp.fmt(expenses)}`}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
