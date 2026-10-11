@@ -38,7 +38,7 @@ export default function Transactions() {
       siPromise = supabase.from('hotel_guest_invoices').select('id, invoice_number:id, invoice_date, amount_usd:invoice_amount_usd, currency, amount:invoice_amount, contact:guest_name').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to)
       piPromise = supabase.from('hotel_expense_entries').select('id, invoice_number:id, invoice_date:expense_date, amount_usd, currency, amount, contact:notes').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to)
       rdrPromise = supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
-      hrsPromise = supabase.from('hotel_room_stats').select('id, stat_date, room_revenue_usd, manual_room_revenue_collected_usd, currency, room_revenue').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to)
+      hrsPromise = supabase.from('hotel_room_stats').select('id, stat_date, room_revenue_usd, manual_room_revenue_usd, manual_room_revenue_collected_usd, currency, room_revenue').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to)
       hrePromise = supabase.from('hotel_revenue_entries').select('id, entry_date, amount_usd, currency, amount, notes, account:accounts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to)
       amcPromise = supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
     } else {
@@ -48,13 +48,16 @@ export default function Transactions() {
 
     const [{ data: si }, { data: pi }, { data: pr }, { data: rdr }, { data: hrs }, { data: hre }, { data: amc }] = await Promise.all([siPromise, piPromise, prPromise, rdrPromise, hrsPromise, hrePromise, amcPromise])
 
+    const isHotelOrRest = ['hotel', 'restaurant'].includes(activeProduct)
     const combined = [
-      ...(si || []).map(r => ({ id: `si-${r.id}`, date: r.invoice_date, type: ['hotel', 'restaurant'].includes(activeProduct) ? 'Guest Invoice' : 'Sales Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.contact || ''}`, amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'in' })),
-      ...(pi || []).map(r => ({ id: `pi-${r.id}`, date: r.invoice_date, type: ['hotel', 'restaurant'].includes(activeProduct) ? 'Expense' : 'Purchase Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.supplier_name_freeform || r.contact || 'Expense'}`, amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'out' })),
+      ...(si || []).map(r => ({ id: `si-${r.id}`, date: r.invoice_date, type: isHotelOrRest ? 'Guest Invoice' : 'Sales Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.contact || ''}`, amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'in' })),
+      ...(pi || []).map(r => ({ id: `pi-${r.id}`, date: r.invoice_date, type: isHotelOrRest ? 'Expense' : 'Purchase Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.supplier_name_freeform || r.contact || 'Expense'}`, amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'out' })),
       ...(pr || []).map(r => ({ id: `pr-${r.id}`, date: r.receipt_date, type: 'Payment Receipt', desc: 'Payment received', amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'in' })),
       ...(rdr || []).map(r => { const total = Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0)); return { id: `rdr-${r.id}`, date: r.revenue_date, type: 'F&B Revenue', desc: `${r.meal_period} F&B Revenue`, amount_usd: total, amount: total, currency: 'USD', direction: 'in' } }),
-      ...(hre || []).map(r => ({ id: `hre-${r.id}`, date: r.entry_date, type: 'Ancillary Revenue', desc: r.account?.name || r.notes || 'Revenue', amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'in' })),
-      ...(hrs || []).filter(r => Number(r.room_revenue_usd) > 0).map(r => ({ id: `hrs-${r.id}`, date: r.stat_date, type: 'Room Revenue', desc: 'Daily Room Revenue', amount_usd: r.room_revenue_usd, amount: r.room_revenue || r.room_revenue_usd, currency: r.currency || 'USD', direction: 'in' })),
+      // For hotel: only include direct/manual ancillary entries (avoid double-counting entries created by guest invoices)
+      ...(hre || []).filter(r => !isHotelOrRest || !r.notes?.startsWith('Invoice ')).map(r => ({ id: `hre-${r.id}`, date: r.entry_date, type: 'Ancillary Revenue', desc: r.account?.name || r.notes || 'Revenue', amount_usd: r.amount_usd, amount: r.amount, currency: r.currency, direction: 'in' })),
+      // For hotel: only include manual walk-in room stats (avoid double-counting room revenue created by guest invoices)
+      ...(hrs || []).filter(r => isHotelOrRest ? Number(r.manual_room_revenue_usd) > 0 : Number(r.room_revenue_usd) > 0).map(r => ({ id: `hrs-${r.id}`, date: r.stat_date, type: 'Room Revenue', desc: isHotelOrRest ? 'Daily Room Revenue (Walk-in)' : 'Daily Room Revenue', amount_usd: isHotelOrRest ? r.manual_room_revenue_usd : r.room_revenue_usd, amount: isHotelOrRest ? (r.manual_room_revenue || r.manual_room_revenue_usd) : (r.room_revenue || r.room_revenue_usd), currency: r.currency || 'USD', direction: 'in' })),
     ]
     
         // Add AMC Contract lines (Actual Posting or Amortized depending on view)
@@ -96,7 +99,7 @@ export default function Transactions() {
       if (wantSales) siPromise = supabase.from('hotel_guest_invoices').select('invoice_number:id, invoice_date, amount_usd:invoice_amount_usd, contact:guest_name').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to)
       if (wantPurchase) piPromise = supabase.from('hotel_expense_entries').select('invoice_number:id, invoice_date:expense_date, amount_usd, contact:notes').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('expense_date', range.from).lte('expense_date', range.to)
       if (wantSales) rdrPromise = supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to)
-      if (wantSales) hrsPromise = supabase.from('hotel_room_stats').select('id, stat_date, room_revenue_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to)
+      if (wantSales) hrsPromise = supabase.from('hotel_room_stats').select('id, stat_date, room_revenue_usd, manual_room_revenue_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to)
       if (wantSales) hrePromise = supabase.from('hotel_revenue_entries').select('id, entry_date, amount_usd, notes, account:accounts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to)
       if (wantPurchase) amcPromise = supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
     } else {
@@ -106,13 +109,14 @@ export default function Transactions() {
 
     const [{ data: si }, { data: pi }, { data: pr }, { data: rdr }, { data: hrs }, { data: hre }, { data: amc }] = await Promise.all([siPromise, piPromise, prPromise, rdrPromise, hrsPromise, hrePromise, amcPromise])
 
+    const isHotelOrRest = ['hotel', 'restaurant'].includes(activeProduct)
     const combined = [
-      ...(si || []).map(r => ({ date: r.invoice_date, type: ['hotel', 'restaurant'].includes(activeProduct) ? 'Guest Invoice' : 'Sales Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.contact || ''}`, amount: fmt(r.amount_usd), direction: '+' })),
-      ...(pi || []).map(r => ({ date: r.invoice_date, type: ['hotel', 'restaurant'].includes(activeProduct) ? 'Expense' : 'Purchase Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.supplier_name_freeform || r.contact || 'Expense'}`, amount: fmt(r.amount_usd), direction: '-' })),
+      ...(si || []).map(r => ({ date: r.invoice_date, type: isHotelOrRest ? 'Guest Invoice' : 'Sales Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.contact || ''}`, amount: fmt(r.amount_usd), direction: '+' })),
+      ...(pi || []).map(r => ({ date: r.invoice_date, type: isHotelOrRest ? 'Expense' : 'Purchase Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.supplier_name_freeform || r.contact || 'Expense'}`, amount: fmt(r.amount_usd), direction: '-' })),
       ...(pr || []).map(r => ({ date: r.receipt_date, type: 'Payment Receipt', desc: 'Payment received', amount: fmt(r.amount_usd), direction: '+' })),
       ...(rdr || []).map(r => { const total = Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0)); return { date: r.revenue_date, type: 'F&B Revenue', desc: `${r.meal_period} F&B Revenue`, amount: fmt(total), direction: '+' } }),
-      ...(hre || []).map(r => ({ date: r.entry_date, type: 'Ancillary Revenue', desc: r.account?.name || r.notes || 'Revenue', amount: fmt(r.amount_usd), direction: '+' })),
-      ...(hrs || []).filter(r => Number(r.room_revenue_usd) > 0).map(r => ({ date: r.stat_date, type: 'Room Revenue', desc: 'Daily Room Revenue', amount: fmt(r.room_revenue_usd), direction: '+' })),
+      ...(hre || []).filter(r => !isHotelOrRest || !r.notes?.startsWith('Invoice ')).map(r => ({ date: r.entry_date, type: 'Ancillary Revenue', desc: r.account?.name || r.notes || 'Revenue', amount: fmt(r.amount_usd), direction: '+' })),
+      ...(hrs || []).filter(r => isHotelOrRest ? Number(r.manual_room_revenue_usd) > 0 : Number(r.room_revenue_usd) > 0).map(r => ({ date: r.stat_date, type: 'Room Revenue', desc: isHotelOrRest ? 'Daily Room Revenue (Walk-in)' : 'Daily Room Revenue', amount: fmt(isHotelOrRest ? r.manual_room_revenue_usd : r.room_revenue_usd), direction: '+' })),
     ]
 
         // Add AMC Contract lines (Actual Posting or Amortized depending on view)
