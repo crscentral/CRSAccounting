@@ -192,11 +192,11 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
     <Modal title={invoice ? 'Edit Purchase Invoice' : 'New Purchase Invoice'} onClose={onClose} maxWidth="max-w-3xl">
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Field label="Invoice Number *"><input required value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
-          <Field label="Invoice Date *"><input type="date" required value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
-          <Field label="Due Date"><input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
+          <Field label="Invoice Number *"><input required value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
+          <Field label="Invoice Date *"><input type="date" required value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
+          <Field label="Due Date"><input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" /></Field>
           <Field label="Currency">
-            <select value={currency} onChange={e => { setCurrency(e.target.value); if (e.target.value === 'USD') setFxRate(''); }} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={currency} onChange={e => { setCurrency(e.target.value); if (e.target.value === 'USD') setFxRate(''); }} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
               {CURRENCY_LIST.slice(0, 25).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
             </select>
           </Field>

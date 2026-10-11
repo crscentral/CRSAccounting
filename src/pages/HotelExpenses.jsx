@@ -667,15 +667,15 @@ function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClo
         </Field>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Currency">
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
               {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
             </select>
           </Field>
           <Field label="Amount *">
-            <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input type="number" step="0.01" min="0" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
           </Field>
           <Field label="Paid Amount">
-            <input type="number" step="0.01" min="0" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input type="number" step="0.01" min="0" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
           </Field>
         </div>
                 <Field label="Invoice Number">
@@ -748,15 +748,15 @@ function AmcContractFormModal({ companyId, product, editingRow, onClose, onSaved
         </Field>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Currency">
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
               {CURRENCY_LIST.slice(0, 30).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
             </select>
           </Field>
           <Field label="Annual Amount *">
-            <input type="number" step="0.01" min="0" required value={annualAmount} onChange={e => setAnnualAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input type="number" step="0.01" min="0" required value={annualAmount} onChange={e => setAnnualAmount(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
           </Field>
           <Field label="Paid Amount">
-            <input type="number" step="0.01" min="0" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <input type="number" step="0.01" min="0" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} className="w-full h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
