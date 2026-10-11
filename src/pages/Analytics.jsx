@@ -36,13 +36,15 @@ function AnalyticsInner() {
   const [hotelAmc, setHotelAmc] = useState([])
   const [hotelRevenueEntries, setHotelRevenueEntries] = useState([])
 
+  const [hotelPurchaseInvoices, setHotelPurchaseInvoices] = useState([])
+
   useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   const [restaurantRevenue, setRestaurantRevenue] = useState([])
 
   async function loadData() {
     const prodFilter = activeProduct === 'hotel' ? ['hotel', 'restaurant'] : [activeProduct]
-    const [{ data: s }, { data: p }, { data: r }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }] = await Promise.all([
+    const [{ data: s }, { data: p }, { data: r }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }, { data: hpi }] = await Promise.all([
       supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
@@ -51,7 +53,8 @@ function AnalyticsInner() {
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] })
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to) : Promise.resolve({ data: [] })
     ])
     setSales(s || []); setPurchases(p || []); setReceipts(r || [])
     setHotelRoomStats(hrs || [])
@@ -60,6 +63,7 @@ function AnalyticsInner() {
     setHotelAmc(hamc || [])
     setHotelRevenueEntries(hre || [])
     setRestaurantRevenue(rdr || [])
+    setHotelPurchaseInvoices(hpi || [])
   }
 
 
@@ -68,7 +72,7 @@ function AnalyticsInner() {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
 
-    const [{ data: s }, { data: p }, { data: r }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }] = await Promise.all([
+    const [{ data: s }, { data: p }, { data: r }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }, { data: hpi }] = await Promise.all([
       supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', range.from).lte('invoice_date', range.to),
       supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', range.from).lte('invoice_date', range.to),
       supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('receipt_date', range.from).lte('receipt_date', range.to),
@@ -77,10 +81,11 @@ function AnalyticsInner() {
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('expense_date', range.from).lte('expense_date', range.to) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
       ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', range.from).lte('entry_date', range.to) : Promise.resolve({ data: [] }),
-      activeProduct === 'restaurant' ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to) : Promise.resolve({ data: [] }),
+      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', range.from).lte('invoice_date', range.to) : Promise.resolve({ data: [] })
     ])
     const sSel = s || [], pSel = p || [], rSel = r || []
-    const hrsSel = hrs || [], hgiSel = hgi || [], heeSel = hee || [], hamcSel = hamc || [], hreSel = hre || [], rdrSel = rdr || []
+    const hrsSel = hrs || [], hgiSel = hgi || [], heeSel = hee || [], hamcSel = hamc || [], hreSel = hre || [], rdrSel = rdr || [], hpiSel = hpi || []
     let totalInvoiced = 0
     let outstanding = 0
     let collected = 0
@@ -88,26 +93,51 @@ function AnalyticsInner() {
     const monthlyMap = {}
 
     if (['hotel', 'restaurant'].includes(activeProduct)) {
-      const manualRoomCollected = hrsSel.reduce((s2, r) => s2 + Number(r.manual_room_revenue_collected_usd || 0), 0)
-      const manualRoomRevenue = hrsSel.reduce((s2, r) => s2 + Number(r.room_revenue_usd || 0), 0)
-      const guestInvoiceCollected = hgiSel.reduce((s2, i) => s2 + Number(i.collected_amount_usd || 0), 0)
-      const guestInvoiceRevenue = hgiSel.reduce((s2, i) => s2 + Number(i.invoice_amount_usd || 0), 0)
-      const ancillaryCollected = hreSel.reduce((s2, r) => s2 + Number(r.amount_usd || 0), 0)
+      const roomRev = hrsSel.reduce((s2, r) => s2 + Number(r.room_revenue_usd || 0), 0)
+      const ancRev = hreSel.reduce((s2, r) => s2 + Number(r.amount_usd || 0), 0)
+      const restRev = rdrSel.reduce((s2, r) => s2 + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
+      totalInvoiced = roomRev + ancRev + restRev
 
-      totalInvoiced = manualRoomRevenue + guestInvoiceRevenue + ancillaryCollected
-      collected = manualRoomCollected + guestInvoiceCollected + ancillaryCollected
-      outstanding = hgiSel.reduce((s2, i) => s2 + (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd)), 0)
+      const roomCollected = hrsSel.reduce((s2, r) => s2 + Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0), 0)
+      const ancillaryCollected = hreSel.reduce((s2, r) => s2 + Number(r.collected_usd || 0), 0)
+      const restRevCollected = rdrSel.reduce((s2, r) => s2 + Number(r.collected_usd || 0), 0)
+      collected = roomCollected + ancillaryCollected + restRevCollected
 
-      const start = new Date(range.from)
-      const end = new Date(Math.min(new Date(range.to).getTime(), new Date().getTime()))
-      const monthsInView = Math.max(1, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1)
-      const amcTotal = hamcSel.reduce((s2, r) => s2 + (Number(r.annual_amount_usd) / 12), 0) * monthsInView
-      expenses = heeSel.reduce((s2, e) => s2 + Number(e.amount_usd), 0) + amcTotal + pSel.reduce((s2, i) => s2 + Number(i.amount_usd || 0), 0)
+      outstanding = totalInvoiced - collected
 
-      hgiSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7) || 'Unknown'; monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.invoice_amount_usd || 0); monthlyMap[k].collected += Number(i.collected_amount_usd || 0) })
-      hrsSel.forEach(i => { const k = i.stat_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.room_revenue_usd || 0); monthlyMap[k].collected += Number(i.manual_room_revenue_collected_usd || 0) })
-      hreSel.forEach(i => { const k = i.entry_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.amount_usd || 0); monthlyMap[k].collected += Number(i.amount_usd || 0) })
-      rdrSel.forEach(i => { const k = i.revenue_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.total_amount_usd) || (Number(i.food_amount_usd||0) + Number(i.beverage_amount_usd||0)); monthlyMap[k].collected += Number(i.collected_usd || 0) })
+      const fyStart = activeCompany.fiscal_year_start_month || 1
+      const amcTotal = hamcSel.reduce((s2, r) => s2 + getAmcOverlapUsd(r, fyStart, range.from, range.to), 0)
+      const directExpenses = heeSel.reduce((s2, e) => s2 + Number(e.amount_usd || 0), 0)
+      const piExpenses = hpiSel.reduce((s2, e) => s2 + Number(e.amount_usd || 0), 0)
+      expenses = directExpenses + amcTotal + piExpenses
+
+      hrsSel.forEach(r => {
+        const k = (r.stat_date || '').slice(0, 7)
+        if (!k) return
+        monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }
+        monthlyMap[k].revenue += Number(r.room_revenue_usd || 0)
+        monthlyMap[k].collected += Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0)
+      })
+      hreSel.forEach(r => {
+        const k = (r.entry_date || '').slice(0, 7)
+        if (!k) return
+        monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }
+        monthlyMap[k].revenue += Number(r.amount_usd || 0)
+        monthlyMap[k].collected += Number(r.collected_usd || 0)
+      })
+      rdrSel.forEach(r => {
+        const k = (r.revenue_date || '').slice(0, 7)
+        if (!k) return
+        monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }
+        monthlyMap[k].revenue += Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))
+        monthlyMap[k].collected += Number(r.collected_usd || 0)
+      })
+      hgiSel.forEach(i => {
+        const k = (i.invoice_date || '').slice(0, 7)
+        if (!k) return
+        monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }
+        monthlyMap[k].invoices += 1
+      })
 
     } else {
       totalInvoiced = sSel.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
@@ -146,56 +176,52 @@ function AnalyticsInner() {
   let txTypePie = []
 
   if (['hotel', 'restaurant'].includes(activeProduct)) {
-    const manualRoomCollected = (hotelRoomStats || []).reduce((s, r) => s + Number(r.manual_room_revenue_collected_usd || 0), 0)
-    const manualRoomRevenue = (hotelRoomStats || []).reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
-    const guestInvoiceCollected = (hotelGuestInvoices || []).reduce((s, i) => s + Number(i.collected_amount_usd || 0), 0)
-    const guestInvoiceRevenue = (hotelGuestInvoices || []).reduce((s, i) => s + Number(i.invoice_amount_usd || 0), 0)
-    const ancillaryCollected = (hotelRevenueEntries || []).reduce((s, r) => s + Number(r.collected_usd || r.amount_usd || 0), 0)
-    const ancillaryRevenue = (hotelRevenueEntries || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
-    
-    const restRevRevenue = (restaurantRevenue || []).reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
+    const roomRev = (hotelRoomStats || []).reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
+    const ancRev = (hotelRevenueEntries || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+    const restRev = (restaurantRevenue || []).reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
+    totalInvoiced = roomRev + ancRev + restRev
+
+    const roomCollected = (hotelRoomStats || []).reduce((s, r) => s + Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0), 0)
+    const ancillaryCollected = (hotelRevenueEntries || []).reduce((s, r) => s + Number(r.collected_usd || 0), 0)
     const restRevCollected = (restaurantRevenue || []).reduce((s, r) => s + Number(r.collected_usd || 0), 0)
+    collected = roomCollected + ancillaryCollected + restRevCollected
 
-    totalInvoiced = manualRoomRevenue + guestInvoiceRevenue + ancillaryRevenue + restRevRevenue
-    collected = manualRoomCollected + guestInvoiceCollected + ancillaryCollected + restRevCollected
-    outstanding = (hotelGuestInvoices || []).reduce((s, i) => s + (Number(i.invoice_amount_usd) - Number(i.collected_amount_usd)), 0)
+    outstanding = totalInvoiced - collected
 
-    const start = new Date(cp.range.from)
-    const end = new Date(Math.min(new Date(cp.range.to).getTime(), new Date().getTime()))
-    const monthsInView = Math.max(1, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1)
-    const fyStart = activeCompany.fiscal_year_start_month || 1;
+    const fyStart = activeCompany.fiscal_year_start_month || 1
     const amcTotal = (hotelAmc || []).reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, cp.range.from, cp.range.to), 0)
-    expenses = (hotelExpenseEntries || []).reduce((s, e) => s + Number(e.amount_usd), 0) + amcTotal
+    const directExpenses = (hotelExpenseEntries || []).reduce((s, e) => s + Number(e.amount_usd || 0), 0)
+    const piExpenses = (hotelPurchaseInvoices || []).reduce((s, e) => s + Number(e.amount_usd || 0), 0)
+    expenses = directExpenses + amcTotal + piExpenses
 
     overdueCount = (hotelGuestInvoices || []).filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)).length
 
-    ;(hotelGuestInvoices || []).forEach(i => {
-      const key = (i.invoice_date || '').slice(0, 7) || 'Unknown'
-      monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
-      monthlyMap[key].invoices += 1
-      monthlyMap[key].revenue += Number(i.invoice_amount_usd || 0)
-      monthlyMap[key].collected += Number(i.collected_amount_usd || 0)
-    })
     ;(hotelRoomStats || []).forEach(r => {
-      const key = (r.stat_date || '').slice(0, 7) || 'Unknown'
+      const key = (r.stat_date || '').slice(0, 7)
+      if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
-      monthlyMap[key].invoices += 1
       monthlyMap[key].revenue += Number(r.room_revenue_usd || 0)
-      monthlyMap[key].collected += Number(r.manual_room_revenue_collected_usd || 0)
+      monthlyMap[key].collected += Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0)
     })
     ;(hotelRevenueEntries || []).forEach(r => {
-      const key = (r.entry_date || '').slice(0, 7) || 'Unknown'
+      const key = (r.entry_date || '').slice(0, 7)
+      if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
-      monthlyMap[key].invoices += 1
       monthlyMap[key].revenue += Number(r.amount_usd || 0)
-      monthlyMap[key].collected += Number(r.amount_usd || 0)
+      monthlyMap[key].collected += Number(r.collected_usd || 0)
     })
     ;(restaurantRevenue || []).forEach(r => {
-      const key = (r.revenue_date || '').slice(0, 7) || 'Unknown'
+      const key = (r.revenue_date || '').slice(0, 7)
+      if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
-      monthlyMap[key].invoices += 1
       monthlyMap[key].revenue += Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))
       monthlyMap[key].collected += Number(r.collected_usd || 0)
+    })
+    ;(hotelGuestInvoices || []).forEach(i => {
+      const key = (i.invoice_date || '').slice(0, 7)
+      if (!key) return
+      monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
+      monthlyMap[key].invoices += 1
     })
 
     const fullyPaidCount = (hotelGuestInvoices || []).filter(i => Number(i.collected_amount_usd) >= Number(i.invoice_amount_usd)).length
