@@ -316,7 +316,7 @@ export default function Ledger() {
         <div>
           <label className="text-xs font-medium text-slate-500">Select Account</label>
           <select value={accountId} onChange={e => setAccountId(e.target.value)}
-            className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            className="mt-1 w-full h-[42px] border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="all">All Accounts</option>
             {accounts.map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
           </select>
@@ -324,12 +324,12 @@ export default function Ledger() {
         <div>
           <label className="text-xs font-medium text-slate-500">From Date</label>
           <input type="date" value={cp.periodProps.customFrom || cp.range.from} onChange={e => cp.periodProps.onCustomChange({ from: e.target.value, to: cp.range.to })}
-            className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            className="mt-1 w-full h-[42px] border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
         </div>
         <div>
           <label className="text-xs font-medium text-slate-500">To Date</label>
           <input type="date" value={cp.periodProps.customTo || cp.range.to} onChange={e => cp.periodProps.onCustomChange({ from: cp.range.from, to: e.target.value })}
-            className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            className="mt-1 w-full h-[42px] border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white" />
         </div>
       </div>
 
