@@ -403,30 +403,68 @@ function HotelExpensesInner() {
       <div className="grid lg:grid-cols-2 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (Cost Per Occupied Room: {totalOccupied > 0 ? cp.fmt(totalExpenses/totalOccupied) : '—'})</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2}>
-                  {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <RechartsTooltip formatter={(value) => cp.fmt(value)} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderCustomLegend} />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="flex flex-col sm:flex-row items-center h-64 gap-3">
+            <div className="w-full sm:w-[180px] shrink-0 h-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2}>
+                    {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <RechartsTooltip formatter={(value) => cp.fmt(value)} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex-1 w-full h-full max-h-60 overflow-y-auto pl-2 pr-1 border-t sm:border-t-0 sm:border-l border-slate-100">
+              {pieData.length === 0 ? (
+                <div className="text-xs text-slate-400 py-8 text-center">No expenses recorded</div>
+              ) : (
+                <ul className="text-[11px] space-y-1.5 w-full">
+                  {pieData.map((entry, index) => (
+                    <li key={`cpor-${index}`} className="flex items-center justify-between text-slate-600 gap-1">
+                      <div className="flex items-center min-w-0 mr-1.5">
+                        <span className="w-10 text-right mr-2 text-slate-500 font-medium shrink-0">{entry.percentStr}</span>
+                        <span className="w-2.5 h-2.5 mr-2 rounded-[2px] shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
+                        <span className="truncate max-w-[150px] font-medium" title={entry.name}>{entry.name}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-700 shrink-0">{cp.fmt(entry.value)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (Cost Per Available Room: {availableRoomNights > 0 ? cp.fmt(totalExpenses/availableRoomNights) : '—'})</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}>
-                  {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <RechartsTooltip formatter={(value) => cp.fmt(value)} />
-                <Legend layout="vertical" verticalAlign="middle" align="right" content={renderCustomLegend} />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="flex flex-col sm:flex-row items-center h-64 gap-3">
+            <div className="w-full sm:w-[180px] shrink-0 h-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}>
+                    {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <RechartsTooltip formatter={(value) => cp.fmt(value)} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex-1 w-full h-full max-h-60 overflow-y-auto pl-2 pr-1 border-t sm:border-t-0 sm:border-l border-slate-100">
+              {pieData.length === 0 ? (
+                <div className="text-xs text-slate-400 py-8 text-center">No expenses recorded</div>
+              ) : (
+                <ul className="text-[11px] space-y-1.5 w-full">
+                  {pieData.map((entry, index) => (
+                    <li key={`cpar-${index}`} className="flex items-center justify-between text-slate-600 gap-1">
+                      <div className="flex items-center min-w-0 mr-1.5">
+                        <span className="w-10 text-right mr-2 text-slate-500 font-medium shrink-0">{entry.percentStr}</span>
+                        <span className="w-2.5 h-2.5 mr-2 rounded-[2px] shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
+                        <span className="truncate max-w-[150px] font-medium" title={entry.name}>{entry.name}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-700 shrink-0">{cp.fmt(entry.value)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       </div>
