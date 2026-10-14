@@ -210,6 +210,7 @@ function loadImageAsDataUrl(url) {
 export async function exportInvoicePDF({ type, invoice, items, company, contact, itemDescription, preview = false }) {
   const doc = new jsPDF()
   const isSales = type === 'sales'
+  const isGuest = type === 'guest'
   const isReceipt = type === 'receipt'
   const pageWidth = doc.internal.pageSize.getWidth()
   const rightX = pageWidth - 14
@@ -223,7 +224,8 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const isProforma = isSales && invoice.invoice_type === 'proforma'
   let docHeading = 'Invoice'
   if (isProforma) docHeading = 'Proforma Invoice'
-  if (!isSales && !isReceipt) docHeading = 'Purchase Invoice'
+  if (isGuest) docHeading = 'Guest Invoice'
+  if (!isSales && !isReceipt && !isGuest) docHeading = 'Purchase Invoice'
   if (isReceipt) docHeading = 'Payment Receipt'
   doc.text(docHeading, 14, 22)
 
@@ -250,7 +252,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.setFontSize(9)
   doc.setTextColor(90)
   doc.setFont(undefined, 'bold')
-  doc.text(isReceipt ? 'PAYMENT RECEIPT' : isSales ? (isProforma ? 'PROFORMA INVOICE' : 'TAX INVOICE') : 'PURCHASE INVOICE', pageWidth / 2, y, { align: 'center' })
+  doc.text(isReceipt ? 'PAYMENT RECEIPT' : isGuest ? 'GUEST INVOICE' : isSales ? (isProforma ? 'PROFORMA INVOICE' : 'TAX INVOICE') : 'PURCHASE INVOICE', pageWidth / 2, y, { align: 'center' })
   y += 5
   doc.setFont(undefined, 'normal')
   doc.setFontSize(8)
@@ -267,7 +269,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.setFontSize(8)
   doc.setTextColor(150)
   doc.text('FROM', col1, y)
-  doc.text('TO', col2, y)
+  doc.text(isGuest ? 'GUEST' : 'TO', col2, y)
   doc.text('DOCUMENT', col3, y)
   y += 5.5
 
@@ -275,8 +277,8 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.setFont(undefined, 'bold')
   doc.setTextColor(20)
   
-  const fromName = (isSales || isReceipt) ? (company?.name || '') : (contact?.name || invoice.supplier_name_freeform || '')
-  const toName = (isSales || isReceipt) ? (contact?.name || invoice.customer_name_freeform || invoice.customer_name || '') : (company?.name || '')
+  const fromName = (isSales || isReceipt || isGuest) ? (company?.name || '') : (contact?.name || invoice.supplier_name_freeform || '')
+  const toName = (isSales || isReceipt || isGuest) ? (contact?.name || invoice.guest_name || invoice.customer_name_freeform || invoice.customer_name || '') : (company?.name || '')
   
   const fromNameWrapped = doc.splitTextToSize(fromName, 60)
   const toNameWrapped = doc.splitTextToSize(toName, 62)
@@ -304,22 +306,28 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     company?.tax_id ? `Tax ID: ${company.tax_id}` : null,
   ].filter(Boolean)
   
+  const guestStayLine = isGuest ? [
+    invoice.room_number ? `Room: ${invoice.room_number}` : null,
+    invoice.checkin_date && invoice.checkout_date ? `Stay: ${invoice.checkin_date} to ${invoice.checkout_date} (${invoice.nights || 1} nights)` : null
+  ].filter(Boolean) : []
+
   const contactLines = [
+    ...guestStayLine,
     (invoice.customer_address || contact?.address || invoice.supplier_address || '').trim(),
     (invoice.customer_email || contact?.email || invoice.supplier_email || '').trim(),
     (invoice.customer_phone || contact?.phone || invoice.supplier_phone || '').trim(),
     invoice.supplier_gstin ? `GSTIN: ${invoice.supplier_gstin}` : null,
   ].filter(Boolean)
   
-  const fromLines = isSales ? companyLines : contactLines
-  const billLines = isSales ? contactLines : companyLines
+  const fromLines = (isSales || isGuest) ? companyLines : contactLines
+  const billLines = (isSales || isGuest) ? contactLines : companyLines
   
   const docLines = [
     `Issue: ${invoice.invoice_date}`,
     `Due: ${invoice.due_date || '—'}`,
     `Terms: ${invoice.billing_terms || invoice.payment_terms || '—'}`,
     `Currency: ${invoice.currency}`,
-    !isSales && invoice.expense_account_name ? `Expense Account: ${invoice.expense_account_name}` : null,
+    !isSales && !isGuest && invoice.expense_account_name ? `Expense Account: ${invoice.expense_account_name}` : null,
   ].filter(Boolean)
   // Render each column independently with its own running Y position, so a wrapped
   // multi-line address in one column never overlaps the next field in that same
@@ -346,18 +354,18 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   // Line items -- two-line description like the original (bold name + gray subtitle)
   const tableColumns = isReceipt 
     ? ['Description', 'Amount']
-    : isSales
-      ? ['Item', 'Qty', 'Price', 'Tax %', 'Total']
+    : (isSales || isGuest)
+      ? ['Item / Description', 'Qty / Nights', 'Price / Rate', 'Tax %', 'Total']
       : ['Product', 'HSN/SAC', 'Qty', 'Unit Price', 'Tax %', 'Total']
   const tableRows = (items || []).map(it => {
     if (isReceipt) {
       return [it.description || 'Payment Received', Number(it.amount || invoice.amount).toFixed(2)]
     }
-    const mainLabel = isSales ? (it.description || '') : (it.product_name || '')
+    const mainLabel = (isSales || isGuest) ? (it.description || '') : (it.product_name || '')
     const subtitle = isSales && itemDescription ? itemDescription : null
     const label = subtitle ? `${mainLabel}\n${subtitle}` : mainLabel
-    return isSales
-      ? [label, it.qty, Number(it.unit_price).toFixed(2), `${it.tax_percent}%`, Number(it.line_total).toFixed(2)]
+    return (isSales || isGuest)
+      ? [label, it.qty ?? 1, Number(it.unit_price ?? it.amount ?? 0).toFixed(2), `${it.tax_percent || 0}%`, Number(it.line_total ?? it.amount ?? 0).toFixed(2)]
       : [label, it.hsn_sac || '—', it.qty, Number(it.unit_price).toFixed(2), `${it.tax_percent}%`, Number(it.line_total).toFixed(2)]
   })
 
@@ -367,7 +375,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     body: tableRows,
     headStyles: { fillColor: [27, 58, 107], fontSize: 9 },
     styles: { fontSize: 9, cellPadding: 3 },
-    columnStyles: isSales ? { 0: { cellWidth: 90 } } : { 0: { cellWidth: 70 } },
+    columnStyles: (isSales || isGuest) ? { 0: { cellWidth: 90 } } : { 0: { cellWidth: 70 } },
     didParseCell: (data) => {
       if (data.column.index === 0 && data.cell.raw && String(data.cell.raw).includes('\n')) {
         data.cell.styles.fontStyle = 'normal'
@@ -376,8 +384,8 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   })
 
   let finalY = doc.lastAutoTable.finalY + 8
-  const grandTotal = Number(isSales ? invoice.amount : (invoice.net_payable ?? invoice.amount))
-  const paid = Number(invoice.paid_amount || 0)
+  const grandTotal = Number((isSales || isGuest) ? (invoice.amount ?? invoice.invoice_amount) : (invoice.net_payable ?? invoice.amount))
+  const paid = Number(invoice.paid_amount ?? invoice.collected_amount ?? 0)
   const summaryRows = [
     ['Subtotal', (invoice.subtotal ?? invoice.amount)?.toFixed(2)],
     ...(isSales && invoice.discount_value ? [
@@ -388,7 +396,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     ] : []),
     ['Tax', Number(invoice.tax_amount ?? 0).toFixed(2)],
     ...(isSales && invoice.bank_charges ? [['Bank Charges', Number(invoice.bank_charges).toFixed(2)]] : []),
-    ...(!isSales && invoice.tds_percent ? [[`TDS (${invoice.tds_percent}%)`, `-${(((invoice.subtotal || 0) + (invoice.tax_amount || 0)) * invoice.tds_percent / 100).toFixed(2)}`]] : []),
+    ...(!isSales && !isGuest && invoice.tds_percent ? [[`TDS (${invoice.tds_percent}%)`, `-${(((invoice.subtotal || 0) + (invoice.tax_amount || 0)) * invoice.tds_percent / 100).toFixed(2)}`]] : []),
   ]
   doc.setFontSize(9)
   summaryRows.forEach(([label, val]) => {
@@ -412,7 +420,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.setFont(undefined, 'bold')
   doc.setFontSize(11)
   doc.setTextColor(20)
-  doc.text(isSales ? 'Grand total' : 'Net Payable', 130, finalY + 3)
+  doc.text((isSales || isGuest) ? 'Grand total' : 'Net Payable', 130, finalY + 3)
   doc.text(`${grandTotal.toFixed(2)} ${invoice.currency}`, rightX, finalY + 3, { align: 'right' })
   
   if (printUsd) {
@@ -425,11 +433,11 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     finalY += 9
   }
 
-  if (isSales) {
+  if (isSales || isGuest) {
     doc.setFont(undefined, 'normal')
     doc.setFontSize(9)
     doc.setTextColor(90)
-    doc.text('Paid', 130, finalY)
+    doc.text(isGuest ? 'Collected' : 'Paid', 130, finalY)
     doc.setTextColor(20)
     doc.text(`${paid.toFixed(2)} ${invoice.currency}`, rightX, finalY, { align: 'right' })
     
@@ -445,7 +453,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     doc.setFont(undefined, 'bold')
     doc.setFontSize(9)
     doc.setTextColor(20)
-    doc.text('Balance due', 130, finalY)
+    doc.text(isGuest ? 'Pending' : 'Balance due', 130, finalY)
     doc.text(`${Math.max(0, grandTotal - paid).toFixed(2)} ${invoice.currency}`, rightX, finalY, { align: 'right' })
     
     if (printUsd) {
@@ -470,7 +478,10 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   }
 
   if (invoice.payment_terms || invoice.notes) {
-    const combined = [invoice.payment_terms, invoice.notes].filter(Boolean).join("\n\n")
+    const combined = [
+      invoice.payment_terms ? `Payment Terms: ${invoice.payment_terms}` : null,
+      invoice.notes ? `Remarks / Notes: ${invoice.notes}` : null
+    ].filter(Boolean).join("\n\n")
     finalY = renderRichText(doc, combined, 14, finalY, pageWidth - 28)
   }
 
@@ -524,19 +535,24 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
 /** Exports a single invoice as a formatted Excel workbook (header info + line items + summary). */
 export function exportInvoiceExcel({ type, invoice, items, company, contact }) {
   const isSales = type === 'sales'
+  const isGuest = type === 'guest'
   const isReceipt = type === 'receipt'
   const rows = []
   const isProformaXl = isSales && invoice.invoice_type === 'proforma'
-  const docHeading = isReceipt ? 'PAYMENT RECEIPT' : (isProformaXl ? 'PROFORMA INVOICE' : 'INVOICE')
+  const docHeading = isReceipt ? 'PAYMENT RECEIPT' : (isProformaXl ? 'PROFORMA INVOICE' : (isGuest ? 'GUEST INVOICE' : 'INVOICE'))
   
   rows.push([docHeading, isReceipt ? invoice.receipt_number : invoice.invoice_number, '', 'Status:', isReceipt ? 'Received' : (invoice.status || 'Draft')])
   rows.push([])
-  rows.push(['From', company?.name || '', '', isReceipt ? 'To' : (isSales ? 'Bill To' : 'Supplier'), contact?.name || invoice.customer_name_freeform || invoice.supplier_name_freeform || invoice.customer_name || ''])
+  rows.push(['From', company?.name || '', '', isReceipt ? 'To' : (isGuest ? 'Guest' : (isSales ? 'Bill To' : 'Supplier')), contact?.name || invoice.guest_name || invoice.customer_name_freeform || invoice.supplier_name_freeform || invoice.customer_name || ''])
+  if (isGuest && (invoice.room_number || invoice.checkin_date)) {
+    if (invoice.room_number) rows.push(['', '', '', 'Room #', invoice.room_number])
+    if (invoice.checkin_date && invoice.checkout_date) rows.push(['', '', '', 'Stay Dates', `${invoice.checkin_date} to ${invoice.checkout_date} (${invoice.nights || 1} nights)`])
+  }
   rows.push(['', company?.address || '', '', '', invoice.customer_address || invoice.supplier_address || ''])
   rows.push(['', company?.email || '', '', '', invoice.customer_email || invoice.supplier_email || ''])
   rows.push([])
   rows.push(['Issue Date', isReceipt ? invoice.receipt_date : invoice.invoice_date, '', isReceipt ? 'Payment Method' : 'Due Date', isReceipt ? invoice.method : (invoice.due_date || '')])
-  rows.push(['Currency', invoice.currency, '', isSales ? 'Terms' : 'GSTIN', isSales ? (invoice.billing_terms || '') : (invoice.supplier_gstin || '')])
+  rows.push(['Currency', invoice.currency, '', (isSales || isGuest) ? 'Terms' : 'GSTIN', (isSales || isGuest) ? (invoice.billing_terms || invoice.payment_terms || '') : (invoice.supplier_gstin || '')])
   rows.push([])
   
   if (isReceipt) {
@@ -545,10 +561,10 @@ export function exportInvoiceExcel({ type, invoice, items, company, contact }) {
     rows.push([])
     rows.push(['', 'Total Amount', invoice.amount])
   } else {
-    rows.push(isSales ? ['Item', 'Qty', 'Price', 'Tax %', 'Total'] : ['Product', 'HSN/SAC', 'Qty', 'Unit Price', 'Tax %', 'Total'])
+    rows.push((isSales || isGuest) ? ['Item / Description', 'Qty', 'Price', 'Tax %', 'Total'] : ['Product', 'HSN/SAC', 'Qty', 'Unit Price', 'Tax %', 'Total'])
     ;(items || []).forEach(it => {
-      rows.push(isSales
-        ? [it.description, it.qty, it.unit_price, `${it.tax_percent}%`, it.line_total]
+      rows.push((isSales || isGuest)
+        ? [it.description, it.qty ?? 1, it.unit_price ?? it.amount ?? 0, `${it.tax_percent || 0}%`, it.line_total ?? it.amount ?? 0]
         : [it.product_name, it.hsn_sac || '', it.qty, it.unit_price, `${it.tax_percent}%`, it.line_total])
     })
     rows.push([])
@@ -556,12 +572,18 @@ export function exportInvoiceExcel({ type, invoice, items, company, contact }) {
     if (isSales && invoice.discount_value) rows.push(['', '', '', 'Discount', -invoice.discount_value])
     rows.push(['', '', '', 'Tax', invoice.tax_amount ?? 0])
     if (isSales && invoice.bank_charges) rows.push(['', '', '', 'Bank Charges', invoice.bank_charges])
-    if (!isSales && invoice.tds_percent) rows.push(['', '', '', `TDS (${invoice.tds_percent}%)`, -(((invoice.subtotal || 0) + (invoice.tax_amount || 0)) * invoice.tds_percent / 100)])
-    rows.push(['', '', '', isSales ? 'Grand Total' : 'Net Payable', isSales ? invoice.amount : (invoice.net_payable ?? invoice.amount)])
-    if (isSales) {
-      rows.push(['', '', '', 'Paid', invoice.paid_amount || 0])
-      rows.push(['', '', '', 'Balance Due', Math.max(0, invoice.amount - (invoice.paid_amount || 0))])
+    if (!isSales && !isGuest && invoice.tds_percent) rows.push(['', '', '', `TDS (${invoice.tds_percent}%)`, -(((invoice.subtotal || 0) + (invoice.tax_amount || 0)) * invoice.tds_percent / 100)])
+    rows.push(['', '', '', (isSales || isGuest) ? 'Grand Total' : 'Net Payable', (isSales || isGuest) ? invoice.amount : (invoice.net_payable ?? invoice.amount)])
+    if (isSales || isGuest) {
+      rows.push(['', '', '', isGuest ? 'Collected' : 'Paid', invoice.paid_amount ?? invoice.collected_amount ?? 0])
+      rows.push(['', '', '', isGuest ? 'Pending' : 'Balance Due', Math.max(0, (Number(invoice.amount) || 0) - (Number(invoice.paid_amount ?? invoice.collected_amount) || 0))])
     }
+  }
+
+  if (invoice.payment_terms || invoice.notes) {
+    rows.push([])
+    if (invoice.payment_terms) rows.push(['Payment Terms', invoice.payment_terms])
+    if (invoice.notes) rows.push(['Remarks / Notes', invoice.notes])
   }
 
   const lutInfoXl = resolveLutInfo(invoice, company)
@@ -589,6 +611,7 @@ export function exportInvoiceExcel({ type, invoice, items, company, contact }) {
 /** Exports a single invoice as a Word-compatible (.doc) file matching the same layout. */
 export function exportInvoiceWord({ type, invoice, items, company, contact }) {
   const isSales = type === 'sales'
+  const isGuest = type === 'guest'
   const isReceipt = type === 'receipt'
   const isProformaDoc = isSales && invoice.invoice_type === 'proforma'
   const esc = (s) => escapeHtml(String(s ?? ''))
@@ -597,24 +620,24 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
     if (isReceipt) {
       return `<tr><td style="padding:6px;border:1px solid #ddd;">${esc(it.description || 'Payment Received')}</td><td style="padding:6px;border:1px solid #ddd;text-align:right;">${esc(Number(it.amount || invoice.amount).toFixed(2))}</td></tr>`
     }
-    return isSales
-      ? `<tr><td style="padding:6px;border:1px solid #ddd;">${esc(it.description)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.qty)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.unit_price).toFixed(2))}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.tax_percent)}%</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.line_total).toFixed(2))}</td></tr>`
+    return (isSales || isGuest)
+      ? `<tr><td style="padding:6px;border:1px solid #ddd;">${esc(it.description)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.qty ?? 1)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.unit_price ?? it.amount ?? 0).toFixed(2))}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.tax_percent ?? 0)}%</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.line_total ?? it.amount ?? 0).toFixed(2))}</td></tr>`
       : `<tr><td style="padding:6px;border:1px solid #ddd;">${esc(it.product_name)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.hsn_sac || '')}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.qty)}</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.unit_price).toFixed(2))}</td><td style="padding:6px;border:1px solid #ddd;">${esc(it.tax_percent)}%</td><td style="padding:6px;border:1px solid #ddd;">${esc(Number(it.line_total).toFixed(2))}</td></tr>`
   }).join('')
   
   const headerCells = isReceipt 
     ? ['Description', 'Amount'].map(c => `<th style="background:#1B3A6B;color:#fff;padding:6px;text-align:${c === 'Amount' ? 'right' : 'left'};">${esc(c)}</th>`).join('')
-    : (isSales ? ['Item', 'Qty', 'Price', 'Tax %', 'Total'] : ['Product', 'HSN/SAC', 'Qty', 'Unit Price', 'Tax %', 'Total'])
+    : ((isSales || isGuest) ? ['Item / Description', 'Qty', 'Price', 'Tax %', 'Total'] : ['Product', 'HSN/SAC', 'Qty', 'Unit Price', 'Tax %', 'Total'])
         .map(c => `<th style="background:#1B3A6B;color:#fff;padding:6px;text-align:left;">${esc(c)}</th>`).join('')
 
-  const grandTotal = Number(isSales ? invoice.amount : (invoice.net_payable ?? invoice.amount))
+  const grandTotal = Number((isSales || isGuest) ? (invoice.amount ?? invoice.invoice_amount) : (invoice.net_payable ?? invoice.amount))
   const bankHtml = isSales && company?.bank_account_number ? `
     <p style="color:#999;font-size:11px;margin-top:20px;">BANK DETAILS</p>
     <p>Bank: ${esc(company.bank_name)}<br/>Account Holder: ${esc(company.bank_account_holder)}<br/>Account Number: ${esc(company.bank_account_number)}<br/>Branch: ${esc(company.bank_branch)}<br/>SWIFT: ${esc(company.bank_swift_code)}</p>
   ` : ''
 
-  const docHeading = isReceipt ? 'Payment Receipt' : (isProformaDoc ? 'Proforma Invoice' : 'Invoice')
-  const toName = isReceipt ? (contact?.name || invoice.customer_name_freeform || invoice.customer_name) : (isSales ? (contact?.name || invoice.customer_name_freeform) : (invoice.supplier_name_freeform))
+  const docHeading = isReceipt ? 'Payment Receipt' : (isProformaDoc ? 'Proforma Invoice' : (isGuest ? 'Guest Invoice' : 'Invoice'))
+  const toName = isReceipt ? (contact?.name || invoice.customer_name_freeform || invoice.customer_name) : (isGuest ? (contact?.name || invoice.guest_name) : (isSales ? (contact?.name || invoice.customer_name_freeform) : (invoice.supplier_name_freeform)))
   
   const html = `
     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -628,8 +651,8 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
           <p><strong>${esc(company?.name)}</strong><br/>${esc(company?.legal_name)}<br/>${esc(company?.address)}<br/>${esc(company?.email)}<br/>${company?.tax_id ? 'Tax ID: ' + esc(company.tax_id) : ''}</p>
         </td>
         <td style="vertical-align:top;width:33%;">
-          <p style="color:#999;font-size:11px;">${isReceipt ? 'TO' : (isSales ? 'BILL TO' : 'SUPPLIER')}</p>
-          <p><strong>${esc(toName)}</strong><br/>${esc(invoice.customer_address || invoice.supplier_address)}<br/>${esc(invoice.customer_email || invoice.supplier_email)}</p>
+          <p style="color:#999;font-size:11px;">${isReceipt ? 'TO' : (isGuest ? 'GUEST' : (isSales ? 'BILL TO' : 'SUPPLIER'))}</p>
+          <p><strong>${esc(toName)}</strong><br/>${isGuest && invoice.room_number ? 'Room: ' + esc(invoice.room_number) + '<br/>' : ''}${isGuest && invoice.checkin_date && invoice.checkout_date ? 'Stay: ' + esc(invoice.checkin_date) + ' to ' + esc(invoice.checkout_date) + ' (' + esc(invoice.nights || 1) + ' nights)<br/>' : ''}${esc(invoice.customer_address || invoice.supplier_address)}<br/>${esc(invoice.customer_email || invoice.supplier_email)}</p>
         </td>
         <td style="vertical-align:top;width:33%;">
           <p style="color:#999;font-size:11px;">DOCUMENT</p>
@@ -643,17 +666,18 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
           ${isSales && invoice.discount_value ? `<p>Discount: -${esc(Number(invoice.discount_value).toFixed(2))} ${esc(invoice.currency)}</p>` : ''}
           <p>Tax: ${esc(Number(invoice.tax_amount ?? 0).toFixed(2))} ${esc(invoice.currency)}</p>
         `}
-        <p><strong>${isReceipt ? 'Total Amount' : (isSales ? 'Grand Total' : 'Net Payable')}: ${esc(Number(invoice.amount).toFixed(2))} ${esc(invoice.currency)}</strong></p>
-        ${(isSales && !isReceipt) ? `<p>Paid: ${esc(Number(invoice.paid_amount || 0).toFixed(2))} ${esc(invoice.currency)}</p><p><strong>Balance Due: ${esc(Math.max(0, grandTotal - (invoice.paid_amount || 0)).toFixed(2))} ${esc(invoice.currency)}</strong></p>` : ''}
+        <p><strong>${isReceipt ? 'Total Amount' : ((isSales || isGuest) ? 'Grand Total' : 'Net Payable')}: ${esc(Number(invoice.amount).toFixed(2))} ${esc(invoice.currency)}</strong></p>
+        ${((isSales || isGuest) && !isReceipt) ? `<p>${isGuest ? 'Collected' : 'Paid'}: ${esc(Number(invoice.paid_amount ?? invoice.collected_amount ?? 0).toFixed(2))} ${esc(invoice.currency)}</p><p><strong>${isGuest ? 'Pending' : 'Balance Due'}: ${esc(Math.max(0, grandTotal - (invoice.paid_amount ?? invoice.collected_amount ?? 0)).toFixed(2))} ${esc(invoice.currency)}</strong></p>` : ''}
       </td></tr></table>
       ${(() => { const l = resolveLutInfo(invoice, company); return isSales && l.number ? `<p style="font-size:11px;color:#666;">The LUT acknowledgement number is ${esc(l.number)}${l.date ? ' dated ' + esc(l.date) : ''}</p>` : '' })()}
-      <p style="font-size:11px;color:#666;">${esc(invoice.payment_terms || '')} ${esc(invoice.notes || '')}</p>
+      ${invoice.payment_terms ? `<p style="font-size:11px;color:#666;"><strong>Payment Terms:</strong> ${esc(invoice.payment_terms)}</p>` : ''}
+      ${invoice.notes ? `<p style="font-size:11px;color:#444;margin-top:6px;"><strong>Remarks / Notes:</strong><br/>${esc(invoice.notes).replace(/\n/g, '<br/>')}</p>` : ''}
       ${bankHtml}
       <p style="text-align:center;color:#999;margin-top:24px;">${esc(company?.legal_name || company?.name)}</p>
     </body>
     </html>
   `
-  const blob = new Blob(['﻿', html], { type: 'application/msword' })
+  const blob = new Blob(['\ufeff', html], { type: 'application/msword' })
   const fileName = String(isReceipt ? invoice.receipt_number : invoice.invoice_number) || 'document'
   downloadBlob(blob, `${fileName}.doc`)
 }
@@ -737,8 +761,9 @@ function renderGroupedBarChartDataUrl({ categories, series, width = 800, height 
  * ({ heading, keyValuePairs: [[label, value], ...] }), or a chart
  * ({ heading, chart: { categories, series } }).
  */
-export async function exportMultiSectionPDF({ title, subtitle, sections, filename, logoUrl, preview = false }) {
-  const doc = new jsPDF()
+export async function exportMultiSectionPDF({ title, subtitle, sections, filename, logoUrl, preview = false, orientation }) {
+  const isWide = orientation === 'landscape' || (sections || []).some(s => s.columns && s.columns.length >= 8)
+  const doc = new jsPDF({ orientation: isWide ? 'landscape' : 'portrait' })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
 
@@ -788,18 +813,25 @@ export async function exportMultiSectionPDF({ title, subtitle, sections, filenam
         columnStyles = { 0: { cellWidth: 142 }, 1: { cellWidth: 40, halign: 'right' } }
       }
       
+      const isNumericCol = (header) => /amount|total|collected|pending|price|rate|balance|qty|rev/i.test(String(header))
       const safeHead = section.columns.map((c, i) => {
         const text = sanitizeText(c)
-        return (i > 0) ? { content: text, styles: { halign: 'right' } } : text
+        const alignRight = section.columns.length <= 3 ? (i > 0) : isNumericCol(c)
+        return alignRight ? { content: text, styles: { halign: 'right' } } : { content: text, styles: { halign: 'left' } }
       })
-      const safeBody = section.rows.map(row => row.map(sanitizeText))
+      const safeBody = section.rows.map(row => row.map((cell, i) => {
+        const text = sanitizeText(cell)
+        const alignRight = section.columns.length <= 3 ? (i > 0) : isNumericCol(section.columns[i])
+        return alignRight ? { content: text, styles: { halign: 'right' } } : { content: text, styles: { halign: 'left' } }
+      }))
 
+      const tableFontSize = section.columns.length >= 8 ? 7 : 8
       autoTable(doc, {
         startY: y + 3,
         head: [safeHead],
         body: safeBody,
-        headStyles: { fillColor: section.headColor || [27, 58, 107], fontSize: 8 },
-        styles: { fontSize: 8, cellPadding: 2.5 },
+        headStyles: { fillColor: section.headColor || [27, 58, 107], fontSize: tableFontSize },
+        styles: { fontSize: tableFontSize, cellPadding: section.columns.length >= 8 ? 2 : 2.5 },
         columnStyles: columnStyles,
         margin: { left: 14, right: 14 },
       })
@@ -859,6 +891,7 @@ export function exportMultiSectionExcel({ title, sections, filename }) {
 /** Multi-section Word export. */
 export function exportMultiSectionWord({ title, subtitle, sections, filename, logoUrl }) {
   const esc = escapeHtml
+  const isNumericCol = (header) => /amount|total|collected|pending|price|rate|balance|qty|rev/i.test(String(header))
   const sectionsHtml = sections.map(section => {
     let inner = ''
     if (section.keyValuePairs) {
@@ -870,14 +903,14 @@ export function exportMultiSectionWord({ title, subtitle, sections, filename, lo
       const bgColor = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
       
       const head = section.columns.map((c, i) => {
-        const align = (i > 0) ? 'right' : 'left'
+        const align = section.columns.length <= 3 ? (i > 0 ? 'right' : 'left') : (isNumericCol(c) ? 'right' : 'left')
         const width = (section.columns.length === 3 && i > 0) ? 'width:15%;' : ((section.columns.length === 2 && i > 0) ? 'width:20%;' : 'width:auto;')
         return `<th style="background:${bgColor};color:#fff;padding:5px 8px;text-align:${align};${width}">${esc(c)}</th>`
       }).join('')
       
       const body = section.rows.map(r =>
         `<tr>${r.map((cell, i) => {
-          const align = (i > 0) ? 'right' : 'left'
+          const align = section.columns.length <= 3 ? (i > 0 ? 'right' : 'left') : (isNumericCol(section.columns[i]) ? 'right' : 'left')
           return `<td style="padding:5px 8px;border:1px solid #ddd;text-align:${align};">${esc(cell)}</td>`
         }).join('')}</tr>`
       ).join('')

@@ -12,9 +12,11 @@ import KpiCard from '../components/KpiCard'
 import DataTable from '../components/DataTable'
 import Modal, { Field } from '../components/Modal'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
+import InvoiceDownloadMenu from '../components/InvoiceDownloadMenu'
+import InvoicePreviewModal from '../components/InvoicePreviewModal'
 
 export default function HotelGuestInvoices() {
-  const { activeCompany, activeProduct, can } = useAuth()
+  const { activeCompany, activeProduct, activeRole, can } = useAuth()
   const cp = useCurrencyAndPeriod('YTD')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
@@ -127,8 +129,8 @@ export default function HotelGuestInvoices() {
 
   async function generateInvoicesReport(selections, format) {
     const sections = [{
-      heading: 'Guest Invoices (YTD)',
-      columns: ['Date', 'Room', 'Guest', 'Check-in', 'Check-out', 'Invoice Amount', 'Collected', 'Pending'],
+      heading: 'Guest Invoices',
+      columns: ['Date', 'Room #', 'Guest Name', 'Check-in', 'Check-out', 'Invoice Amount', 'Collected', 'Pending', 'Remarks / Notes'],
       rows: cpRows.map(r => [
         r.invoice_date,
         r.room_number || '—',
@@ -137,14 +139,16 @@ export default function HotelGuestInvoices() {
         r.checkout_date || '—',
         fmt(r.invoice_amount_usd),
         fmt(r.collected_amount_usd),
-        fmt(r.invoice_amount_usd - r.collected_amount_usd)
+        fmt(Math.max(0, (Number(r.invoice_amount_usd) || 0) - (Number(r.collected_amount_usd) || 0))),
+        r.notes || '—'
       ]),
     }]
     const title = 'Guest Invoices'
     const subtitle = `${activeCompany.name} • ${cp.range.from} to ${cp.range.to}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'guest_invoices' })
+    const logoUrl = activeCompany.logo_url
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'guest_invoices', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'guest_invoices' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'guest_invoices' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'guest_invoices', logoUrl })
   }
 
   if (!activeCompany) return null
@@ -215,14 +219,88 @@ export default function HotelGuestInvoices() {
           },
           { key: 'collected_amount_usd', label: 'Collected', render: r => fmt(r.collected_amount_usd) },
           { key: 'pending', label: 'Pending', render: r => fmt(Math.max(0, (Number(r.invoice_amount_usd) || 0) - (Number(r.collected_amount_usd) || 0))) },
-          ...(can(['owner', 'admin', 'accountant']) ? [{
-            key: 'actions', label: '', render: r => (
-              <div className="flex gap-2 justify-end md:justify-start">
-                <button onClick={() => { setEditingRow(r); setModalOpen(true) }} className="text-slate-400 hover:text-navy-600"><Pencil size={15} /></button>
-                <button onClick={() => handleDelete(r)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+          {
+            key: 'notes',
+            label: 'Remarks / Notes',
+            render: r => r.notes ? (
+              <span className="text-xs text-slate-700 max-w-[200px] line-clamp-2 block font-normal" title={r.notes}>
+                {r.notes}
+              </span>
+            ) : <span className="text-slate-300">—</span>
+          },
+          {
+            key: 'actions',
+            label: '',
+            render: r => (
+              <div className="flex gap-2 items-center justify-end md:justify-start">
+                <InvoiceDownloadMenu
+                  type="guest"
+                  company={activeCompany}
+                  role={activeRole}
+                  getData={async () => {
+                    const accMap = {}
+                    const { data: accounts } = await supabase.from('accounts').select('id, code, name').eq('company_id', activeCompany.id)
+                    ;(accounts || []).forEach(a => { accMap[a.id] = `${a.code} - ${a.name}` })
+
+                    const roomItems = (Number(r.room_revenue) > 0 || Number(r.room_rate) > 0) ? [{
+                      description: `Room Stay (Room ${r.room_number || '—'})`,
+                      qty: Number(r.nights) || 1,
+                      unit_price: Number(r.room_rate) || 0,
+                      line_total: Number(r.room_revenue) || ((Number(r.room_rate) || 0) * (Number(r.nights) || 1)),
+                      tax_percent: 0
+                    }] : []
+
+                    const ancillaryItems = (r.line_items || []).map(li => ({
+                      description: accMap[li.account_id] || li.description || 'Ancillary Service',
+                      qty: 1,
+                      unit_price: Number(li.amount) || 0,
+                      line_total: Number(li.amount) || 0,
+                      tax_percent: 0,
+                      currency: li.currency || r.currency
+                    }))
+
+                    const allItems = [...roomItems, ...ancillaryItems]
+                    if (allItems.length === 0) {
+                      allItems.push({
+                        description: `Guest Stay Invoice - Room ${r.room_number || '—'}`,
+                        qty: 1,
+                        unit_price: Number(r.invoice_amount) || 0,
+                        line_total: Number(r.invoice_amount) || 0,
+                        tax_percent: 0
+                      })
+                    }
+
+                    const invObj = {
+                      ...r,
+                      amount: Number(r.invoice_amount),
+                      amount_usd: Number(r.invoice_amount_usd),
+                      paid_amount: Number(r.collected_amount),
+                      collected_amount: Number(r.collected_amount),
+                      status: (Number(r.invoice_amount) - Number(r.collected_amount || 0) <= 0.001) ? 'Paid' : 'Unpaid',
+                      notes: r.notes || '',
+                      due_date: r.checkout_date || r.invoice_date,
+                    }
+
+                    return {
+                      invoice: invObj,
+                      items: allItems,
+                      contact: { name: r.guest_name }
+                    }
+                  }}
+                />
+                {can(['owner', 'admin', 'accountant']) && (
+                  <>
+                    <button onClick={() => { setEditingRow(r); setModalOpen(true) }} className="text-slate-400 hover:text-navy-600" title="Edit Invoice">
+                      <Pencil size={15} />
+                    </button>
+                    <button onClick={() => handleDelete(r)} className="text-slate-400 hover:text-red-600" title="Delete Invoice">
+                      <Trash2 size={15} />
+                    </button>
+                  </>
+                )}
               </div>
             )
-          }] : []),
+          },
         ]}
         rows={cpRows}
         emptyMessage="No guest invoices yet this year."
@@ -232,6 +310,7 @@ export default function HotelGuestInvoices() {
         <GuestInvoiceFormModal
           companyId={activeCompany.id}
           product={activeProduct}
+          company={activeCompany}
           row={editingRow}
           onClose={() => setModalOpen(false)}
           onSaved={loadAll}
@@ -249,7 +328,8 @@ export default function HotelGuestInvoices() {
   )
 }
 
-function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
+function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSaved }) {
+  const { activeRole } = useAuth()
   const [invoiceDate, setInvoiceDate] = useState(row?.invoice_date || getLocalDate())
   const [invoiceNumber, setInvoiceNumber] = useState(row?.invoice_number || '')
   const [roomNumber, setRoomNumber] = useState(row?.room_number || '')
@@ -259,6 +339,8 @@ function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
   const [currency, setCurrency] = useState(row?.currency || 'USD')
   const [roomRate, setRoomRate] = useState(row?.room_rate ?? '')
   const [nights, setNights] = useState(row?.nights ?? '')
+  const [notes, setNotes] = useState(row?.notes || '')
+  const [previewData, setPreviewData] = useState(null)
   
   // Ancillary items now have their own currency
   const [lineItems, setLineItems] = useState(
@@ -472,6 +554,7 @@ function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
         collected_amount: finalCollectedAmount,
         invoice_amount_usd: finalInvoiceAmountUsd,
         collected_amount_usd: finalCollectedAmountUsd,
+        notes: notes.trim() || null,
       }
 
       if (row) {
@@ -489,6 +572,88 @@ function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  function handlePreview() {
+    if (!guestName.trim()) {
+      setError('Guest name is required to preview the invoice.')
+      return
+    }
+    if (finalInvoiceAmount <= 0) {
+      setError('Invoice amount must be greater than zero to preview.')
+      return
+    }
+    setError('')
+
+    const roomItems = (Number(roomRevenue) > 0 || Number(roomRate) > 0) ? [{
+      description: `Room Stay (Room ${roomNumber || '—'})`,
+      qty: Number(nights) || 1,
+      unit_price: Number(roomRate) || 0,
+      line_total: Number(roomRevenue) || 0,
+      tax_percent: 0
+    }] : []
+
+    const ancillaryItems = lineItems.map(li => {
+      const acc = revenueAccounts.find(a => a.id === li.account_id)
+      return {
+        description: acc ? `${acc.code} - ${acc.name}` : (li.description || 'Ancillary Service'),
+        qty: 1,
+        unit_price: Number(li.amount) || 0,
+        line_total: Number(li.amount) || 0,
+        tax_percent: 0,
+        currency: li.currency || currency
+      }
+    })
+
+    const allItems = [...roomItems, ...ancillaryItems]
+    if (allItems.length === 0) {
+      allItems.push({
+        description: `Guest Stay Invoice - Room ${roomNumber || '—'}`,
+        qty: 1,
+        unit_price: Number(finalInvoiceAmount) || 0,
+        line_total: Number(finalInvoiceAmount) || 0,
+        tax_percent: 0
+      })
+    }
+
+    const previewInvoice = {
+      invoice_number: invoiceNumber || 'INV-DRAFT',
+      invoice_date: invoiceDate,
+      due_date: checkoutDate || invoiceDate,
+      room_number: roomNumber,
+      guest_name: guestName.trim(),
+      checkin_date: checkinDate,
+      checkout_date: checkoutDate,
+      nights: Number(nights) || 1,
+      currency,
+      amount: finalInvoiceAmount,
+      amount_usd: finalInvoiceAmountUsd,
+      paid_amount: finalCollectedAmount,
+      collected_amount: finalCollectedAmount,
+      notes: notes.trim() || '',
+      status: (finalInvoiceAmount - finalCollectedAmount <= 0.001) ? 'Paid' : 'Unpaid'
+    }
+
+    setPreviewData({
+      invoice: previewInvoice,
+      items: allItems,
+      contactDisplay: guestName.trim()
+    })
+  }
+
+  if (previewData) {
+    return (
+      <InvoicePreviewModal
+        type="guest"
+        invoice={previewData.invoice}
+        items={previewData.items}
+        company={company}
+        contactDisplay={previewData.contactDisplay}
+        role={activeRole}
+        onBack={() => setPreviewData(null)}
+        onClose={onClose}
+      />
+    )
   }
 
   return (
@@ -667,6 +832,17 @@ function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
           )}
         </div>
 
+        {/* Remarks / Notes */}
+        <Field label="Remarks / Notes">
+          <textarea
+            rows={2}
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Add any remarks, special requests, or notes..."
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-navy-500"
+          />
+        </Field>
+
         {/* Final Invoice Summary */}
         <div className="grid grid-cols-2 gap-3 border-t border-slate-200 pt-3">
           <div className="flex flex-col">
@@ -696,8 +872,9 @@ function GuestInvoiceFormModal({ companyId, product, row, onClose, onSaved }) {
 
         {error && <p className="text-xs text-red-600">{error}</p>}
 
-        <div className="flex gap-2 pt-2">
-          <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600">Cancel</button>
+        <div className="flex flex-col sm:flex-row gap-2 pt-2">
+          <button type="button" onClick={onClose} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button type="button" onClick={handlePreview} className="flex-1 border border-navy-300 text-navy-700 hover:bg-navy-50 rounded-lg py-2 text-sm font-medium">Preview</button>
           <button type="submit" disabled={saving} className="flex-1 bg-navy-600 hover:bg-navy-700 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60">
             {saving ? 'Saving…' : row ? 'Save Changes' : 'Add Invoice'}
           </button>

@@ -3,10 +3,11 @@ import InvoiceDownloadMenu from './InvoiceDownloadMenu'
 
 export default function InvoicePreviewModal({ type, invoice, items, company, contactDisplay, role, onBack, onClose }) {
   const isSales = type === 'sales'
+  const isGuest = type === 'guest'
   const isProforma = isSales && invoice.invoice_type === 'proforma'
-  const lineTotals = items.map(it => Number(it.line_total || 0))
-  const subtotal = items.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unit_price || 0), 0)
-  const taxAmount = lineTotals.reduce((s, t, i) => s + (t - Number(items[i].qty || 0) * Number(items[i].unit_price || 0)), 0)
+  const lineTotals = items.map(it => Number(it.line_total ?? (Number(it.qty || 1) * Number(it.unit_price ?? it.amount ?? 0))))
+  const subtotal = items.reduce((s, it) => s + (Number(it.qty || 1) * Number(it.unit_price ?? it.amount ?? 0)), 0)
+  const taxAmount = lineTotals.reduce((s, t, i) => s + (t - (Number(items[i].qty || 1) * Number(items[i].unit_price ?? items[i].amount ?? 0))), 0)
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-black/50">
@@ -30,7 +31,9 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
         <div className="p-6 sm:p-10">
           <div className="flex items-start justify-between mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-slate-800">{isProforma ? 'Proforma Invoice' : 'Invoice'}</h1>
+              <h1 className="text-3xl font-bold text-slate-800">
+                {isProforma ? 'Proforma Invoice' : isGuest ? 'Guest Invoice' : isSales ? 'Invoice' : 'Purchase Invoice'}
+              </h1>
               <span className={`inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded ${invoice.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                 {invoice.status || 'Draft'}
               </span>
@@ -40,7 +43,7 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
 
           <div className="grid sm:grid-cols-3 gap-6 mb-8 text-sm">
             <div>
-              <div className="text-[11px] font-semibold text-slate-400 uppercase mb-1">{isSales ? 'From' : 'Our Company'}</div>
+              <div className="text-[11px] font-semibold text-slate-400 uppercase mb-1">{isSales || isGuest ? 'From' : 'Our Company'}</div>
               <div className="font-semibold text-slate-800">{company?.name}</div>
               <div className="text-slate-500">{company?.legal_name}</div>
               <div className="text-slate-500">{[company?.address, company?.city, company?.country].filter(Boolean).join(', ')}</div>
@@ -48,8 +51,12 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
               {company?.tax_id && <div className="text-slate-500">Tax ID: {company.tax_id}</div>}
             </div>
             <div>
-              <div className="text-[11px] font-semibold text-slate-400 uppercase mb-1">{isSales ? 'Bill To' : 'Supplier'}</div>
-              <div className="font-semibold text-slate-800">{contactDisplay || '—'}</div>
+              <div className="text-[11px] font-semibold text-slate-400 uppercase mb-1">{isGuest ? 'Guest' : isSales ? 'Bill To' : 'Supplier'}</div>
+              <div className="font-semibold text-slate-800">{contactDisplay || invoice.guest_name || '—'}</div>
+              {invoice.room_number && <div className="text-slate-500 font-medium">Room: {invoice.room_number}</div>}
+              {invoice.checkin_date && invoice.checkout_date && (
+                <div className="text-slate-500">Stay: {invoice.checkin_date} to {invoice.checkout_date} ({invoice.nights || 1} nights)</div>
+              )}
               <div className="text-slate-500">{invoice.customer_address || invoice.supplier_address}</div>
               <div className="text-slate-500">{invoice.customer_email || invoice.supplier_email}</div>
               <div className="text-slate-500">{invoice.customer_phone || invoice.supplier_phone}</div>
@@ -57,7 +64,7 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
             </div>
             <div>
               <div className="text-[11px] font-semibold text-slate-400 uppercase mb-1">Document</div>
-              <div className="font-semibold text-slate-800">{invoice.invoice_number}</div>
+              <div className="font-semibold text-slate-800">{invoice.invoice_number || '—'}</div>
               <div className="text-slate-500">Issue: {invoice.invoice_date}</div>
               <div className="text-slate-500">Due: {invoice.due_date || '—'}</div>
               <div className="text-slate-500">Currency: {invoice.currency}</div>
@@ -78,8 +85,8 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
           <table className="w-full text-sm mb-6">
             <thead>
               <tr className="bg-navy-800 text-white text-left">
-                <th className="px-3 py-2 rounded-l-lg">{isSales ? 'Item' : 'Product'}</th>
-                {!isSales && <th className="px-3 py-2">HSN/SAC</th>}
+                <th className="px-3 py-2 rounded-l-lg">{isSales || isGuest ? 'Item / Description' : 'Product'}</th>
+                {!isSales && !isGuest && <th className="px-3 py-2">HSN/SAC</th>}
                 <th className="px-3 py-2">Qty</th>
                 <th className="px-3 py-2">Price</th>
                 <th className="px-3 py-2">Tax %</th>
@@ -90,11 +97,11 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
               {items.map((it, i) => (
                 <tr key={i} className="border-b border-slate-100">
                   <td className="px-3 py-2">{it.description || it.product_name}</td>
-                  {!isSales && <td className="px-3 py-2">{it.hsn_sac || '—'}</td>}
-                  <td className="px-3 py-2">{it.qty}</td>
-                  <td className="px-3 py-2">{Number(it.unit_price).toFixed(2)}</td>
-                  <td className="px-3 py-2">{it.tax_percent}%</td>
-                  <td className="px-3 py-2 text-right">{Number(it.line_total).toFixed(2)}</td>
+                  {!isSales && !isGuest && <td className="px-3 py-2">{it.hsn_sac || '—'}</td>}
+                  <td className="px-3 py-2">{it.qty ?? 1}</td>
+                  <td className="px-3 py-2">{Number(it.unit_price ?? it.amount ?? 0).toFixed(2)}</td>
+                  <td className="px-3 py-2">{it.tax_percent || 0}%</td>
+                  <td className="px-3 py-2 text-right">{Number(it.line_total ?? it.amount ?? 0).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -108,7 +115,7 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
               {isSales && invoice.bank_charges > 0 && <div className="flex justify-between"><span className="text-slate-500">Bank Charges</span><span>{Number(invoice.bank_charges).toFixed(2)}</span></div>}
               {!isSales && invoice.tds_percent > 0 && <div className="flex justify-between text-red-600"><span>TDS ({invoice.tds_percent}%)</span><span>-{((subtotal + taxAmount) * invoice.tds_percent / 100).toFixed(2)}</span></div>}
               <div className="flex justify-between font-bold text-base border-t border-slate-200 pt-2">
-                <span>{isSales ? 'Grand Total' : 'Net Payable'}</span>
+                <span>{isSales || isGuest ? 'Grand Total' : 'Net Payable'}</span>
                 <span className="text-right">
                   {Number(invoice.amount).toFixed(2)} {invoice.currency}
                   {invoice.currency && invoice.currency !== 'USD' && (
@@ -118,13 +125,30 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
                   )}
                 </span>
               </div>
+              {(invoice.paid_amount !== undefined || invoice.collected_amount !== undefined) && (
+                <div className="flex justify-between text-emerald-700 pt-1">
+                  <span className="font-medium">Collected</span>
+                  <span className="font-semibold">{Number(invoice.paid_amount ?? invoice.collected_amount ?? 0).toFixed(2)} {invoice.currency}</span>
+                </div>
+              )}
+              {((Number(invoice.amount) || 0) - Number(invoice.paid_amount ?? invoice.collected_amount ?? 0) > 0.001) && (
+                <div className="flex justify-between text-amber-700 pt-1 font-semibold border-t border-slate-100">
+                  <span>Pending Balance</span>
+                  <span>{Number((Number(invoice.amount) || 0) - Number(invoice.paid_amount ?? invoice.collected_amount ?? 0)).toFixed(2)} {invoice.currency}</span>
+                </div>
+              )}
             </div>
           </div>
 
           {(invoice.payment_terms || invoice.notes) && (
-            <div className="text-xs text-slate-500 mb-4 space-y-1">
-              {invoice.payment_terms && <p>{invoice.payment_terms}</p>}
-              {invoice.notes && <p>{invoice.notes}</p>}
+            <div className="text-xs text-slate-600 mb-4 space-y-1.5 bg-slate-50 p-3 rounded-lg border border-slate-200">
+              {invoice.payment_terms && <p><strong className="text-slate-700">Payment Terms:</strong> {invoice.payment_terms}</p>}
+              {invoice.notes && (
+                <div>
+                  <strong className="text-slate-700 block mb-0.5">Remarks / Notes:</strong>
+                  <p className="whitespace-pre-line text-slate-700">{invoice.notes}</p>
+                </div>
+              )}
             </div>
           )}
 
