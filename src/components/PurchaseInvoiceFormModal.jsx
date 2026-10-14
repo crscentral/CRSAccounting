@@ -26,7 +26,7 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
   const [fxRate, setFxRate] = useState(invoice?.fx_rate_locked || '')
   const [accountId, setAccountId] = useState(invoice?.account_id || '')
   const [items, setItems] = useState([emptyItem()])
-  const [tdsPercent, setTdsPercent] = useState(invoice?.tds_percent || 0)
+  const [tdsPercent, setTdsPercent] = useState(invoice?.tds_percent ?? '')
   const [paymentTerms, setPaymentTerms] = useState(invoice?.payment_terms || 'Net 30')
   const [status, setStatus] = useState(invoice?.status || 'Draft')
   const [notes, setNotes] = useState(invoice?.notes || '')
@@ -126,7 +126,7 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
         currency, fx_rate_locked: currency === 'USD' ? 1 : finalFxRate,
         amount: netPayable, amount_usd: Math.round(amountUsd * 100) / 100,
         account_id: accountId || null, status,
-        subtotal, tax_amount: taxAmount, tds_percent: tdsPercent, net_payable: netPayable,
+        subtotal, tax_amount: taxAmount, tds_percent: Number(tdsPercent || 0), net_payable: netPayable,
         payment_terms: paymentTerms, notes, attachment_url: attachmentUrl || null,
       }
 
@@ -167,7 +167,7 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
     setPreviewData({
       invoice: {
         invoice_number: invoiceNumber, invoice_date: invoiceDate, due_date: dueDate, currency, status,
-        subtotal, tax_amount: taxAmount, tds_percent: tdsPercent, amount: netPayable, net_payable: netPayable,
+        subtotal, tax_amount: taxAmount, tds_percent: Number(tdsPercent || 0), amount: netPayable, net_payable: netPayable,
         notes, payment_terms: paymentTerms, supplier_gstin: supplierGstin, supplier_email: supplierEmail,
         supplier_phone: supplierPhone, supplier_address: supplierAddress,
       },
@@ -289,7 +289,31 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-slate-500">TDS %</span>
-              <input type="number" value={tdsPercent} onChange={e => setTdsPercent(Number(e.target.value))} className="w-20 border border-slate-200 rounded-md px-2 py-1 text-sm" />
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    max="100"
+                    value={tdsPercent ?? ''}
+                    onChange={e => setTdsPercent(e.target.value)}
+                    placeholder="0"
+                    className="w-14 sm:w-16 border border-slate-300 rounded-md px-2 py-1 text-sm text-right bg-white focus:outline-none focus:ring-1 focus:ring-navy-500"
+                  />
+                  <span className="text-xs text-slate-400">%</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    readOnly
+                    value={tdsAmount > 0 ? (tdsAmount % 1 === 0 ? tdsAmount.toFixed(0) : tdsAmount.toFixed(2)) : '0'}
+                    className="w-20 sm:w-24 border border-slate-200 bg-slate-100 rounded-md px-2 py-1 text-sm text-right text-slate-700 font-medium cursor-default focus:outline-none"
+                    title="Calculated TDS Amount"
+                  />
+                  <span className="text-xs text-slate-500 font-medium">{currency}</span>
+                </div>
+              </div>
             </div>
             <div className="flex items-center justify-between font-semibold text-emerald-700 border-t border-slate-200 pt-2">
               <span>Net Payable</span><span>{netPayable.toFixed(2)} {currency}</span>

@@ -113,7 +113,7 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
               {isSales && invoice.discount_value > 0 && <div className="flex justify-between"><span className="text-slate-500">Discount</span><span>-{Number(invoice.discount_value).toFixed(2)}</span></div>}
               <div className="flex justify-between"><span className="text-slate-500">Tax</span><span>{taxAmount.toFixed(2)}</span></div>
               {isSales && invoice.bank_charges > 0 && <div className="flex justify-between"><span className="text-slate-500">Bank Charges</span><span>{Number(invoice.bank_charges).toFixed(2)}</span></div>}
-              {!isSales && invoice.tds_percent > 0 && <div className="flex justify-between text-red-600"><span>TDS ({invoice.tds_percent}%)</span><span>-{((subtotal + taxAmount) * invoice.tds_percent / 100).toFixed(2)}</span></div>}
+              {!isSales && invoice.tds_percent > 0 && <div className="flex justify-between text-red-600"><span>TDS ({invoice.tds_percent}%)</span><span>-{(subtotal * invoice.tds_percent / 100).toFixed(2)}</span></div>}
               <div className="flex justify-between font-bold text-base border-t border-slate-200 pt-2">
                 <span>{isSales || isGuest ? 'Grand Total' : 'Net Payable'}</span>
                 <span className="text-right">

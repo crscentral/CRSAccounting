@@ -396,7 +396,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     ] : []),
     ['Tax', Number(invoice.tax_amount ?? 0).toFixed(2)],
     ...(isSales && invoice.bank_charges ? [['Bank Charges', Number(invoice.bank_charges).toFixed(2)]] : []),
-    ...(!isSales && !isGuest && invoice.tds_percent ? [[`TDS (${invoice.tds_percent}%)`, `-${(((invoice.subtotal || 0) + (invoice.tax_amount || 0)) * invoice.tds_percent / 100).toFixed(2)}`]] : []),
+    ...(!isSales && !isGuest && invoice.tds_percent ? [[`TDS (${invoice.tds_percent}%)`, `-${((Number(invoice.subtotal || 0)) * invoice.tds_percent / 100).toFixed(2)}`]] : []),
   ]
   doc.setFontSize(9)
   summaryRows.forEach(([label, val]) => {
@@ -572,7 +572,7 @@ export function exportInvoiceExcel({ type, invoice, items, company, contact }) {
     if (isSales && invoice.discount_value) rows.push(['', '', '', 'Discount', -invoice.discount_value])
     rows.push(['', '', '', 'Tax', invoice.tax_amount ?? 0])
     if (isSales && invoice.bank_charges) rows.push(['', '', '', 'Bank Charges', invoice.bank_charges])
-    if (!isSales && !isGuest && invoice.tds_percent) rows.push(['', '', '', `TDS (${invoice.tds_percent}%)`, -(((invoice.subtotal || 0) + (invoice.tax_amount || 0)) * invoice.tds_percent / 100)])
+    if (!isSales && !isGuest && invoice.tds_percent) rows.push(['', '', '', `TDS (${invoice.tds_percent}%)`, -((Number(invoice.subtotal || 0)) * invoice.tds_percent / 100)])
     rows.push(['', '', '', (isSales || isGuest) ? 'Grand Total' : 'Net Payable', (isSales || isGuest) ? invoice.amount : (invoice.net_payable ?? invoice.amount)])
     if (isSales || isGuest) {
       rows.push(['', '', '', isGuest ? 'Collected' : 'Paid', invoice.paid_amount ?? invoice.collected_amount ?? 0])
@@ -665,6 +665,7 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
           <p>Subtotal: ${esc((invoice.subtotal ?? invoice.amount)?.toFixed(2))} ${esc(invoice.currency)}</p>
           ${isSales && invoice.discount_value ? `<p>Discount: -${esc(Number(invoice.discount_value).toFixed(2))} ${esc(invoice.currency)}</p>` : ''}
           <p>Tax: ${esc(Number(invoice.tax_amount ?? 0).toFixed(2))} ${esc(invoice.currency)}</p>
+          ${!isSales && !isGuest && invoice.tds_percent ? `<p style="color:#dc2626;">TDS (${invoice.tds_percent}%): -${esc(((Number(invoice.subtotal || 0)) * invoice.tds_percent / 100).toFixed(2))} ${esc(invoice.currency)}</p>` : ''}
         `}
         <p><strong>${isReceipt ? 'Total Amount' : ((isSales || isGuest) ? 'Grand Total' : 'Net Payable')}: ${esc(Number(invoice.amount).toFixed(2))} ${esc(invoice.currency)}</strong></p>
         ${((isSales || isGuest) && !isReceipt) ? `<p>${isGuest ? 'Collected' : 'Paid'}: ${esc(Number(invoice.paid_amount ?? invoice.collected_amount ?? 0).toFixed(2))} ${esc(invoice.currency)}</p><p><strong>${isGuest ? 'Pending' : 'Balance Due'}: ${esc(Math.max(0, grandTotal - (invoice.paid_amount ?? invoice.collected_amount ?? 0)).toFixed(2))} ${esc(invoice.currency)}</strong></p>` : ''}
