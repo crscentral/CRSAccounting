@@ -192,21 +192,43 @@ export default function HotelGuestInvoices() {
       </div>
 
       <DataTable
+        compact
         columns={[
-          { key: 'invoice_date', label: 'Date' },
-          { key: 'room_number', label: 'Room #', render: r => r.room_number || '—' },
-          { key: 'guest_name', label: 'Guest Name' },
-          { key: 'checkin_date', label: 'Check-in', render: r => r.checkin_date || '—' },
-          { key: 'checkout_date', label: 'Check-out', render: r => r.checkout_date || '—' },
+          {
+            key: 'invoice_date',
+            label: 'Date',
+            render: r => <span className="whitespace-nowrap font-medium text-slate-700">{r.invoice_date}</span>
+          },
+          {
+            key: 'room_number',
+            label: 'Room',
+            render: r => <span className="font-semibold text-slate-800">{r.room_number || '—'}</span>
+          },
+          {
+            key: 'guest_name',
+            label: 'Guest Name',
+            render: r => <span className="font-medium text-slate-900 whitespace-nowrap">{r.guest_name}</span>
+          },
+          {
+            key: 'stay_dates',
+            label: 'Stay',
+            render: r => (
+              <div className="whitespace-nowrap text-xs leading-tight">
+                <div><span className="text-slate-400 text-[10px] uppercase font-semibold mr-1">In:</span><span className="text-slate-700 font-medium">{r.checkin_date || '—'}</span></div>
+                <div><span className="text-slate-400 text-[10px] uppercase font-semibold mr-1">Out:</span><span className="text-slate-700 font-medium">{r.checkout_date || '—'}</span></div>
+              </div>
+            )
+          },
           {
             key: 'invoice_amount_usd',
-            label: 'Invoice Amount',
+            label: 'Amount',
+            align: 'right',
             render: r => {
               const stayRev = getStayRevenueInRange(r, cp.range.from, cp.range.to)
               const hasStayOutside = r.checkin_date && (r.checkin_date < cp.range.from || (cp.range.to !== '9999-12-31' && r.checkout_date > cp.range.to))
               return (
-                <div>
-                  <div className="font-semibold">{fmt(r.invoice_amount_usd)}</div>
+                <div className="text-right">
+                  <div className="font-semibold text-slate-800">{fmt(r.invoice_amount_usd)}</div>
                   {r.currency && r.currency !== 'USD' && (
                     <div className="text-[10px] text-slate-400">({Number(r.invoice_amount).toLocaleString()} {r.currency})</div>
                   )}
@@ -217,13 +239,30 @@ export default function HotelGuestInvoices() {
               )
             }
           },
-          { key: 'collected_amount_usd', label: 'Collected', render: r => fmt(r.collected_amount_usd) },
-          { key: 'pending', label: 'Pending', render: r => fmt(Math.max(0, (Number(r.invoice_amount_usd) || 0) - (Number(r.collected_amount_usd) || 0))) },
+          {
+            key: 'collected_amount_usd',
+            label: 'Collected',
+            align: 'right',
+            render: r => <div className="text-right font-medium text-slate-700">{fmt(r.collected_amount_usd)}</div>
+          },
+          {
+            key: 'pending',
+            label: 'Pending',
+            align: 'right',
+            render: r => {
+              const pend = Math.max(0, (Number(r.invoice_amount_usd) || 0) - (Number(r.collected_amount_usd) || 0))
+              return (
+                <div className={`text-right font-semibold ${pend > 0.001 ? 'text-amber-600' : 'text-slate-400'}`}>
+                  {fmt(pend)}
+                </div>
+              )
+            }
+          },
           {
             key: 'notes',
             label: 'Remarks / Notes',
             render: r => r.notes ? (
-              <span className="text-xs text-slate-700 max-w-[200px] line-clamp-2 block font-normal" title={r.notes}>
+              <span className="text-xs text-slate-700 max-w-[140px] truncate block font-normal" title={r.notes}>
                 {r.notes}
               </span>
             ) : <span className="text-slate-300">—</span>
@@ -231,9 +270,11 @@ export default function HotelGuestInvoices() {
           {
             key: 'actions',
             label: '',
+            align: 'right',
             render: r => (
-              <div className="flex gap-2 items-center justify-end md:justify-start">
+              <div className="flex gap-2 items-center justify-end whitespace-nowrap">
                 <InvoiceDownloadMenu
+                  iconOnly={true}
                   type="guest"
                   company={activeCompany}
                   role={activeRole}

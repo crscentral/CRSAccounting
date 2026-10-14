@@ -3,10 +3,12 @@
  * rows: array of objects
  * Below `md` breakpoint, renders each row as a labeled card instead of a horizontally-scrolling table.
  */
-export default function DataTable({ columns, rows, keyField = 'id', emptyMessage = 'No records found.', footer }) {
+export default function DataTable({ columns, rows, keyField = 'id', emptyMessage = 'No records found.', footer, compact = false }) {
   if (!rows || rows.length === 0) {
     return <div className="text-center text-slate-400 text-sm py-10 bg-white rounded-xl border border-slate-200">{emptyMessage}</div>
   }
+
+  const padClass = compact ? 'px-2.5 py-2 text-xs' : 'px-4 py-3'
 
   return (
     <>
@@ -16,7 +18,10 @@ export default function DataTable({ columns, rows, keyField = 'id', emptyMessage
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50">
               {columns.map(col => (
-                <th key={col.key} className={`text-left font-semibold text-slate-500 px-4 py-3 whitespace-nowrap ${col.className || ''}`}>
+                <th
+                  key={col.key}
+                  className={`font-semibold text-slate-500 whitespace-nowrap ${padClass} ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.className || ''}`}
+                >
                   {col.label}
                 </th>
               ))}
@@ -26,7 +31,10 @@ export default function DataTable({ columns, rows, keyField = 'id', emptyMessage
             {rows.map(row => (
               <tr key={row[keyField]} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                 {columns.map(col => (
-                  <td key={col.key} className={`px-4 py-3 align-middle ${col.className || ''}`}>
+                  <td
+                    key={col.key}
+                    className={`align-middle ${padClass} ${col.align === 'right' ? 'text-right' : ''} ${col.className || ''}`}
+                  >
                     {col.render ? col.render(row) : row[col.key]}
                   </td>
                 ))}
@@ -36,7 +44,7 @@ export default function DataTable({ columns, rows, keyField = 'id', emptyMessage
           {footer && (
             <tfoot>
               <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-700">
-                <td colSpan={columns.length} className="px-4 py-3 text-right">
+                <td colSpan={columns.length} className={`${padClass} text-right`}>
                   {footer}
                 </td>
               </tr>
