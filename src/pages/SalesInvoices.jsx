@@ -190,9 +190,7 @@ export default function SalesInvoices() {
     else loadData()
   }
 
-  if (!activeCompany) return null
-
-  const totalUsd = invoices.reduce((s, i) => s + Number(i.amount_usd), 0)
+  const totalUsd = invoices.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
   const pendingUsd = invoices.reduce((s, i) => s + (i.status === 'Paid' ? 0 : ((Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd))), 0)
   const collectedUsd = totalUsd - pendingUsd
 
@@ -210,7 +208,7 @@ export default function SalesInvoices() {
     { label: 'Amount', key: 'amountLabel' }, { label: 'Amount (USD)', key: 'amountUsdLabel' }, { label: 'Status', key: 'status' },
   ]
   const reportRows = invoices.map(i => ({
-    ...i, customerName: i.contact?.name || '—', amountLabel: `${i.amount} ${i.currency}`, amountUsdLabel: cp.fmt(i.amount_usd),
+    ...i, customerName: i.contact?.name || '—', amountLabel: `${i.amount} ${i.currency}`, amountUsdLabel: cp.fmt(i.amount_usd || 0),
   }))
 
   // Filtered invoices logic
@@ -244,8 +242,8 @@ export default function SalesInvoices() {
         if (!rateVal.includes(invoiceFilters.rate.trim())) return false
       }
       if (invoiceFilters.amountUsd) {
-        const usdVal = cp.fmt(i.amount_usd).toLowerCase()
-        const rawUsd = String(i.amount_usd || '').toLowerCase()
+        const usdVal = cp.fmt(i.amount_usd || 0).toLowerCase()
+        const rawUsd = String(i.amount_usd ?? '').toLowerCase()
         const q = invoiceFilters.amountUsd.toLowerCase().trim()
         if (!usdVal.includes(q) && !rawUsd.includes(q)) return false
       }
@@ -506,8 +504,8 @@ export default function SalesInvoices() {
         if (!rateVal.includes(receiptFilters.rate.trim())) return false
       }
       if (receiptFilters.amountUsd) {
-        const usdVal = cp.fmt(r.amount_usd).toLowerCase()
-        const rawUsd = String(r.amount_usd || '').toLowerCase()
+        const usdVal = cp.fmt(r.amount_usd || 0).toLowerCase()
+        const rawUsd = String(r.amount_usd ?? '').toLowerCase()
         const q = receiptFilters.amountUsd.toLowerCase().trim()
         if (!usdVal.includes(q) && !rawUsd.includes(q)) return false
       }
@@ -743,6 +741,8 @@ export default function SalesInvoices() {
       </td>
     </>
   ) : null
+
+  if (!activeCompany) return null
 
   return (
     <div>

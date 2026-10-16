@@ -115,9 +115,7 @@ export default function PurchaseInvoices() {
     if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'purchase_invoices_report' , logoUrl: activeCompany?.logo_url})
   }
 
-  if (!activeCompany) return null
-
-  const totalUsd = invoices.reduce((s, i) => s + Number(i.amount_usd), 0)
+  const totalUsd = invoices.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
   const pendingUsd = invoices.reduce((s, i) => s + (i.status === 'Paid' ? 0 : Number(i.amount_usd)), 0)
   const paidUsd = totalUsd - pendingUsd
 
@@ -135,7 +133,7 @@ export default function PurchaseInvoices() {
     { label: 'Amount', key: 'amountLabel' }, { label: `Amount (${cp.displayCurrency})`, key: 'amountUsdLabel' }, { label: 'Status', key: 'status' },
   ]
   const reportRows = invoices.map(i => ({
-    ...i, supplierName: i.contact?.name || i.supplier_name_freeform || '—', amountLabel: `${i.amount} ${i.currency}`, amountUsdLabel: cp.fmt(i.amount_usd),
+    ...i, supplierName: i.contact?.name || i.supplier_name_freeform || '—', amountLabel: `${i.amount} ${i.currency}`, amountUsdLabel: cp.fmt(i.amount_usd || 0),
   }))
 
   const filteredInvoices = useMemo(() => {
@@ -163,8 +161,8 @@ export default function PurchaseInvoices() {
         if (!amtStr.includes(invoiceFilters.amount.toLowerCase().trim())) return false
       }
       if (invoiceFilters.amountUsd) {
-        const usdVal = cp.fmt(i.amount_usd).toLowerCase()
-        const rawUsd = String(i.amount_usd || '').toLowerCase()
+        const usdVal = cp.fmt(i.amount_usd || 0).toLowerCase()
+        const rawUsd = String(i.amount_usd ?? '').toLowerCase()
         const q = invoiceFilters.amountUsd.toLowerCase().trim()
         if (!usdVal.includes(q) && !rawUsd.includes(q)) return false
       }
@@ -375,6 +373,8 @@ export default function PurchaseInvoices() {
       </td>
     </>
   ) : null
+
+  if (!activeCompany) return null
 
   return (
     <div>
