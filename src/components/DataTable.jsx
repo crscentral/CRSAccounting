@@ -3,7 +3,7 @@
  * rows: array of objects
  * Below `md` breakpoint, renders each row as a labeled card instead of a horizontally-scrolling table.
  */
-export default function DataTable({ columns, rows, keyField = 'id', emptyMessage = 'No records found.', footer, compact = false, filterRow }) {
+export default function DataTable({ columns, rows, keyField = 'id', emptyMessage = 'No records found.', footer, footerRow, compact = false, filterRow }) {
   if (!filterRow && (!rows || rows.length === 0)) {
     return <div className="text-center text-slate-400 text-sm py-10 bg-white rounded-xl border border-slate-200">{emptyMessage}</div>
   }
@@ -55,12 +55,14 @@ export default function DataTable({ columns, rows, keyField = 'id', emptyMessage
               ))
             )}
           </tbody>
-          {footer && (
+          {(footerRow || footer) && !isEmpty && (
             <tfoot>
               <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-700">
-                <td colSpan={columns.length} className={`${padClass} text-right`}>
-                  {footer}
-                </td>
+                {footerRow || (
+                  <td colSpan={columns.length} className={`${padClass} text-right`}>
+                    {footer}
+                  </td>
+                )}
               </tr>
             </tfoot>
           )}
@@ -79,7 +81,7 @@ export default function DataTable({ columns, rows, keyField = 'id', emptyMessage
             ))}
           </div>
         ))}
-        {footer && (
+        {footer && !isEmpty && (
           <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 text-right font-semibold text-slate-700 text-sm">
             {footer}
           </div>

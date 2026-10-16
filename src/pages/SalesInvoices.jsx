@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { Plus, Eye, Pencil, Trash2, Download, Search, Filter, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
@@ -213,6 +213,537 @@ export default function SalesInvoices() {
     ...i, customerName: i.contact?.name || '—', amountLabel: `${i.amount} ${i.currency}`, amountUsdLabel: cp.fmt(i.amount_usd),
   }))
 
+  // Filtered invoices logic
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter(i => {
+      if (invoiceFilters.invoiceNumber && !String(i.invoice_number || '').toLowerCase().includes(invoiceFilters.invoiceNumber.toLowerCase().trim())) {
+        return false
+      }
+      if (invoiceFilters.customer) {
+        const cust = (i.contact?.name || i.customer_name_freeform || '').toLowerCase()
+        if (!cust.includes(invoiceFilters.customer.toLowerCase().trim())) return false
+      }
+      if (invoiceFilters.date) {
+        const d1 = String(i.invoice_date || '')
+        const d2 = formatDate(i.invoice_date) || ''
+        const q = invoiceFilters.date.toLowerCase().trim()
+        if (!d1.toLowerCase().includes(q) && !d2.toLowerCase().includes(q)) return false
+      }
+      if (invoiceFilters.dueDate) {
+        const d1 = String(i.due_date || '')
+        const d2 = formatDate(i.due_date) || ''
+        const q = invoiceFilters.dueDate.toLowerCase().trim()
+        if (!d1.toLowerCase().includes(q) && !d2.toLowerCase().includes(q)) return false
+      }
+      if (invoiceFilters.amount) {
+        const amtStr = `${i.amount || ''} ${i.currency || ''}`.toLowerCase()
+        if (!amtStr.includes(invoiceFilters.amount.toLowerCase().trim())) return false
+      }
+      if (invoiceFilters.rate) {
+        const rateVal = i.currency === 'USD' ? '1.00' : Number(i.fx_rate_locked || (i.amount / (i.amount_usd || 1))).toFixed(2)
+        if (!rateVal.includes(invoiceFilters.rate.trim())) return false
+      }
+      if (invoiceFilters.amountUsd) {
+        const usdVal = cp.fmt(i.amount_usd).toLowerCase()
+        const rawUsd = String(i.amount_usd || '').toLowerCase()
+        const q = invoiceFilters.amountUsd.toLowerCase().trim()
+        if (!usdVal.includes(q) && !rawUsd.includes(q)) return false
+      }
+      if (invoiceFilters.status) {
+        if (invoiceFilters.status !== 'All' && (i.status || '').toLowerCase() !== invoiceFilters.status.toLowerCase().trim()) {
+          return false
+        }
+      }
+      return true
+    })
+  }, [invoices, invoiceFilters, cp])
+
+  const filteredTotalUsd = useMemo(() => {
+    return filteredInvoices.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
+  }, [filteredInvoices])
+
+  const invoiceCurrencies = useMemo(() => {
+    return [...new Set(filteredInvoices.map(i => i.currency).filter(Boolean))]
+  }, [filteredInvoices])
+
+  const singleInvoiceCurrency = invoiceCurrencies.length === 1 ? invoiceCurrencies[0] : null
+  const filteredTotalNative = useMemo(() => {
+    if (singleInvoiceCurrency) {
+      return filteredInvoices.reduce((s, i) => s + Number(i.amount || 0), 0)
+    }
+    return null
+  }, [filteredInvoices, singleInvoiceCurrency])
+
+  const invoiceFooterRow = (
+    <>
+      <td colSpan={4} className="px-4 py-3 text-left font-bold text-slate-700 bg-slate-50">
+        Total ({filteredInvoices.length} invoice{filteredInvoices.length === 1 ? '' : 's'})
+      </td>
+      <td className="px-4 py-3 text-left font-bold text-slate-900 bg-slate-50">
+        {singleInvoiceCurrency ? (
+          <span>{filteredTotalNative.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {singleInvoiceCurrency}</span>
+        ) : (
+          <span className="text-xs text-slate-500 font-normal">Mixed ({invoiceCurrencies.join(', ')})</span>
+        )}
+      </td>
+      <td className="px-4 py-3 bg-slate-50"></td>
+      <td className="px-4 py-3 text-left font-bold text-emerald-700 bg-slate-50">
+        {cp.fmt(filteredTotalUsd)}
+      </td>
+      <td colSpan={2} className="px-4 py-3 bg-slate-50"></td>
+    </>
+  )
+
+  const invoiceMobileFooter = (
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-sm font-semibold">
+      <span>Total ({filteredInvoices.length} invoices):</span>
+      <div className="flex items-center gap-2">
+        {singleInvoiceCurrency && (
+          <span className="text-slate-900">
+            {filteredTotalNative.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {singleInvoiceCurrency}
+          </span>
+        )}
+        <span className="text-emerald-700">({cp.fmt(filteredTotalUsd)})</span>
+      </div>
+    </div>
+  )
+
+  const invoiceFilterRow = showInvoiceFilters ? (
+    <>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={invNumRef}
+            type="text"
+            value={invoiceFilters.invoiceNumber}
+            onChange={e => setInvoiceFilters(f => ({ ...f, invoiceNumber: e.target.value }))}
+            placeholder="Filter #..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {invoiceFilters.invoiceNumber && (
+            <button
+              onClick={() => setInvoiceFilters(f => ({ ...f, invoiceNumber: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={customerRef}
+            type="text"
+            value={invoiceFilters.customer}
+            onChange={e => setInvoiceFilters(f => ({ ...f, customer: e.target.value }))}
+            placeholder="Filter customer..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {invoiceFilters.customer && (
+            <button
+              onClick={() => setInvoiceFilters(f => ({ ...f, customer: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={dateRef}
+            type="text"
+            value={invoiceFilters.date}
+            onChange={e => setInvoiceFilters(f => ({ ...f, date: e.target.value }))}
+            placeholder="Filter date..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {invoiceFilters.date && (
+            <button
+              onClick={() => setInvoiceFilters(f => ({ ...f, date: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={dueRef}
+            type="text"
+            value={invoiceFilters.dueDate}
+            onChange={e => setInvoiceFilters(f => ({ ...f, dueDate: e.target.value }))}
+            placeholder="Filter due..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {invoiceFilters.dueDate && (
+            <button
+              onClick={() => setInvoiceFilters(f => ({ ...f, dueDate: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={amountRef}
+            type="text"
+            value={invoiceFilters.amount}
+            onChange={e => setInvoiceFilters(f => ({ ...f, amount: e.target.value }))}
+            placeholder="Filter amount..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {invoiceFilters.amount && (
+            <button
+              onClick={() => setInvoiceFilters(f => ({ ...f, amount: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={rateRef}
+            type="text"
+            value={invoiceFilters.rate}
+            onChange={e => setInvoiceFilters(f => ({ ...f, rate: e.target.value }))}
+            placeholder="Rate..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {invoiceFilters.rate && (
+            <button
+              onClick={() => setInvoiceFilters(f => ({ ...f, rate: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={amountUsdRef}
+            type="text"
+            value={invoiceFilters.amountUsd}
+            onChange={e => setInvoiceFilters(f => ({ ...f, amountUsd: e.target.value }))}
+            placeholder="USD..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {invoiceFilters.amountUsd && (
+            <button
+              onClick={() => setInvoiceFilters(f => ({ ...f, amountUsd: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <select
+          ref={statusRef}
+          value={invoiceFilters.status}
+          onChange={e => setInvoiceFilters(f => ({ ...f, status: e.target.value }))}
+          className="w-full text-xs px-1.5 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+        >
+          <option value="">All</option>
+          <option value="Draft">Draft</option>
+          <option value="Paid">Paid</option>
+          <option value="Overdue">Overdue</option>
+          <option value="Cancelled">Cancelled</option>
+        </select>
+      </td>
+      <td className="px-2 py-1.5 text-center">
+        {hasActiveInvoiceFilters && (
+          <button
+            onClick={clearInvoiceFilters}
+            className="text-[11px] text-red-600 hover:underline font-medium whitespace-nowrap"
+            title="Clear all filters"
+          >
+            Clear
+          </button>
+        )}
+      </td>
+    </>
+  ) : null
+
+  // Filtered receipts logic
+  const filteredReceipts = useMemo(() => {
+    return receipts.filter(r => {
+      if (receiptFilters.receiptNumber && !String(r.receipt_number || '').toLowerCase().includes(receiptFilters.receiptNumber.toLowerCase().trim())) {
+        return false
+      }
+      if (receiptFilters.invoiceNumber && !String(r.invoice?.invoice_number || '').toLowerCase().includes(receiptFilters.invoiceNumber.toLowerCase().trim())) {
+        return false
+      }
+      if (receiptFilters.date) {
+        const d1 = String(r.receipt_date || '')
+        const d2 = formatDate(r.receipt_date) || ''
+        const q = receiptFilters.date.toLowerCase().trim()
+        if (!d1.toLowerCase().includes(q) && !d2.toLowerCase().includes(q)) return false
+      }
+      if (receiptFilters.customer) {
+        const cust = (r.customer_name_freeform || r.contact?.name || '').toLowerCase()
+        if (!cust.includes(receiptFilters.customer.toLowerCase().trim())) return false
+      }
+      if (receiptFilters.amount) {
+        const amtStr = `${r.amount || ''} ${r.currency || ''}`.toLowerCase()
+        if (!amtStr.includes(receiptFilters.amount.toLowerCase().trim())) return false
+      }
+      if (receiptFilters.rate) {
+        const rateVal = r.currency === 'USD' ? '1.00' : Number(r.fx_rate_locked || (r.amount / (r.amount_usd || 1))).toFixed(2)
+        if (!rateVal.includes(receiptFilters.rate.trim())) return false
+      }
+      if (receiptFilters.amountUsd) {
+        const usdVal = cp.fmt(r.amount_usd).toLowerCase()
+        const rawUsd = String(r.amount_usd || '').toLowerCase()
+        const q = receiptFilters.amountUsd.toLowerCase().trim()
+        if (!usdVal.includes(q) && !rawUsd.includes(q)) return false
+      }
+      if (receiptFilters.method && !String(r.method || '').toLowerCase().includes(receiptFilters.method.toLowerCase().trim())) {
+        return false
+      }
+      return true
+    })
+  }, [receipts, receiptFilters, cp])
+
+  const filteredReceiptsTotalUsd = useMemo(() => {
+    return filteredReceipts.reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+  }, [filteredReceipts])
+
+  const receiptCurrencies = useMemo(() => {
+    return [...new Set(filteredReceipts.map(r => r.currency).filter(Boolean))]
+  }, [filteredReceipts])
+
+  const singleReceiptCurrency = receiptCurrencies.length === 1 ? receiptCurrencies[0] : null
+  const filteredReceiptsTotalNative = useMemo(() => {
+    if (singleReceiptCurrency) {
+      return filteredReceipts.reduce((s, r) => s + Number(r.amount || 0), 0)
+    }
+    return null
+  }, [filteredReceipts, singleReceiptCurrency])
+
+  const receiptFooterRow = (
+    <>
+      <td colSpan={4} className="px-4 py-3 text-left font-bold text-slate-700 bg-slate-50">
+        Total ({filteredReceipts.length} receipt{filteredReceipts.length === 1 ? '' : 's'})
+      </td>
+      <td className="px-4 py-3 text-left font-bold text-slate-900 bg-slate-50">
+        {singleReceiptCurrency ? (
+          <span>{filteredReceiptsTotalNative.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {singleReceiptCurrency}</span>
+        ) : (
+          <span className="text-xs text-slate-500 font-normal">Mixed ({receiptCurrencies.join(', ')})</span>
+        )}
+      </td>
+      <td className="px-4 py-3 bg-slate-50"></td>
+      <td className="px-4 py-3 text-left font-bold text-emerald-700 bg-slate-50">
+        {cp.fmt(filteredReceiptsTotalUsd)}
+      </td>
+      <td colSpan={2} className="px-4 py-3 bg-slate-50"></td>
+    </>
+  )
+
+  const receiptMobileFooter = (
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-sm font-semibold">
+      <span>Total ({filteredReceipts.length} receipts):</span>
+      <div className="flex items-center gap-2">
+        {singleReceiptCurrency && (
+          <span className="text-slate-900">
+            {filteredReceiptsTotalNative.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {singleReceiptCurrency}
+          </span>
+        )}
+        <span className="text-emerald-700">({cp.fmt(filteredReceiptsTotalUsd)})</span>
+      </div>
+    </div>
+  )
+
+  const receiptFilterRow = showReceiptFilters ? (
+    <>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={recNumRef}
+            type="text"
+            value={receiptFilters.receiptNumber}
+            onChange={e => setReceiptFilters(f => ({ ...f, receiptNumber: e.target.value }))}
+            placeholder="Filter #..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {receiptFilters.receiptNumber && (
+            <button
+              onClick={() => setReceiptFilters(f => ({ ...f, receiptNumber: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={recInvNumRef}
+            type="text"
+            value={receiptFilters.invoiceNumber}
+            onChange={e => setReceiptFilters(f => ({ ...f, invoiceNumber: e.target.value }))}
+            placeholder="Inv #..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {receiptFilters.invoiceNumber && (
+            <button
+              onClick={() => setReceiptFilters(f => ({ ...f, invoiceNumber: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={recDateRef}
+            type="text"
+            value={receiptFilters.date}
+            onChange={e => setReceiptFilters(f => ({ ...f, date: e.target.value }))}
+            placeholder="Date..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {receiptFilters.date && (
+            <button
+              onClick={() => setReceiptFilters(f => ({ ...f, date: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={recCustomerRef}
+            type="text"
+            value={receiptFilters.customer}
+            onChange={e => setReceiptFilters(f => ({ ...f, customer: e.target.value }))}
+            placeholder="Customer..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {receiptFilters.customer && (
+            <button
+              onClick={() => setReceiptFilters(f => ({ ...f, customer: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={recAmountRef}
+            type="text"
+            value={receiptFilters.amount}
+            onChange={e => setReceiptFilters(f => ({ ...f, amount: e.target.value }))}
+            placeholder="Amount..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {receiptFilters.amount && (
+            <button
+              onClick={() => setReceiptFilters(f => ({ ...f, amount: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={recRateRef}
+            type="text"
+            value={receiptFilters.rate}
+            onChange={e => setReceiptFilters(f => ({ ...f, rate: e.target.value }))}
+            placeholder="Rate..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {receiptFilters.rate && (
+            <button
+              onClick={() => setReceiptFilters(f => ({ ...f, rate: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={recAmountUsdRef}
+            type="text"
+            value={receiptFilters.amountUsd}
+            onChange={e => setReceiptFilters(f => ({ ...f, amountUsd: e.target.value }))}
+            placeholder="USD..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {receiptFilters.amountUsd && (
+            <button
+              onClick={() => setReceiptFilters(f => ({ ...f, amountUsd: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="relative">
+          <input
+            ref={recMethodRef}
+            type="text"
+            value={receiptFilters.method}
+            onChange={e => setReceiptFilters(f => ({ ...f, method: e.target.value }))}
+            placeholder="Method..."
+            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
+          />
+          {receiptFilters.method && (
+            <button
+              onClick={() => setReceiptFilters(f => ({ ...f, method: '' }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5 text-center">
+        {hasActiveReceiptFilters && (
+          <button
+            onClick={clearReceiptFilters}
+            className="text-[11px] text-red-600 hover:underline font-medium whitespace-nowrap"
+            title="Clear all filters"
+          >
+            Clear
+          </button>
+        )}
+      </td>
+    </>
+  ) : null
+
   return (
     <div>
       <PageHeader
@@ -327,6 +858,8 @@ export default function SalesInvoices() {
 
           <DataTable
             filterRow={invoiceFilterRow}
+            footerRow={invoiceFooterRow}
+            footer={invoiceMobileFooter}
             emptyMessage={hasActiveInvoiceFilters ? 'No invoices match the selected filters.' : 'No invoices yet.'}
             columns={[
               {
@@ -519,6 +1052,8 @@ export default function SalesInvoices() {
 
           <DataTable
             filterRow={receiptFilterRow}
+            footerRow={receiptFooterRow}
+            footer={receiptMobileFooter}
             emptyMessage={hasActiveReceiptFilters ? 'No receipts match the selected filters.' : 'No receipts yet.'}
             columns={[
               {
