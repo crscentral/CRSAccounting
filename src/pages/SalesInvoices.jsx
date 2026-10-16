@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Plus, Eye, Pencil, Trash2, Download } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { Plus, Eye, Pencil, Trash2, Download, Search, Filter, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
@@ -32,6 +32,102 @@ export default function SalesInvoices() {
   const [receiptModalOpen, setReceiptModalOpen] = useState(false)
   const [editingReceipt, setEditingReceipt] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
+
+  // Column filter states for Invoices
+  const [invoiceFilters, setInvoiceFilters] = useState({
+    invoiceNumber: '',
+    customer: '',
+    date: '',
+    dueDate: '',
+    amount: '',
+    rate: '',
+    amountUsd: '',
+    status: '',
+  })
+  const [showInvoiceFilters, setShowInvoiceFilters] = useState(true)
+
+  const invNumRef = useRef(null)
+  const customerRef = useRef(null)
+  const dateRef = useRef(null)
+  const dueRef = useRef(null)
+  const amountRef = useRef(null)
+  const rateRef = useRef(null)
+  const amountUsdRef = useRef(null)
+  const statusRef = useRef(null)
+
+  function focusColumnFilter(ref) {
+    setShowInvoiceFilters(true)
+    setTimeout(() => {
+      if (ref.current) {
+        ref.current.focus()
+        if (ref.current.select) ref.current.select()
+      }
+    }, 50)
+  }
+
+  const activeInvoiceFilterCount = Object.values(invoiceFilters).filter(v => Boolean(v && v.trim())).length
+  const hasActiveInvoiceFilters = activeInvoiceFilterCount > 0
+
+  function clearInvoiceFilters() {
+    setInvoiceFilters({
+      invoiceNumber: '',
+      customer: '',
+      date: '',
+      dueDate: '',
+      amount: '',
+      rate: '',
+      amountUsd: '',
+      status: '',
+    })
+  }
+
+  // Column filter states for Payment Receipts
+  const [receiptFilters, setReceiptFilters] = useState({
+    receiptNumber: '',
+    invoiceNumber: '',
+    date: '',
+    customer: '',
+    amount: '',
+    rate: '',
+    amountUsd: '',
+    method: '',
+  })
+  const [showReceiptFilters, setShowReceiptFilters] = useState(true)
+
+  const recNumRef = useRef(null)
+  const recInvNumRef = useRef(null)
+  const recDateRef = useRef(null)
+  const recCustomerRef = useRef(null)
+  const recAmountRef = useRef(null)
+  const recRateRef = useRef(null)
+  const recAmountUsdRef = useRef(null)
+  const recMethodRef = useRef(null)
+
+  function focusReceiptFilter(ref) {
+    setShowReceiptFilters(true)
+    setTimeout(() => {
+      if (ref.current) {
+        ref.current.focus()
+        if (ref.current.select) ref.current.select()
+      }
+    }, 50)
+  }
+
+  const activeReceiptFilterCount = Object.values(receiptFilters).filter(v => Boolean(v && v.trim())).length
+  const hasActiveReceiptFilters = activeReceiptFilterCount > 0
+
+  function clearReceiptFilters() {
+    setReceiptFilters({
+      receiptNumber: '',
+      invoiceNumber: '',
+      date: '',
+      customer: '',
+      amount: '',
+      rate: '',
+      amountUsd: '',
+      method: '',
+    })
+  }
 
   useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
@@ -181,16 +277,178 @@ export default function SalesInvoices() {
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-slate-700">
+                Invoices ({filteredInvoices.length}{filteredInvoices.length !== invoices.length ? ` of ${invoices.length}` : ''})
+              </span>
+              {hasActiveInvoiceFilters && (
+                <span className="inline-flex items-center gap-1 text-xs bg-navy-50 text-navy-700 font-medium px-2 py-0.5 rounded-full border border-navy-200">
+                  <Filter size={11} /> {activeInvoiceFilterCount} filter{activeInvoiceFilterCount > 1 ? 's' : ''} applied
+                </span>
+              )}
+              {invoiceFilters.customer && (
+                <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                  Customer: <strong>{invoiceFilters.customer}</strong>
+                  <button onClick={() => setInvoiceFilters(f => ({ ...f, customer: '' }))} className="hover:text-red-600 ml-0.5"><X size={12} /></button>
+                </span>
+              )}
+              {invoiceFilters.invoiceNumber && (
+                <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                  Invoice #: <strong>{invoiceFilters.invoiceNumber}</strong>
+                  <button onClick={() => setInvoiceFilters(f => ({ ...f, invoiceNumber: '' }))} className="hover:text-red-600 ml-0.5"><X size={12} /></button>
+                </span>
+              )}
+              {invoiceFilters.status && (
+                <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                  Status: <strong>{invoiceFilters.status}</strong>
+                  <button onClick={() => setInvoiceFilters(f => ({ ...f, status: '' }))} className="hover:text-red-600 ml-0.5"><X size={12} /></button>
+                </span>
+              )}
+              {hasActiveInvoiceFilters && (
+                <button onClick={clearInvoiceFilters} className="text-xs text-red-600 hover:underline font-medium ml-1">
+                  Clear All
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowInvoiceFilters(s => !s)}
+                className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors ${
+                  showInvoiceFilters ? 'bg-navy-50 border-navy-300 text-navy-700' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                }`}
+                title="Toggle column filters row"
+              >
+                <Filter size={13} />
+                <span>{showInvoiceFilters ? 'Hide Filters' : 'Filter Columns'}</span>
+              </button>
+            </div>
+          </div>
+
           <DataTable
+            filterRow={invoiceFilterRow}
+            emptyMessage={hasActiveInvoiceFilters ? 'No invoices match the selected filters.' : 'No invoices yet.'}
             columns={[
-              { key: 'invoice_number', label: 'Invoice #' },
-              { key: 'customer', label: 'Customer', render: r => r.contact?.name || '—' },
-              { key: 'invoice_date', label: 'Date', render: r => <span className="whitespace-nowrap">{formatDate(r.invoice_date)}</span> },
-              { key: 'due_date', label: 'Due', render: r => <span className="whitespace-nowrap">{formatDate(r.due_date)}</span> },
-              { key: 'amount', label: 'Amount', render: r => `${r.amount.toLocaleString()} ${r.currency}` },
-              { key: 'rate', label: 'Rate', render: r => r.currency === 'USD' ? '1.00' : Number(r.fx_rate_locked || (r.amount / r.amount_usd)).toFixed(2) },
-              { key: 'amount_usd', label: 'Amount (USD)', render: r => cp.fmt(r.amount_usd) },
-              { key: 'status', label: 'Status', render: r => <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[r.status]}`}>{r.status}</span> },
+              {
+                key: 'invoice_number',
+                label: (
+                  <div
+                    onClick={() => focusColumnFilter(invNumRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Invoice #"
+                  >
+                    <span>Invoice #</span>
+                    <Search size={12} className={`transition-opacity ${invoiceFilters.invoiceNumber ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {invoiceFilters.invoiceNumber && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => <span className="font-medium text-slate-800">{r.invoice_number}</span>
+              },
+              {
+                key: 'customer',
+                label: (
+                  <div
+                    onClick={() => focusColumnFilter(customerRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Customer"
+                  >
+                    <span>Customer</span>
+                    <Search size={12} className={`transition-opacity ${invoiceFilters.customer ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {invoiceFilters.customer && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => r.contact?.name || r.customer_name_freeform || '—'
+              },
+              {
+                key: 'invoice_date',
+                label: (
+                  <div
+                    onClick={() => focusColumnFilter(dateRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Date"
+                  >
+                    <span>Date</span>
+                    <Search size={12} className={`transition-opacity ${invoiceFilters.date ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {invoiceFilters.date && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => <span className="whitespace-nowrap">{formatDate(r.invoice_date)}</span>
+              },
+              {
+                key: 'due_date',
+                label: (
+                  <div
+                    onClick={() => focusColumnFilter(dueRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Due Date"
+                  >
+                    <span>Due</span>
+                    <Search size={12} className={`transition-opacity ${invoiceFilters.dueDate ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {invoiceFilters.dueDate && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => <span className="whitespace-nowrap">{formatDate(r.due_date)}</span>
+              },
+              {
+                key: 'amount',
+                label: (
+                  <div
+                    onClick={() => focusColumnFilter(amountRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Amount"
+                  >
+                    <span>Amount</span>
+                    <Search size={12} className={`transition-opacity ${invoiceFilters.amount ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {invoiceFilters.amount && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => `${r.amount.toLocaleString()} ${r.currency}`
+              },
+              {
+                key: 'rate',
+                label: (
+                  <div
+                    onClick={() => focusColumnFilter(rateRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Rate"
+                  >
+                    <span>Rate</span>
+                    <Search size={12} className={`transition-opacity ${invoiceFilters.rate ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {invoiceFilters.rate && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => r.currency === 'USD' ? '1.00' : Number(r.fx_rate_locked || (r.amount / r.amount_usd)).toFixed(2)
+              },
+              {
+                key: 'amount_usd',
+                label: (
+                  <div
+                    onClick={() => focusColumnFilter(amountUsdRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Amount (USD)"
+                  >
+                    <span>Amount (USD)</span>
+                    <Search size={12} className={`transition-opacity ${invoiceFilters.amountUsd ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {invoiceFilters.amountUsd && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => cp.fmt(r.amount_usd)
+              },
+              {
+                key: 'status',
+                label: (
+                  <div
+                    onClick={() => focusColumnFilter(statusRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Status"
+                  >
+                    <span>Status</span>
+                    <Search size={12} className={`transition-opacity ${invoiceFilters.status ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {invoiceFilters.status && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[r.status]}`}>{r.status}</span>
+              },
               {
                 key: 'actions', label: '', render: r => (
                   <div className="flex gap-2 justify-end md:justify-start">
@@ -212,21 +470,177 @@ export default function SalesInvoices() {
                 )
               },
             ]}
-            rows={invoices}
+            rows={filteredInvoices}
           />
         </>
       ) : (
         <>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-slate-700">
+                Payment Receipts ({filteredReceipts.length}{filteredReceipts.length !== receipts.length ? ` of ${receipts.length}` : ''})
+              </span>
+              {hasActiveReceiptFilters && (
+                <span className="inline-flex items-center gap-1 text-xs bg-navy-50 text-navy-700 font-medium px-2 py-0.5 rounded-full border border-navy-200">
+                  <Filter size={11} /> {activeReceiptFilterCount} filter{activeReceiptFilterCount > 1 ? 's' : ''} applied
+                </span>
+              )}
+              {receiptFilters.customer && (
+                <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                  Customer: <strong>{receiptFilters.customer}</strong>
+                  <button onClick={() => setReceiptFilters(f => ({ ...f, customer: '' }))} className="hover:text-red-600 ml-0.5"><X size={12} /></button>
+                </span>
+              )}
+              {receiptFilters.receiptNumber && (
+                <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                  Receipt #: <strong>{receiptFilters.receiptNumber}</strong>
+                  <button onClick={() => setReceiptFilters(f => ({ ...f, receiptNumber: '' }))} className="hover:text-red-600 ml-0.5"><X size={12} /></button>
+                </span>
+              )}
+              {hasActiveReceiptFilters && (
+                <button onClick={clearReceiptFilters} className="text-xs text-red-600 hover:underline font-medium ml-1">
+                  Clear All
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowReceiptFilters(s => !s)}
+                className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors ${
+                  showReceiptFilters ? 'bg-navy-50 border-navy-300 text-navy-700' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                }`}
+                title="Toggle column filters row"
+              >
+                <Filter size={13} />
+                <span>{showReceiptFilters ? 'Hide Filters' : 'Filter Columns'}</span>
+              </button>
+            </div>
+          </div>
+
           <DataTable
+            filterRow={receiptFilterRow}
+            emptyMessage={hasActiveReceiptFilters ? 'No receipts match the selected filters.' : 'No receipts yet.'}
             columns={[
-              { key: 'receipt_number', label: 'Receipt #', render: r => r.receipt_number || '—' },
-              { key: 'invoice', label: 'Invoice #', render: r => r.invoice?.invoice_number || '—' },
-              { key: 'receipt_date', label: 'Date', render: r => <span className="whitespace-nowrap">{formatDate(r.receipt_date)}</span> },
-              { key: 'customer', label: 'Customer', render: r => r.customer_name_freeform || r.contact?.name || '—' },
-              { key: 'amount', label: 'Amount', render: r => `${r.amount.toLocaleString()} ${r.currency}` },
-              { key: 'rate', label: 'Rate', render: r => r.currency === 'USD' ? '1.00' : Number(r.fx_rate_locked || (r.amount / r.amount_usd)).toFixed(2) },
-              { key: 'amount_usd', label: 'Amount (USD)', render: r => cp.fmt(r.amount_usd) },
-              { key: 'method', label: 'Method' },
+              {
+                key: 'receipt_number',
+                label: (
+                  <div
+                    onClick={() => focusReceiptFilter(recNumRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Receipt #"
+                  >
+                    <span>Receipt #</span>
+                    <Search size={12} className={`transition-opacity ${receiptFilters.receiptNumber ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {receiptFilters.receiptNumber && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => r.receipt_number || '—'
+              },
+              {
+                key: 'invoice',
+                label: (
+                  <div
+                    onClick={() => focusReceiptFilter(recInvNumRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Invoice #"
+                  >
+                    <span>Invoice #</span>
+                    <Search size={12} className={`transition-opacity ${receiptFilters.invoiceNumber ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {receiptFilters.invoiceNumber && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => r.invoice?.invoice_number || '—'
+              },
+              {
+                key: 'receipt_date',
+                label: (
+                  <div
+                    onClick={() => focusReceiptFilter(recDateRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Date"
+                  >
+                    <span>Date</span>
+                    <Search size={12} className={`transition-opacity ${receiptFilters.date ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {receiptFilters.date && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => <span className="whitespace-nowrap">{formatDate(r.receipt_date)}</span>
+              },
+              {
+                key: 'customer',
+                label: (
+                  <div
+                    onClick={() => focusReceiptFilter(recCustomerRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Customer"
+                  >
+                    <span>Customer</span>
+                    <Search size={12} className={`transition-opacity ${receiptFilters.customer ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {receiptFilters.customer && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => r.customer_name_freeform || r.contact?.name || '—'
+              },
+              {
+                key: 'amount',
+                label: (
+                  <div
+                    onClick={() => focusReceiptFilter(recAmountRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Amount"
+                  >
+                    <span>Amount</span>
+                    <Search size={12} className={`transition-opacity ${receiptFilters.amount ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {receiptFilters.amount && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => `${r.amount.toLocaleString()} ${r.currency}`
+              },
+              {
+                key: 'rate',
+                label: (
+                  <div
+                    onClick={() => focusReceiptFilter(recRateRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Rate"
+                  >
+                    <span>Rate</span>
+                    <Search size={12} className={`transition-opacity ${receiptFilters.rate ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {receiptFilters.rate && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => r.currency === 'USD' ? '1.00' : Number(r.fx_rate_locked || (r.amount / r.amount_usd)).toFixed(2)
+              },
+              {
+                key: 'amount_usd',
+                label: (
+                  <div
+                    onClick={() => focusReceiptFilter(recAmountUsdRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Amount (USD)"
+                  >
+                    <span>Amount (USD)</span>
+                    <Search size={12} className={`transition-opacity ${receiptFilters.amountUsd ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {receiptFilters.amountUsd && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => cp.fmt(r.amount_usd)
+              },
+              {
+                key: 'method',
+                label: (
+                  <div
+                    onClick={() => focusReceiptFilter(recMethodRef)}
+                    className="flex items-center gap-1.5 cursor-pointer select-none group"
+                    title="Click to filter by Method"
+                  >
+                    <span>Method</span>
+                    <Search size={12} className={`transition-opacity ${receiptFilters.method ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {receiptFilters.method && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                  </div>
+                ),
+                render: r => r.method || '—'
+              },
               {
                 key: 'actions', label: '', render: r => (
                   <div className="flex gap-2 justify-end md:justify-start">
@@ -247,7 +661,7 @@ export default function SalesInvoices() {
                 )
               }
             ]}
-            rows={receipts}
+            rows={filteredReceipts}
           />
           <ReceiptCurrencySummary receipts={receipts} />
         </>
