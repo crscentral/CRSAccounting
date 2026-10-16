@@ -12,6 +12,7 @@ import InvoiceDownloadMenu from '../components/InvoiceDownloadMenu'
 import SalesInvoiceFormModal from '../components/SalesInvoiceFormModal'
 import PaymentReceiptFormModal from '../components/PaymentReceiptFormModal'
 import ReceiptCurrencySummary from '../components/ReceiptCurrencySummary'
+import MultiSelectFilter from '../components/MultiSelectFilter'
 
 const STATUS_COLORS = {
   Draft: 'bg-slate-100 text-slate-600',
@@ -44,6 +45,7 @@ export default function SalesInvoices() {
     amountUsd: '',
     status: '',
   })
+  const [selectedCustomers, setSelectedCustomers] = useState([])
   const [showInvoiceFilters, setShowInvoiceFilters] = useState(true)
 
   const invNumRef = useRef(null)
@@ -65,7 +67,7 @@ export default function SalesInvoices() {
     }, 50)
   }
 
-  const activeInvoiceFilterCount = Object.values(invoiceFilters).filter(v => Boolean(v && v.trim())).length
+  const activeInvoiceFilterCount = Object.values(invoiceFilters).filter(v => Boolean(v && v.trim())).length + (selectedCustomers.length > 0 ? 1 : 0)
   const hasActiveInvoiceFilters = activeInvoiceFilterCount > 0
 
   function clearInvoiceFilters() {
@@ -79,6 +81,7 @@ export default function SalesInvoices() {
       amountUsd: '',
       status: '',
     })
+    setSelectedCustomers([])
   }
 
   // Column filter states for Payment Receipts
@@ -92,6 +95,7 @@ export default function SalesInvoices() {
     amountUsd: '',
     method: '',
   })
+  const [selectedReceiptCustomers, setSelectedReceiptCustomers] = useState([])
   const [showReceiptFilters, setShowReceiptFilters] = useState(true)
 
   const recNumRef = useRef(null)
@@ -113,7 +117,7 @@ export default function SalesInvoices() {
     }, 50)
   }
 
-  const activeReceiptFilterCount = Object.values(receiptFilters).filter(v => Boolean(v && v.trim())).length
+  const activeReceiptFilterCount = Object.values(receiptFilters).filter(v => Boolean(v && v.trim())).length + (selectedReceiptCustomers.length > 0 ? 1 : 0)
   const hasActiveReceiptFilters = activeReceiptFilterCount > 0
 
   function clearReceiptFilters() {
@@ -127,6 +131,7 @@ export default function SalesInvoices() {
       amountUsd: '',
       method: '',
     })
+    setSelectedReceiptCustomers([])
   }
 
   useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
@@ -211,13 +216,34 @@ export default function SalesInvoices() {
     ...i, customerName: i.contact?.name || '—', amountLabel: `${i.amount} ${i.currency}`, amountUsdLabel: cp.fmt(i.amount_usd || 0),
   }))
 
+  const allCustomers = useMemo(() => {
+    const set = new Set()
+    invoices.forEach(i => {
+      const name = (i.contact?.name || i.customer_name_freeform || '').trim()
+      if (name) set.add(name)
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [invoices])
+
+  const customerCounts = useMemo(() => {
+    const counts = {}
+    invoices.forEach(i => {
+      const name = (i.contact?.name || i.customer_name_freeform || '').trim()
+      if (name) counts[name] = (counts[name] || 0) + 1
+    })
+    return counts
+  }, [invoices])
+
   // Filtered invoices logic
   const filteredInvoices = useMemo(() => {
     return invoices.filter(i => {
       if (invoiceFilters.invoiceNumber && !String(i.invoice_number || '').toLowerCase().includes(invoiceFilters.invoiceNumber.toLowerCase().trim())) {
         return false
       }
-      if (invoiceFilters.customer) {
+      if (selectedCustomers.length > 0) {
+        const cust = (i.contact?.name || i.customer_name_freeform || '').trim()
+        if (!selectedCustomers.includes(cust)) return false
+      } else if (invoiceFilters.customer) {
         const cust = (i.contact?.name || i.customer_name_freeform || '').toLowerCase()
         if (!cust.includes(invoiceFilters.customer.toLowerCase().trim())) return false
       }
@@ -254,7 +280,7 @@ export default function SalesInvoices() {
       }
       return true
     })
-  }, [invoices, invoiceFilters, cp])
+  }, [invoices, invoiceFilters, selectedCustomers, cp])
 
   const filteredTotalUsd = useMemo(() => {
     return filteredInvoices.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
@@ -328,25 +354,18 @@ export default function SalesInvoices() {
           )}
         </div>
       </td>
-      <td className="px-2 py-1.5">
-        <div className="relative">
-          <input
-            ref={customerRef}
-            type="text"
-            value={invoiceFilters.customer}
-            onChange={e => setInvoiceFilters(f => ({ ...f, customer: e.target.value }))}
-            placeholder="Filter customer..."
-            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
-          />
-          {invoiceFilters.customer && (
-            <button
-              onClick={() => setInvoiceFilters(f => ({ ...f, customer: '' }))}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              <X size={11} />
-            </button>
-          )}
-        </div>
+      <td className="px-2 py-1.5 min-w-[150px]">
+        <MultiSelectFilter
+          inputRef={customerRef}
+          title="Customers"
+          placeholder="Filter customer..."
+          options={allCustomers}
+          counts={customerCounts}
+          selectedValues={selectedCustomers}
+          onChangeSelected={setSelectedCustomers}
+          searchValue={invoiceFilters.customer}
+          onSearchChange={val => setInvoiceFilters(f => ({ ...f, customer: val }))}
+        />
       </td>
       <td className="px-2 py-1.5">
         <div className="relative">
@@ -476,6 +495,24 @@ export default function SalesInvoices() {
     </>
   ) : null
 
+  const allReceiptCustomers = useMemo(() => {
+    const set = new Set()
+    receipts.forEach(r => {
+      const name = (r.customer_name_freeform || r.contact?.name || '').trim()
+      if (name) set.add(name)
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [receipts])
+
+  const receiptCustomerCounts = useMemo(() => {
+    const counts = {}
+    receipts.forEach(r => {
+      const name = (r.customer_name_freeform || r.contact?.name || '').trim()
+      if (name) counts[name] = (counts[name] || 0) + 1
+    })
+    return counts
+  }, [receipts])
+
   // Filtered receipts logic
   const filteredReceipts = useMemo(() => {
     return receipts.filter(r => {
@@ -491,7 +528,10 @@ export default function SalesInvoices() {
         const q = receiptFilters.date.toLowerCase().trim()
         if (!d1.toLowerCase().includes(q) && !d2.toLowerCase().includes(q)) return false
       }
-      if (receiptFilters.customer) {
+      if (selectedReceiptCustomers.length > 0) {
+        const cust = (r.customer_name_freeform || r.contact?.name || '').trim()
+        if (!selectedReceiptCustomers.includes(cust)) return false
+      } else if (receiptFilters.customer) {
         const cust = (r.customer_name_freeform || r.contact?.name || '').toLowerCase()
         if (!cust.includes(receiptFilters.customer.toLowerCase().trim())) return false
       }
@@ -514,7 +554,7 @@ export default function SalesInvoices() {
       }
       return true
     })
-  }, [receipts, receiptFilters, cp])
+  }, [receipts, receiptFilters, selectedReceiptCustomers, cp])
 
   const filteredReceiptsTotalUsd = useMemo(() => {
     return filteredReceipts.reduce((s, r) => s + Number(r.amount_usd || 0), 0)
@@ -628,25 +668,18 @@ export default function SalesInvoices() {
           )}
         </div>
       </td>
-      <td className="px-2 py-1.5">
-        <div className="relative">
-          <input
-            ref={recCustomerRef}
-            type="text"
-            value={receiptFilters.customer}
-            onChange={e => setReceiptFilters(f => ({ ...f, customer: e.target.value }))}
-            placeholder="Customer..."
-            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
-          />
-          {receiptFilters.customer && (
-            <button
-              onClick={() => setReceiptFilters(f => ({ ...f, customer: '' }))}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              <X size={11} />
-            </button>
-          )}
-        </div>
+      <td className="px-2 py-1.5 min-w-[150px]">
+        <MultiSelectFilter
+          inputRef={recCustomerRef}
+          title="Customers"
+          placeholder="Filter customer..."
+          options={allReceiptCustomers}
+          counts={receiptCustomerCounts}
+          selectedValues={selectedReceiptCustomers}
+          onChangeSelected={setSelectedReceiptCustomers}
+          searchValue={receiptFilters.customer}
+          onSearchChange={val => setReceiptFilters(f => ({ ...f, customer: val }))}
+        />
       </td>
       <td className="px-2 py-1.5">
         <div className="relative">
@@ -818,12 +851,17 @@ export default function SalesInvoices() {
                   <Filter size={11} /> {activeInvoiceFilterCount} filter{activeInvoiceFilterCount > 1 ? 's' : ''} applied
                 </span>
               )}
-              {invoiceFilters.customer && (
+              {selectedCustomers.length > 0 ? (
+                <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                  Customer{selectedCustomers.length > 1 ? 's' : ''}: <strong>{selectedCustomers.length === 1 ? selectedCustomers[0] : `${selectedCustomers.length} selected`}</strong>
+                  <button onClick={() => setSelectedCustomers([])} className="hover:text-red-600 ml-0.5" title="Clear customer filter"><X size={12} /></button>
+                </span>
+              ) : invoiceFilters.customer ? (
                 <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
                   Customer: <strong>{invoiceFilters.customer}</strong>
-                  <button onClick={() => setInvoiceFilters(f => ({ ...f, customer: '' }))} className="hover:text-red-600 ml-0.5"><X size={12} /></button>
+                  <button onClick={() => setInvoiceFilters(f => ({ ...f, customer: '' }))} className="hover:text-red-600 ml-0.5" title="Clear customer search"><X size={12} /></button>
                 </span>
-              )}
+              ) : null}
               {invoiceFilters.invoiceNumber && (
                 <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
                   Invoice #: <strong>{invoiceFilters.invoiceNumber}</strong>
@@ -886,8 +924,8 @@ export default function SalesInvoices() {
                     title="Click to filter by Customer"
                   >
                     <span>Customer</span>
-                    <Search size={12} className={`transition-opacity ${invoiceFilters.customer ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
-                    {invoiceFilters.customer && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                    <Search size={12} className={`transition-opacity ${selectedCustomers.length > 0 || invoiceFilters.customer ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {(selectedCustomers.length > 0 || invoiceFilters.customer) && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
                   </div>
                 ),
                 render: r => r.contact?.name || r.customer_name_freeform || '—'
@@ -1018,12 +1056,17 @@ export default function SalesInvoices() {
                   <Filter size={11} /> {activeReceiptFilterCount} filter{activeReceiptFilterCount > 1 ? 's' : ''} applied
                 </span>
               )}
-              {receiptFilters.customer && (
+              {selectedReceiptCustomers.length > 0 ? (
+                <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                  Customer{selectedReceiptCustomers.length > 1 ? 's' : ''}: <strong>{selectedReceiptCustomers.length === 1 ? selectedReceiptCustomers[0] : `${selectedReceiptCustomers.length} selected`}</strong>
+                  <button onClick={() => setSelectedReceiptCustomers([])} className="hover:text-red-600 ml-0.5" title="Clear customer filter"><X size={12} /></button>
+                </span>
+              ) : receiptFilters.customer ? (
                 <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
                   Customer: <strong>{receiptFilters.customer}</strong>
-                  <button onClick={() => setReceiptFilters(f => ({ ...f, customer: '' }))} className="hover:text-red-600 ml-0.5"><X size={12} /></button>
+                  <button onClick={() => setReceiptFilters(f => ({ ...f, customer: '' }))} className="hover:text-red-600 ml-0.5" title="Clear customer search"><X size={12} /></button>
                 </span>
-              )}
+              ) : null}
               {receiptFilters.receiptNumber && (
                 <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
                   Receipt #: <strong>{receiptFilters.receiptNumber}</strong>
@@ -1110,8 +1153,8 @@ export default function SalesInvoices() {
                     title="Click to filter by Customer"
                   >
                     <span>Customer</span>
-                    <Search size={12} className={`transition-opacity ${receiptFilters.customer ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
-                    {receiptFilters.customer && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                    <Search size={12} className={`transition-opacity ${selectedReceiptCustomers.length > 0 || receiptFilters.customer ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                    {(selectedReceiptCustomers.length > 0 || receiptFilters.customer) && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
                   </div>
                 ),
                 render: r => r.customer_name_freeform || r.contact?.name || '—'

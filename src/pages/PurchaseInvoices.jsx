@@ -10,6 +10,7 @@ import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
 import { resolveReportPeriod, formatDate } from '../lib/fiscalYear'
 import InvoiceDownloadMenu from '../components/InvoiceDownloadMenu'
 import PurchaseInvoiceFormModal from '../components/PurchaseInvoiceFormModal'
+import MultiSelectFilter from '../components/MultiSelectFilter'
 
 const STATUS_COLORS = {
   Draft: 'bg-slate-100 text-slate-600',
@@ -38,6 +39,7 @@ export default function PurchaseInvoices() {
     amountUsd: '',
     status: '',
   })
+  const [selectedSuppliers, setSelectedSuppliers] = useState([])
   const [showInvoiceFilters, setShowInvoiceFilters] = useState(true)
 
   const invNumRef = useRef(null)
@@ -58,7 +60,7 @@ export default function PurchaseInvoices() {
     }, 50)
   }
 
-  const activeInvoiceFilterCount = Object.values(invoiceFilters).filter(v => Boolean(v && v.trim())).length
+  const activeInvoiceFilterCount = Object.values(invoiceFilters).filter(v => Boolean(v && v.trim())).length + (selectedSuppliers.length > 0 ? 1 : 0)
   const hasActiveInvoiceFilters = activeInvoiceFilterCount > 0
 
   function clearInvoiceFilters() {
@@ -71,6 +73,7 @@ export default function PurchaseInvoices() {
       amountUsd: '',
       status: '',
     })
+    setSelectedSuppliers([])
   }
 
   useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
@@ -136,6 +139,24 @@ export default function PurchaseInvoices() {
     ...i, supplierName: i.contact?.name || i.supplier_name_freeform || '—', amountLabel: `${i.amount} ${i.currency}`, amountUsdLabel: cp.fmt(i.amount_usd || 0),
   }))
 
+  const allSuppliers = useMemo(() => {
+    const set = new Set()
+    invoices.forEach(i => {
+      const name = (i.contact?.name || i.supplier_name_freeform || '').trim()
+      if (name) set.add(name)
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [invoices])
+
+  const supplierCounts = useMemo(() => {
+    const counts = {}
+    invoices.forEach(i => {
+      const name = (i.contact?.name || i.supplier_name_freeform || '').trim()
+      if (name) counts[name] = (counts[name] || 0) + 1
+    })
+    return counts
+  }, [invoices])
+
   const filteredInvoices = useMemo(() => {
     return invoices.filter(i => {
       if (invoiceFilters.invoiceNumber && !String(i.invoice_number || '').toLowerCase().includes(invoiceFilters.invoiceNumber.toLowerCase().trim())) {
@@ -147,7 +168,10 @@ export default function PurchaseInvoices() {
         const q = invoiceFilters.date.toLowerCase().trim()
         if (!d1.toLowerCase().includes(q) && !d2.toLowerCase().includes(q)) return false
       }
-      if (invoiceFilters.supplier) {
+      if (selectedSuppliers.length > 0) {
+        const supp = (i.contact?.name || i.supplier_name_freeform || '').trim()
+        if (!selectedSuppliers.includes(supp)) return false
+      } else if (invoiceFilters.supplier) {
         const supp = (i.contact?.name || i.supplier_name_freeform || '').toLowerCase()
         if (!supp.includes(invoiceFilters.supplier.toLowerCase().trim())) return false
       }
@@ -173,7 +197,7 @@ export default function PurchaseInvoices() {
       }
       return true
     })
-  }, [invoices, invoiceFilters, cp])
+  }, [invoices, invoiceFilters, selectedSuppliers, cp])
 
   const allCurrencies = useMemo(() => {
     return [...new Set(invoices.map(i => i.currency).filter(Boolean))]
@@ -273,25 +297,18 @@ export default function PurchaseInvoices() {
           )}
         </div>
       </td>
-      <td className="px-2 py-1.5">
-        <div className="relative">
-          <input
-            ref={supplierRef}
-            type="text"
-            value={invoiceFilters.supplier}
-            onChange={e => setInvoiceFilters(f => ({ ...f, supplier: e.target.value }))}
-            placeholder="Filter supplier..."
-            className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-navy-500 font-normal"
-          />
-          {invoiceFilters.supplier && (
-            <button
-              onClick={() => setInvoiceFilters(f => ({ ...f, supplier: '' }))}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              <X size={11} />
-            </button>
-          )}
-        </div>
+      <td className="px-2 py-1.5 min-w-[150px]">
+        <MultiSelectFilter
+          inputRef={supplierRef}
+          title="Suppliers"
+          placeholder="Filter supplier..."
+          options={allSuppliers}
+          counts={supplierCounts}
+          selectedValues={selectedSuppliers}
+          onChangeSelected={setSelectedSuppliers}
+          searchValue={invoiceFilters.supplier}
+          onSearchChange={val => setInvoiceFilters(f => ({ ...f, supplier: val }))}
+        />
       </td>
       <td className="px-2 py-1.5">
         <select
@@ -433,12 +450,17 @@ export default function PurchaseInvoices() {
               <Filter size={11} /> {activeInvoiceFilterCount} filter{activeInvoiceFilterCount > 1 ? 's' : ''} applied
             </span>
           )}
-          {invoiceFilters.supplier && (
+          {selectedSuppliers.length > 0 ? (
+            <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+              Supplier{selectedSuppliers.length > 1 ? 's' : ''}: <strong>{selectedSuppliers.length === 1 ? selectedSuppliers[0] : `${selectedSuppliers.length} selected`}</strong>
+              <button onClick={() => setSelectedSuppliers([])} className="hover:text-red-600 ml-0.5" title="Clear supplier filter"><X size={12} /></button>
+            </span>
+          ) : invoiceFilters.supplier ? (
             <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
               Supplier: <strong>{invoiceFilters.supplier}</strong>
-              <button onClick={() => setInvoiceFilters(f => ({ ...f, supplier: '' }))} className="hover:text-red-600 ml-0.5"><X size={12} /></button>
+              <button onClick={() => setInvoiceFilters(f => ({ ...f, supplier: '' }))} className="hover:text-red-600 ml-0.5" title="Clear supplier search"><X size={12} /></button>
             </span>
-          )}
+          ) : null}
           {invoiceFilters.invoiceNumber && (
             <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
               Invoice #: <strong>{invoiceFilters.invoiceNumber}</strong>
@@ -522,8 +544,8 @@ export default function PurchaseInvoices() {
                 title="Click to filter by Supplier"
               >
                 <span>Supplier</span>
-                <Search size={12} className={`transition-opacity ${invoiceFilters.supplier ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
-                {invoiceFilters.supplier && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
+                <Search size={12} className={`transition-opacity ${selectedSuppliers.length > 0 || invoiceFilters.supplier ? 'text-navy-600 opacity-100' : 'text-slate-400 opacity-0 group-hover:opacity-70'}`} />
+                {(selectedSuppliers.length > 0 || invoiceFilters.supplier) && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
               </div>
             ),
             render: r => r.contact?.name || r.supplier_name_freeform || '—'
