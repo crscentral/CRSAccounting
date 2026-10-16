@@ -11,6 +11,7 @@ import { resolveReportPeriod, formatDate } from '../lib/fiscalYear'
 import InvoiceDownloadMenu from '../components/InvoiceDownloadMenu'
 import PurchaseInvoiceFormModal from '../components/PurchaseInvoiceFormModal'
 import MultiSelectFilter from '../components/MultiSelectFilter'
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
 
 const STATUS_COLORS = {
   Draft: 'bg-slate-100 text-slate-600',
@@ -18,6 +19,24 @@ const STATUS_COLORS = {
   Overdue: 'bg-red-100 text-red-700',
   Cancelled: 'bg-slate-100 text-slate-400',
 }
+
+const PIE_COLORS = [
+  '#1e293b',
+  '#3b82f6',
+  '#10b981',
+  '#f59e0b',
+  '#6366f1',
+  '#ec4899',
+  '#8b5cf6',
+  '#14b8a6',
+  '#f43f5e',
+  '#0ea5e9',
+  '#84cc16',
+  '#d97706',
+  '#a855f7',
+  '#06b6d4',
+  '#64748b',
+]
 
 export default function PurchaseInvoices() {
   const { activeCompany, activeProduct, can, activeRole } = useAuth()
@@ -80,7 +99,7 @@ export default function PurchaseInvoices() {
 
   async function loadData() {
     const [{ data: inv }, { data: con }, { data: acc }] = await Promise.all([
-      supabase.from('purchase_invoices').select('*, contact:contacts(name, email, phone, address, tax_id)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
+      supabase.from('purchase_invoices').select('*, contact:contacts(name, email, phone, address, tax_id), account:accounts(id, code, name, type)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
       supabase.from('contacts').select('*').eq('company_id', activeCompany.id),
       supabase.from('accounts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
     ])
@@ -218,6 +237,63 @@ export default function PurchaseInvoices() {
     }
     return null
   }, [filteredInvoices, singleCurrency])
+
+  const categoryPieData = useMemo(() => {
+    const accMap = {}
+    accounts.forEach(a => {
+      accMap[a.id] = a
+    })
+
+    const byCategory = {}
+    filteredInvoices.forEach(i => {
+      let catName = 'Uncategorized'
+      const acc = i.account || (i.account_id ? accMap[i.account_id] : null)
+      if (acc) {
+        catName = acc.code ? `${acc.code} - ${acc.name}` : acc.name
+      }
+      const val = Number(i.amount_usd || 0)
+      if (val > 0) {
+        byCategory[catName] = (byCategory[catName] || 0) + val
+      }
+    })
+
+    const total = Object.values(byCategory).reduce((s, v) => s + v, 0)
+    return Object.entries(byCategory)
+      .map(([name, value]) => ({
+        name,
+        value,
+        percentStr: total > 0 ? ((value / total) * 100).toFixed(1) + '%' : '0.0%',
+      }))
+      .sort((a, b) => b.value - a.value)
+  }, [filteredInvoices, accounts])
+
+  const supplierPieData = useMemo(() => {
+    const bySupplier = {}
+    filteredInvoices.forEach(i => {
+      const suppName = (i.contact?.name || i.supplier_name_freeform || 'Unknown Supplier').trim() || 'Unknown Supplier'
+      const val = Number(i.amount_usd || 0)
+      if (val > 0) {
+        bySupplier[suppName] = (bySupplier[suppName] || 0) + val
+      }
+    })
+
+    const total = Object.values(bySupplier).reduce((s, v) => s + v, 0)
+    return Object.entries(bySupplier)
+      .map(([name, value]) => ({
+        name,
+        value,
+        percentStr: total > 0 ? ((value / total) * 100).toFixed(1) + '%' : '0.0%',
+      }))
+      .sort((a, b) => b.value - a.value)
+  }, [filteredInvoices])
+
+  const totalCategoryUsd = useMemo(() => {
+    return categoryPieData.reduce((s, d) => s + d.value, 0)
+  }, [categoryPieData])
+
+  const totalSupplierUsd = useMemo(() => {
+    return supplierPieData.reduce((s, d) => s + d.value, 0)
+  }, [supplierPieData])
 
   const purchaseFooterRow = (
     <>
@@ -436,6 +512,199 @@ export default function PurchaseInvoices() {
           <div className="flex items-center justify-between pt-3 border-t border-slate-100 font-bold text-emerald-700">
             <span>Grand Total ({cp.displayCurrency})</span>
             <span>{cp.fmt(totalUsd)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 2 Pie Charts: Breakdown by Category (Expense Code) & Breakdown by Supplier */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        {/* Pie Chart 1: Category / Expense Code */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-800">Breakdown by Category (Expense Code)</h3>
+              {hasActiveInvoiceFilters && (
+                <span className="text-[11px] bg-navy-50 text-navy-700 px-1.5 py-0.5 rounded font-medium border border-navy-200">
+                  Filtered ({filteredInvoices.length})
+                </span>
+              )}
+            </div>
+            <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md">
+              Total: {cp.fmt(totalCategoryUsd)}
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center h-64 gap-3">
+            <div className="w-full sm:w-[180px] shrink-0 h-full">
+              {categoryPieData.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                  No data
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={categoryPieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={78}
+                      paddingAngle={2}
+                    >
+                      {categoryPieData.map((e, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip
+                      formatter={(val, name, props) => [
+                        `${cp.fmt(val)} (${props?.payload?.percentStr || ''})`,
+                        props?.payload?.name || name,
+                      ]}
+                      contentStyle={{
+                        backgroundColor: '#ffffff',
+                        borderColor: '#e2e8f0',
+                        borderRadius: '0.5rem',
+                        fontSize: '12px',
+                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            <div className="flex-1 w-full h-full max-h-60 overflow-y-auto pl-2 pr-1 border-t sm:border-t-0 sm:border-l border-slate-100">
+              {categoryPieData.length === 0 ? (
+                <div className="text-xs text-slate-400 py-16 text-center">
+                  No purchase invoices recorded for this period
+                </div>
+              ) : (
+                <ul className="text-[11px] space-y-1.5 w-full">
+                  {categoryPieData.map((entry, index) => (
+                    <li
+                      key={`cat-${index}`}
+                      className="flex items-center justify-between text-slate-600 gap-1.5 py-1 hover:bg-slate-50/80 px-1 rounded transition-colors"
+                    >
+                      <div className="flex items-center min-w-0 mr-1.5 flex-1">
+                        <span className="w-11 text-right mr-2 text-slate-500 font-medium shrink-0">
+                          {entry.percentStr}
+                        </span>
+                        <span
+                          className="w-2.5 h-2.5 mr-2 rounded-[2px] shrink-0"
+                          style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                        />
+                        <span
+                          className="truncate max-w-[130px] sm:max-w-[170px] md:max-w-[210px] font-medium text-slate-700"
+                          title={entry.name}
+                        >
+                          {entry.name}
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-800 shrink-0">
+                        {cp.fmt(entry.value)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Pie Chart 2: Supplier Name */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-800">Breakdown by Supplier</h3>
+              {hasActiveInvoiceFilters && (
+                <span className="text-[11px] bg-navy-50 text-navy-700 px-1.5 py-0.5 rounded font-medium border border-navy-200">
+                  Filtered ({filteredInvoices.length})
+                </span>
+              )}
+            </div>
+            <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md">
+              Total: {cp.fmt(totalSupplierUsd)}
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center h-64 gap-3">
+            <div className="w-full sm:w-[180px] shrink-0 h-full">
+              {supplierPieData.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                  No data
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={supplierPieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={78}
+                      paddingAngle={2}
+                    >
+                      {supplierPieData.map((e, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip
+                      formatter={(val, name, props) => [
+                        `${cp.fmt(val)} (${props?.payload?.percentStr || ''})`,
+                        props?.payload?.name || name,
+                      ]}
+                      contentStyle={{
+                        backgroundColor: '#ffffff',
+                        borderColor: '#e2e8f0',
+                        borderRadius: '0.5rem',
+                        fontSize: '12px',
+                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            <div className="flex-1 w-full h-full max-h-60 overflow-y-auto pl-2 pr-1 border-t sm:border-t-0 sm:border-l border-slate-100">
+              {supplierPieData.length === 0 ? (
+                <div className="text-xs text-slate-400 py-16 text-center">
+                  No purchase invoices recorded for this period
+                </div>
+              ) : (
+                <ul className="text-[11px] space-y-1.5 w-full">
+                  {supplierPieData.map((entry, index) => (
+                    <li
+                      key={`sup-${index}`}
+                      className="flex items-center justify-between text-slate-600 gap-1.5 py-1 hover:bg-slate-50/80 px-1 rounded transition-colors"
+                    >
+                      <div className="flex items-center min-w-0 mr-1.5 flex-1">
+                        <span className="w-11 text-right mr-2 text-slate-500 font-medium shrink-0">
+                          {entry.percentStr}
+                        </span>
+                        <span
+                          className="w-2.5 h-2.5 mr-2 rounded-[2px] shrink-0"
+                          style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                        />
+                        <span
+                          className="truncate max-w-[130px] sm:max-w-[170px] md:max-w-[210px] font-medium text-slate-700"
+                          title={entry.name}
+                        >
+                          {entry.name}
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-800 shrink-0">
+                        {cp.fmt(entry.value)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       </div>
