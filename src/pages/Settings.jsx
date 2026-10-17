@@ -86,6 +86,9 @@ export default function Settings() {
       setFyMonth(activeCompany.fiscal_year_start_month)
       setCompanyDefaultCurrency(activeCompany.default_currency || activeCompany.base_currency || 'USD')
       setCompanyBaseCurrency(activeCompany.base_currency || 'USD')
+      if (activeCompany.favorite_currencies && activeCompany.favorite_currencies.length > 0) {
+        setFavorites(activeCompany.favorite_currencies)
+      }
       loadMembers()
       loadSettings()
     }
@@ -222,9 +225,10 @@ export default function Settings() {
       fiscal_year_start_month: fyMonth,
       default_currency: companyDefaultCurrency,
       base_currency: companyBaseCurrency,
+      favorite_currencies: favorites,
     }).eq('id', activeCompany.id)
     await supabase.from('company_settings').upsert({ company_id: activeCompany.id, favorite_currencies: favorites }, { onConflict: 'company_id' })
-    refreshCompanies()
+    await refreshCompanies()
     setSettingsSaved(true)
     setTimeout(() => setSettingsSaved(false), 2500)
   }

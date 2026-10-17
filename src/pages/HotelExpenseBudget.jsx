@@ -6,6 +6,7 @@ import { MONTH_NAMES } from '../lib/fiscalYear'
 import { getLatestRate, convertFromUsd, formatMoney, formatMoneyRounded, formatReportMoney } from '../lib/fx'
 import { CURRENCIES } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
+import CurrencySwitcher from '../components/CurrencySwitcher'
 import KpiCard from '../components/KpiCard'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 
@@ -300,13 +301,10 @@ export default function HotelExpenseBudget() {
             >
               Download Report
             </button>
-            <select
+            <CurrencySwitcher
               value={displayCurrency}
-              onChange={e => setDisplayCurrency(e.target.value)}
-              className="h-[38px] border border-slate-300 rounded-lg px-3 text-sm font-medium text-slate-700 bg-white hover:border-navy-400 focus:outline-none focus:border-navy-500 shadow-sm cursor-pointer"
-            >
-              {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
-            </select>
+              onChange={setDisplayCurrency}
+            />
           </div>
         }
       />

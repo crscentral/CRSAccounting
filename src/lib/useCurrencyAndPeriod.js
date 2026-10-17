@@ -51,7 +51,13 @@ export function useCurrencyAndPeriod(defaultPeriod = 'YTD') {
 
   return {
     displayCurrency, setDisplayCurrency,
-    currencyProps: { value: displayCurrency, onChange: setDisplayCurrency },
+    currencyProps: {
+      value: displayCurrency,
+      onChange: setDisplayCurrency,
+      favorites: (activeCompany?.favorite_currencies && activeCompany.favorite_currencies.length > 0)
+        ? activeCompany.favorite_currencies
+        : ['USD', 'THB', 'INR'],
+    },
     periodProps: {
       periodType, onPeriodTypeChange: setPeriodType,
       n, onNChange: setN,

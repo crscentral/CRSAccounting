@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, Pencil, Trash2, Globe, Mail, MapPin, X, Upload } from 'lucide-react'
+import { Plus, Pencil, Trash2, Globe, Mail, MapPin, X, Upload, Search, Check } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { MONTH_NAMES } from '../lib/fiscalYear'
@@ -12,7 +12,7 @@ const ALL_PRODUCTS = ['basic', 'hotel', 'restaurant']
 const emptyForm = {
   name: '', legal_name: '', industry: 'Revenue Management', address: '', city: '', country: '',
   email: '', website: '', phone: '', tax_id: '', logo_url: '',
-  base_currency: 'USD', default_currency: 'USD', fiscal_year_start_month: 1,
+  base_currency: 'USD', default_currency: 'USD', favorite_currencies: ['USD', 'THB', 'INR'], fiscal_year_start_month: 1,
   bank_name: '', bank_account_holder: '', bank_account_number: '', bank_branch: '', bank_swift_code: '', bank_ifsc_code: '',
   bank2_name: '', bank2_account_holder: '', bank2_account_number: '', bank2_branch: '', bank2_swift_code: '', bank2_ifsc_code: '',
   default_payment_terms: '', default_notes: '', default_thank_you_note: '',
@@ -30,6 +30,21 @@ export default function Companies() {
   const [saving, setSaving] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [error, setError] = useState('')
+  const [currencySearch, setCurrencySearch] = useState('')
+
+  const filteredCurrencies = useMemo(() => {
+    const q = currencySearch.trim().toLowerCase()
+    if (!q) return CURRENCY_LIST
+    return CURRENCY_LIST.filter(c => c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))
+  }, [currencySearch])
+
+  function toggleFavorite(code) {
+    const currFavs = Array.isArray(form.favorite_currencies) ? form.favorite_currencies : ['USD', 'THB', 'INR']
+    const updated = currFavs.includes(code)
+      ? currFavs.filter(c => c !== code)
+      : [...currFavs, code]
+    update('favorite_currencies', updated)
+  }
 
   const availableProductsToUser = useMemo(() => {
     const products = new Set()
@@ -46,16 +61,19 @@ export default function Companies() {
   function openCreate() {
     setEditingCompany(null)
     setForm({ ...emptyForm, products: availableProductsToUser })
+    setCurrencySearch('')
     setTab('General')
     setModalOpen(true)
   }
 
   function openEdit(company) {
     setEditingCompany(company)
+    setCurrencySearch('')
     setForm(Object.fromEntries(Object.keys(emptyForm).map(k => {
       if (k === 'products') return [k, company.company_products?.map(p => p.product) || []]
       if (k === 'fiscal_year_start_month') return [k, company[k] || 1]
       if (k === 'default_currency') return [k, company.default_currency || company.base_currency || 'USD']
+      if (k === 'favorite_currencies') return [k, (Array.isArray(company.favorite_currencies) && company.favorite_currencies.length > 0) ? company.favorite_currencies : ['USD', 'THB', 'INR']]
       return [k, company[k] ?? emptyForm[k]]
     })))
     setTab('General')
@@ -120,6 +138,13 @@ export default function Companies() {
         }
       }
 
+      if (payload.favorite_currencies) {
+        await supabase.from('company_settings').upsert({
+          company_id: targetCompanyId,
+          favorite_currencies: payload.favorite_currencies,
+        }, { onConflict: 'company_id' })
+      }
+
       await refreshCompanies()
       setModalOpen(false)
     } catch (err) {
@@ -159,6 +184,11 @@ export default function Companies() {
                 <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gold-100 text-gold-700" title="Statutory Base Currency">
                   Base: {company.base_currency}
                 </span>
+                {company.favorite_currencies && company.favorite_currencies.length > 0 && (
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600" title="Favorite Currencies">
+                    Favs: {company.favorite_currencies.join(', ')}
+                  </span>
+                )}
               </div>
             </div>
             <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 mb-3">{company.industry || 'Revenue Management'}</span>
@@ -237,6 +267,82 @@ export default function Companies() {
                       </select>
                       <p className="text-[11px] text-slate-500 mt-1">Used for statutory legal currency & Base Currency pie chart on Dashboard.</p>
                     </Field>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl p-3.5 bg-slate-50/50">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-semibold text-slate-700">Favorite Currencies</label>
+                          <span className="text-[11px] bg-navy-50 text-navy-700 font-medium px-2 py-0.5 rounded-full border border-navy-100">
+                            {(form.favorite_currencies || []).length} selected
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Pinned at the top of currency switchers across all pages for this company.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                          <input
+                            type="text"
+                            value={currencySearch}
+                            onChange={e => setCurrencySearch(e.target.value)}
+                            placeholder="Search currency..."
+                            className="pl-8 pr-7 py-1 text-xs border border-slate-200 rounded-lg w-44 focus:outline-none focus:ring-1 focus:ring-navy-600 focus:border-navy-600 bg-white"
+                          />
+                          {currencySearch && (
+                            <button
+                              type="button"
+                              onClick={() => setCurrencySearch('')}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            >
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
+                        {(form.favorite_currencies || []).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => update('favorite_currencies', [])}
+                            className="text-[11px] text-slate-400 hover:text-rose-600 transition-colors whitespace-nowrap px-1 py-1"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="max-h-40 overflow-y-auto p-2 bg-white rounded-lg border border-slate-200">
+                      {filteredCurrencies.length === 0 ? (
+                        <div className="text-center py-4 text-xs text-slate-400">
+                          No currencies match "{currencySearch}".
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {filteredCurrencies.map(c => {
+                            const isFav = (form.favorite_currencies || []).includes(c.code)
+                            return (
+                              <button
+                                key={c.code}
+                                type="button"
+                                onClick={() => toggleFavorite(c.code)}
+                                title={`${c.code} — ${c.name}`}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-all ${
+                                  isFav
+                                    ? 'bg-navy-800 text-white shadow-xs border border-navy-800 font-semibold'
+                                    : 'bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-100'
+                                }`}
+                              >
+                                {isFav && <Check size={11} className="stroke-[3]" />}
+                                <span>{c.code}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Fiscal Year Start Month">

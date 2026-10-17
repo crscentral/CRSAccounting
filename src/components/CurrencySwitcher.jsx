@@ -1,8 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { ChevronDown, Search } from 'lucide-react'
 import { CURRENCY_LIST } from '../lib/currencies'
+import { useAuth } from '../lib/AuthContext'
 
-export default function CurrencySwitcher({ value, onChange, favorites = ['USD', 'THB', 'INR'] }) {
+export default function CurrencySwitcher({ value, onChange, favorites }) {
+  const { activeCompany } = useAuth()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef(null)
@@ -15,7 +17,17 @@ export default function CurrencySwitcher({ value, onChange, favorites = ['USD', 
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
-  const favList = CURRENCY_LIST.filter(c => favorites.includes(c.code))
+  const effectiveFavorites = useMemo(() => {
+    if (Array.isArray(favorites) && favorites.length > 0) return favorites
+    if (Array.isArray(activeCompany?.favorite_currencies) && activeCompany.favorite_currencies.length > 0) {
+      return activeCompany.favorite_currencies
+    }
+    return ['USD', 'THB', 'INR']
+  }, [favorites, activeCompany?.favorite_currencies])
+
+  const favList = useMemo(() => {
+    return CURRENCY_LIST.filter(c => effectiveFavorites.includes(c.code))
+  }, [effectiveFavorites])
   const filtered = useMemo(() => {
     if (!query) return CURRENCY_LIST
     const q = query.toLowerCase()
