@@ -4,7 +4,7 @@ import { BedDouble, Percent, DollarSign, TrendingUp, AlertTriangle } from 'lucid
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
-import { getMTDRange, getYTDRange, getYearRange } from '../lib/fiscalYear'
+import { getMTDRange, getYTDRange, getYearRange, getMonthRange, MONTH_NAMES } from '../lib/fiscalYear'
 import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import { CURRENCY_LIST, CURRENCIES } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
@@ -20,9 +20,16 @@ const VIEWS = [
   { key: 'ytd', label: 'YTD' },
 ]
 
+const currentYearNum = new Date().getFullYear()
+const YEAR_OPTIONS = Array.from({ length: 8 }, (_, i) => currentYearNum - 4 + i)
+
 export default function HotelOccupancyStats() {
   const { activeCompany, activeProduct } = useAuth()
+  const now = new Date()
   const [view, setView] = useState('mtd')
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
+  const [selectedMonthYear, setSelectedMonthYear] = useState(now.getFullYear())
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear())
   const [displayCurrency, setDisplayCurrency] = useState('USD')
   const [rate, setRate] = useState(1)
   const [totalRooms, setTotalRooms] = useState(0)
@@ -36,25 +43,28 @@ export default function HotelOccupancyStats() {
   const [loading, setLoading] = useState(true)
   const [reportModalOpen, setReportModalOpen] = useState(false)
 
-  useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, view])
+  useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, view, selectedMonth, selectedMonthYear, selectedYear])
   useEffect(() => { if (displayCurrency === 'USD') { setRate(1); return } getLatestRate(displayCurrency).then(r => setRate(r || 1)) }, [displayCurrency])
 
   function fmtRounded(usd) { return formatMoney(Math.round(convertFromUsd(usd, displayCurrency, { [displayCurrency]: rate })), displayCurrency).replace('.00', '') }
   function fmt(usd) { return formatMoney(convertFromUsd(usd, displayCurrency, { [displayCurrency]: rate }), displayCurrency) }
 
-  function rangeFor(v) {
+  function rangeFor(v, sm = selectedMonth, smy = selectedMonthYear, sy = selectedYear) {
     const today = new Date()
     if (v === 'last_night') { const d = new Date(today); d.setDate(d.getDate() - 1); const s = getLocalDate(d); return { from: s, to: s } }
     if (v === 'last_30') { const d = new Date(today); d.setDate(d.getDate() - 30); return { from: getLocalDate(d), to: getLocalDate(today) } }
     if (v === 'last_year_daily') return getYearRange(today.getFullYear() - 1)
     if (v === 'mtd') return getMTDRange()
+    if (v === 'ytd') return getYTDRange(1)
+    if (v === 'specific_month') return getMonthRange(smy, sm)
+    if (v === 'specific_year') return getYearRange(sy)
     return getYTDRange(1)
   }
 
   async function loadAll() {
-    const now = new Date();
     setLoading(true)
     const range = rangeFor(view)
+    const targetYear = view === 'specific_month' ? selectedMonthYear : (view === 'specific_year' ? selectedYear : now.getFullYear())
       
     const [{ data: s }, { data: b }, { data: settings }, { data: anc }, { data: restRev }, { data: expBudget }, { data: accounts }] = await Promise.all([
       supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to).order('stat_date', { ascending: false }),
@@ -62,7 +72,7 @@ export default function HotelOccupancyStats() {
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
       supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to),
       activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to) : Promise.resolve({ data: [] }),
-      supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', now.getFullYear()),
+      supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', targetYear),
       supabase.from('accounts').select('id, type').eq('company_id', activeCompany.id).eq('type', 'Revenue')
     ])
     
@@ -105,16 +115,18 @@ export default function HotelOccupancyStats() {
     // Calculate Budgets
     const isMtd = view === 'mtd'
     const isYtd = view === 'ytd'
+    const isSpecMonth = view === 'specific_month'
+    const isSpecYear = view === 'specific_year'
     let v = null
-    if (isMtd || isYtd) {
-        const startMonth = isMtd ? (now.getMonth() + 1) : 1
-        const endMonth = now.getMonth() + 1
+    if (isMtd || isYtd || isSpecMonth || isSpecYear) {
+        const startMonth = isMtd ? (now.getMonth() + 1) : (isSpecMonth ? selectedMonth : 1)
+        const endMonth = isMtd ? (now.getMonth() + 1) : (isSpecMonth ? selectedMonth : (isSpecYear ? 12 : now.getMonth() + 1))
         
         let roomB = 0
         for (let m = startMonth; m <= endMonth; m++) {
-           const row = (b || []).find(bx => bx.budget_year === now.getFullYear() && bx.budget_month === m)
+           const row = (b || []).find(bx => bx.budget_year === targetYear && bx.budget_month === m)
            if (row) {
-              const days = new Date(now.getFullYear(), m, 0).getDate()
+              const days = new Date(targetYear, m, 0).getDate()
               roomB += Number(row.budgeted_room_revenue_usd || 0) * days
            }
         }
@@ -168,6 +180,12 @@ export default function HotelOccupancyStats() {
       statTableRows.push(['Total / Average', totOcc, '', f(avgAdr), '', f(totRev), f(totCol)])
     }
 
+    const periodLabel = reportView === 'specific_month'
+      ? `${MONTH_NAMES[selectedMonth - 1]} ${selectedMonthYear}`
+      : reportView === 'specific_year'
+      ? `Year ${selectedYear}`
+      : (VIEWS.find(v => v.key === reportView)?.label || reportView)
+
     const sections = [
       {
         heading: 'Summary',
@@ -179,7 +197,7 @@ export default function HotelOccupancyStats() {
         ]
       },
       {
-        heading: `Occupancy & Revenue Statistics — ${VIEWS.find(v => v.key === reportView)?.label}`,
+        heading: `Occupancy & Revenue Statistics — ${periodLabel}`,
         columns: ['Date', 'Rooms Occupied', 'Occupancy %', `ADR (${curLabel})`, `RevPAR (${curLabel})`, `Room Revenue (${curLabel})`, `Collected (${curLabel})`],
         rows: statTableRows,
       }
@@ -221,20 +239,127 @@ export default function HotelOccupancyStats() {
         subtitle={`${activeCompany.name} • ${totalRooms} rooms in inventory`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400">
+            <button
+              onClick={() => setReportModalOpen(true)}
+              className="h-[38px] flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 rounded-lg hover:border-navy-400"
+            >
               Download Report
             </button>
-            <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+            <select
+              value={displayCurrency}
+              onChange={e => setDisplayCurrency(e.target.value)}
+              className="h-[38px] border border-slate-300 rounded-lg px-3 text-sm font-medium text-slate-700 bg-white hover:border-navy-400 focus:outline-none focus:border-navy-500"
+            >
               {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
             </select>
           </div>
         }
       />
 
-      <div className="flex gap-1 bg-slate-100 rounded-lg p-1 mb-6 overflow-x-auto">
-        {VIEWS.map(v => (
-          <button key={v.key} onClick={() => setView(v.key)} className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap ${view === v.key ? 'bg-white shadow text-navy-700' : 'text-slate-500'}`}>{v.label}</button>
-        ))}
+      <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 rounded-lg p-1 mb-6">
+        <div className="flex items-center gap-1 overflow-x-auto">
+          {VIEWS.map(v => (
+            <button
+              key={v.key}
+              onClick={() => setView(v.key)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
+                view === v.key ? 'bg-white shadow text-navy-700' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="h-5 w-px bg-slate-300 mx-1 hidden sm:block" />
+
+        {/* Specific Month */}
+        <div
+          className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-colors ${
+            view === 'specific_month' ? 'bg-white shadow text-navy-700' : 'text-slate-600'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => setView('specific_month')}
+            className={`text-xs font-medium px-1 py-1 rounded whitespace-nowrap ${
+              view === 'specific_month' ? 'font-semibold text-navy-700' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Month:
+          </button>
+          <select
+            value={selectedMonth}
+            onChange={(e) => {
+              setSelectedMonth(Number(e.target.value))
+              setView('specific_month')
+            }}
+            className={`text-xs h-7 px-1.5 rounded border ${
+              view === 'specific_month'
+                ? 'border-navy-400 bg-white text-navy-800 font-medium'
+                : 'border-slate-300 bg-white/90 text-slate-700'
+            } focus:outline-none focus:ring-1 focus:ring-navy-400`}
+          >
+            {MONTH_NAMES.map((name, i) => (
+              <option key={name} value={i + 1}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={selectedMonthYear}
+            onChange={(e) => {
+              setSelectedMonthYear(Number(e.target.value))
+              setView('specific_month')
+            }}
+            className={`text-xs h-7 px-1.5 rounded border ${
+              view === 'specific_month'
+                ? 'border-navy-400 bg-white text-navy-800 font-medium'
+                : 'border-slate-300 bg-white/90 text-slate-700'
+            } focus:outline-none focus:ring-1 focus:ring-navy-400`}
+          >
+            {YEAR_OPTIONS.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Specific Year */}
+        <div
+          className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-colors ${
+            view === 'specific_year' ? 'bg-white shadow text-navy-700' : 'text-slate-600'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => setView('specific_year')}
+            className={`text-xs font-medium px-1 py-1 rounded whitespace-nowrap ${
+              view === 'specific_year' ? 'font-semibold text-navy-700' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Year:
+          </button>
+          <select
+            value={selectedYear}
+            onChange={(e) => {
+              setSelectedYear(Number(e.target.value))
+              setView('specific_year')
+            }}
+            className={`text-xs h-7 px-1.5 rounded border ${
+              view === 'specific_year'
+                ? 'border-navy-400 bg-white text-navy-800 font-medium'
+                : 'border-slate-300 bg-white/90 text-slate-700'
+            } focus:outline-none focus:ring-1 focus:ring-navy-400`}
+          >
+            {YEAR_OPTIONS.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {totalRooms === 0 && (
@@ -259,7 +384,20 @@ export default function HotelOccupancyStats() {
             <KpiCard label="Total Room Revenue" value={fmtRounded(roomRevTotal)} icon={DollarSign} tone="green" />
             <KpiCard label="Collected" value={fmtRounded(hotelColTotal)} icon={DollarSign} tone="slate" />
             {budgetVar !== null && (
-              <KpiCard label={`Budget Variance (${view === 'mtd' ? 'MTD' : 'YTD'})`} value={fmtRounded(budgetVar)} icon={budgetVar >= 0 ? TrendingUp : AlertTriangle} tone={budgetVar >= 0 ? 'green' : 'red'} />
+              <KpiCard
+                label={`Budget Variance (${
+                  view === 'mtd'
+                    ? 'MTD'
+                    : view === 'ytd'
+                    ? 'YTD'
+                    : view === 'specific_month'
+                    ? `${MONTH_NAMES[selectedMonth - 1]?.slice(0, 3)} ${selectedMonthYear}`
+                    : `${selectedYear}`
+                })`}
+                value={fmtRounded(budgetVar)}
+                icon={budgetVar >= 0 ? TrendingUp : AlertTriangle}
+                tone={budgetVar >= 0 ? 'green' : 'red'}
+              />
             )}
           </div>
 
@@ -315,6 +453,8 @@ export default function HotelOccupancyStats() {
                 { value: 'last_year_daily', label: 'Each Day, Last Year' },
                 { value: 'mtd', label: 'MTD' },
                 { value: 'ytd', label: 'YTD' },
+                { value: 'specific_month', label: `Month: ${MONTH_NAMES[selectedMonth - 1]} ${selectedMonthYear}` },
+                { value: 'specific_year', label: `Year: ${selectedYear}` },
               ]
             }
           ]}
