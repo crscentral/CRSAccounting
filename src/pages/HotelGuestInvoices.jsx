@@ -403,8 +403,19 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
     return {}
   })
 
-  // Editable conversion rate between primary and secondary currency
-  const [secondaryFxRate, setSecondaryFxRate] = useState(row?.secondary_fx_rate ? String(row.secondary_fx_rate) : '')
+  // Editable conversion rates for all non-USD currencies (1 USD = X Currency)
+  const [customFxRates, setCustomFxRates] = useState(() => {
+    const init = {}
+    if (row?.currency_breakdown) {
+      Object.entries(row.currency_breakdown).forEach(([c, val]) => {
+        if (val.rate) init[c] = String(val.rate)
+      })
+    }
+    if (row?.secondary_currency && row?.secondary_fx_rate) {
+      init[row.secondary_currency] = String(row.secondary_fx_rate)
+    }
+    return init
+  })
   const [ratesToUsd, setRatesToUsd] = useState({ USD: 1 })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -435,7 +446,11 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
     return Array.from(set)
   }, [currency, lineItems])
 
-  const secondaryCurrency = distinctCurrencies.find(c => c !== currency) || null
+  const nonUsdCurrencies = useMemo(() => {
+    return distinctCurrencies.filter(c => c !== 'USD')
+  }, [distinctCurrencies])
+
+  const secondaryCurrency = nonUsdCurrencies.find(c => c !== currency) || nonUsdCurrencies[0] || null
 
   // Fetch live rates for all present currencies
   useEffect(() => {
@@ -449,22 +464,48 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
       }
       setRatesToUsd(prev => ({ ...prev, ...newRates }))
 
-      // If secondaryFxRate is not manually set, calculate default rate
-      if (secondaryCurrency && (!secondaryFxRate || Number(secondaryFxRate) <= 0)) {
-        if (currency === 'USD') {
-          setSecondaryFxRate(String(newRates[secondaryCurrency] || 1))
-        } else if (secondaryCurrency === 'USD') {
-          setSecondaryFxRate(String(newRates[currency] || 1))
-        } else {
-          // Cross rate: 1 Primary = (rateToUsd[Secondary] / rateToUsd[Primary]) Secondary
-          const pRate = newRates[currency] || 1
-          const sRate = newRates[secondaryCurrency] || 1
-          setSecondaryFxRate((sRate / pRate).toFixed(4))
+      setCustomFxRates(prev => {
+        const updated = { ...prev }
+        let changed = false
+        for (const c of distinctCurrencies) {
+          if (c !== 'USD' && (!updated[c] || Number(updated[c]) <= 0)) {
+            updated[c] = String(newRates[c] || 1)
+            changed = true
+          }
         }
-      }
+        return changed ? updated : prev
+      })
     }
     fetchRates()
-  }, [distinctCurrencies, currency, secondaryCurrency])
+  }, [distinctCurrencies.join(',')])
+
+  function getRateFor(c) {
+    if (c === 'USD') return 1
+    const custom = Number(customFxRates[c])
+    if (custom && custom > 0) return custom
+    return ratesToUsd[c] || 1
+  }
+
+  function convertToUsd(amount, fromC) {
+    if (!amount) return 0
+    if (fromC === 'USD') return Number(amount)
+    const rate = getRateFor(fromC)
+    return Number(amount) / rate
+  }
+
+  function convertUsdToCurrency(amountUsd, targetC) {
+    if (!amountUsd) return 0
+    if (targetC === 'USD') return Number(amountUsd)
+    const rate = getRateFor(targetC)
+    return Number(amountUsd) * rate
+  }
+
+  function convertToPrimary(amount, fromC) {
+    if (!amount) return 0
+    if (fromC === currency) return Number(amount)
+    const inUsd = convertToUsd(amount, fromC)
+    return convertUsdToCurrency(inUsd, currency)
+  }
 
   // Totals by currency
   const totalsByCurr = useMemo(() => {
@@ -483,85 +524,88 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
     return totals
   }, [distinctCurrencies, currency, roomRevenue, lineItems])
 
-  // Helper to convert any amount from currency 'fromC' to primary 'currency'
-  function convertToPrimary(amount, fromC) {
-    if (!amount) return 0
-    if (fromC === currency) return Number(amount)
-    const customRate = Number(secondaryFxRate) || 1
-    if (fromC === secondaryCurrency) {
-      if (currency === 'USD') {
-        // Primary is USD, Secondary is LAK (e.g. 1 USD = 22,000 LAK) -> LAK / 22,000
-        return Number(amount) / customRate
-      } else if (secondaryCurrency === 'USD') {
-        // Primary is LAK, Secondary is USD -> USD * 22,000
-        return Number(amount) * customRate
-      } else {
-        // Cross rate: 1 Primary = customRate Secondary
-        return Number(amount) / customRate
-      }
+  const hasAnyExplicitCollection = useMemo(() => {
+    return Object.values(collectedByCurr).some(v => v !== undefined && v !== '' && !isNaN(Number(v)))
+  }, [collectedByCurr])
+
+  function getCollectedFor(c) {
+    if (hasAnyExplicitCollection) {
+      const val = collectedByCurr[c]
+      return (val !== undefined && val !== '') ? Number(val) : 0
     }
-    // Fallback using standard USD rates
-    const fromRateToUsd = ratesToUsd[fromC] || 1
-    const primRateToUsd = ratesToUsd[currency] || 1
-    const inUsd = Number(amount) / fromRateToUsd
-    return inUsd * primRateToUsd
+    return totalsByCurr[c] || 0
   }
+
+  // Combined Invoice Final Amount in USD
+  const finalInvoiceAmountUsd = useMemo(() => {
+    let sumUsd = 0
+    distinctCurrencies.forEach(c => {
+      sumUsd += convertToUsd(totalsByCurr[c] || 0, c)
+    })
+    return Math.round(sumUsd * 100) / 100
+  }, [distinctCurrencies, totalsByCurr, customFxRates, ratesToUsd])
 
   // Combined Invoice Final Amount in primary currency
   const finalInvoiceAmount = useMemo(() => {
-    let sum = 0
+    if (currency === 'USD') return finalInvoiceAmountUsd
+    const primRate = getRateFor(currency)
+    return Math.round(finalInvoiceAmountUsd * primRate * 100) / 100
+  }, [finalInvoiceAmountUsd, currency, customFxRates, ratesToUsd])
+
+  // Combined Collected Amount in USD
+  const finalCollectedAmountUsd = useMemo(() => {
+    let sumUsd = 0
     distinctCurrencies.forEach(c => {
-      sum += convertToPrimary(totalsByCurr[c], c)
+      sumUsd += convertToUsd(getCollectedFor(c), c)
     })
-    return Math.round(sum * 100) / 100
-  }, [distinctCurrencies, totalsByCurr, currency, secondaryCurrency, secondaryFxRate])
+    return Math.round(sumUsd * 100) / 100
+  }, [distinctCurrencies, collectedByCurr, totalsByCurr, hasAnyExplicitCollection, customFxRates, ratesToUsd])
 
   // Combined Collected Amount in primary currency
   const finalCollectedAmount = useMemo(() => {
-    let sum = 0
-    distinctCurrencies.forEach(c => {
-      const userColl = collectedByCurr[c] !== undefined && collectedByCurr[c] !== ''
-        ? Number(collectedByCurr[c])
-        : totalsByCurr[c]
-      sum += convertToPrimary(userColl, c)
-    })
-    return Math.round(sum * 100) / 100
-  }, [distinctCurrencies, collectedByCurr, totalsByCurr, currency, secondaryCurrency, secondaryFxRate])
+    if (currency === 'USD') return finalCollectedAmountUsd
+    const primRate = getRateFor(currency)
+    return Math.round(finalCollectedAmountUsd * primRate * 100) / 100
+  }, [finalCollectedAmountUsd, currency, customFxRates, ratesToUsd])
 
-  // Amounts in USD
-  const primRateToUsd = ratesToUsd[currency] || 1
-  const finalInvoiceAmountUsd = Math.round((currency === 'USD' ? finalInvoiceAmount : finalInvoiceAmount / primRateToUsd) * 100) / 100
-  const finalCollectedAmountUsd = Math.round((currency === 'USD' ? finalCollectedAmount : finalCollectedAmount / primRateToUsd) * 100) / 100
+  // Balance Amount in USD: Invoice Final Amount (USD) - Total Amount Collected (USD)
+  const balanceAmountUsd = useMemo(() => {
+    return Math.round((finalInvoiceAmountUsd - finalCollectedAmountUsd) * 100) / 100
+  }, [finalInvoiceAmountUsd, finalCollectedAmountUsd])
+
+  // Balance Amount in primary currency
+  const balanceAmountPrimary = useMemo(() => {
+    if (currency === 'USD') return balanceAmountUsd
+    const primRate = getRateFor(currency)
+    return Math.round(balanceAmountUsd * primRate * 100) / 100
+  }, [balanceAmountUsd, currency, customFxRates, ratesToUsd])
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    if (!guestName.trim() || finalInvoiceAmount <= 0) {
+    if (!guestName.trim() || (finalInvoiceAmountUsd <= 0 && finalInvoiceAmount <= 0)) {
       setError('Guest name and a positive total invoice amount are required.')
       return
     }
     setSaving(true)
     try {
-      const primFxRate = currency === 'USD' ? 1 : ((ratesToUsd[currency]) || (await getLatestRate(currency)) || 1)
-      const secFxRate = Number(secondaryFxRate) || null
+      const primFxRate = getRateFor(currency)
+      const secCurr = nonUsdCurrencies.find(c => c !== currency) || nonUsdCurrencies[0] || null
+      const secFxRate = secCurr ? getRateFor(secCurr) : null
 
       const breakdown = {}
       distinctCurrencies.forEach(c => {
         const rev = totalsByCurr[c] || 0
-        const coll = collectedByCurr[c] !== undefined && collectedByCurr[c] !== ''
-          ? Number(collectedByCurr[c])
-          : rev
-        breakdown[c] = { revenue: rev, collected: coll }
+        const coll = getCollectedFor(c)
+        const rate = getRateFor(c)
+        breakdown[c] = { revenue: rev, collected: coll, rate: rate }
       })
 
       const enrichedLineItems = lineItems.map(li => {
         const itemCurr = li.currency || currency
-        let itemFx = primFxRate
-        if (itemCurr !== currency && secFxRate) {
-          itemFx = currency === 'USD' ? secFxRate : (ratesToUsd[itemCurr] || 1)
-        }
+        const itemFx = getRateFor(itemCurr)
         const amt = Number(li.amount) || 0
-        const amtUsd = Math.round((amt / (itemCurr === 'USD' ? 1 : itemFx)) * 100) / 100
+        const amtUsd = Math.round((amt / itemFx) * 100) / 100
         return {
           ...li,
           amount: amt,
@@ -583,7 +627,7 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
         checkout_date: checkoutDate || null,
         currency,
         fx_rate_locked: primFxRate,
-        secondary_currency: secondaryCurrency,
+        secondary_currency: secCurr,
         secondary_fx_rate: secFxRate,
         currency_breakdown: breakdown,
         room_rate: Number(roomRate) || 0,
@@ -672,7 +716,7 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
       paid_amount: finalCollectedAmount,
       collected_amount: finalCollectedAmount,
       notes: notes.trim() || '',
-      status: (finalInvoiceAmount - finalCollectedAmount <= 0.001) ? 'Paid' : 'Unpaid'
+      status: (balanceAmountUsd <= 0.009) ? 'Paid' : 'Unpaid'
     }
 
     setPreviewData({
@@ -698,7 +742,7 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
   }
 
   return (
-    <Modal title={row ? 'Edit Guest Invoice' : 'New Guest Invoice'} onClose={onClose}>
+    <Modal title={row ? 'Edit Guest Invoice' : 'New Guest Invoice'} maxWidth="max-w-2xl" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-3 gap-3">
           <Field label="Date *">
@@ -762,7 +806,7 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
           </div>
 
           {lineItems.map((li, i) => (
-            <div key={i} className="flex gap-2 items-center">
+            <div key={i} className="flex gap-2 items-center w-full min-w-0">
               <select
                 value={li.account_id}
                 onChange={e => {
@@ -770,7 +814,7 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
                   nu[i].account_id = e.target.value
                   setLineItems(nu)
                 }}
-                className="flex-1 border border-slate-300 rounded py-1 px-2 text-sm bg-white"
+                className="flex-1 min-w-0 border border-slate-300 rounded py-1.5 px-2 text-sm bg-white truncate"
               >
                 <option value="">Select Revenue Head...</option>
                 {revenueAccounts.map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
@@ -783,7 +827,7 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
                   nu[i].currency = e.target.value
                   setLineItems(nu)
                 }}
-                className="w-24 border border-slate-300 rounded py-1 px-2 text-sm bg-white font-medium text-slate-700"
+                className="w-20 shrink-0 border border-slate-300 rounded py-1.5 px-1.5 text-sm bg-white font-medium text-slate-700"
               >
                 {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
               </select>
@@ -799,13 +843,14 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
                   nu[i].amount = e.target.value
                   setLineItems(nu)
                 }}
-                className="w-28 border border-slate-300 rounded py-1 px-2 text-sm bg-white"
+                className="w-28 shrink-0 border border-slate-300 rounded py-1.5 px-2 text-sm bg-white"
               />
 
               <button
                 type="button"
                 onClick={() => setLineItems(lineItems.filter((_, idx) => idx !== i))}
-                className="text-slate-400 hover:text-red-500 p-1"
+                className="shrink-0 text-slate-400 hover:text-red-500 p-1"
+                title="Remove item"
               >
                 <Trash2 size={16} />
               </button>
@@ -839,35 +884,57 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder={`Full (${rev.toFixed(2)})`}
+                    placeholder={hasAnyExplicitCollection ? '0.00' : `Full (${rev.toFixed(2)})`}
                     value={currentColl}
                     onChange={e => setCollectedByCurr({ ...collectedByCurr, [curr]: e.target.value })}
                     className="w-32 border border-slate-300 rounded px-2.5 py-1 text-sm font-semibold text-slate-800 bg-white"
                   />
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setCollectedByCurr(prev => ({ ...prev, [curr]: String(rev) }))}
+                      className="px-1.5 py-1 text-[10px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded"
+                      title="Set to full revenue"
+                    >
+                      Full
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCollectedByCurr(prev => ({ ...prev, [curr]: '0' }))}
+                      className="px-1.5 py-1 text-[10px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded"
+                      title="Set to 0"
+                    >
+                      0
+                    </button>
+                  </div>
                 </div>
               </div>
             )
           })}
 
-          {/* Editable Conversion Rate if multiple currencies */}
-          {secondaryCurrency && (
-            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-amber-50 rounded border border-amber-200 text-xs">
+          {/* Editable Conversion Rates for all non-USD currencies selected */}
+          {nonUsdCurrencies.length > 0 && (
+            <div className="p-2.5 bg-amber-50/80 rounded border border-amber-200 text-xs space-y-2">
               <div className="flex items-center gap-1.5 font-semibold text-amber-900">
                 <ArrowRightLeft size={13} />
-                <span>Conversion Rate:</span>
+                <span>Conversion Rates:</span>
+                <span className="text-[10px] text-amber-700 font-normal italic">(Editable - 1 USD to currency)</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-700 font-medium">1 {currency === 'USD' ? 'USD' : (secondaryCurrency === 'USD' ? 'USD' : currency)} =</span>
-                <input
-                  type="number"
-                  step="0.0001"
-                  min="0"
-                  value={secondaryFxRate}
-                  onChange={e => setSecondaryFxRate(e.target.value)}
-                  className="w-28 border border-amber-300 rounded px-2 py-1 text-xs font-bold text-amber-950 bg-white shadow-inner"
-                />
-                <span className="text-slate-700 font-medium">{currency === 'USD' ? secondaryCurrency : (secondaryCurrency === 'USD' ? currency : secondaryCurrency)}</span>
-                <span className="text-[10px] text-amber-700 italic ml-1">(Editable)</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {nonUsdCurrencies.map(c => (
+                  <div key={c} className="flex items-center justify-between gap-1.5 bg-white p-2 rounded border border-amber-200 shadow-sm">
+                    <span className="text-slate-700 font-medium whitespace-nowrap">1 USD =</span>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      value={customFxRates[c] !== undefined ? customFxRates[c] : ''}
+                      onChange={e => setCustomFxRates(prev => ({ ...prev, [c]: e.target.value }))}
+                      className="w-28 border border-amber-300 rounded px-2 py-1 text-xs font-bold text-amber-950 bg-white shadow-inner"
+                    />
+                    <span className="text-slate-800 font-semibold">{c}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -885,29 +952,50 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
         </Field>
 
         {/* Final Invoice Summary */}
-        <div className="grid grid-cols-2 gap-3 border-t border-slate-200 pt-3">
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-slate-700 mb-1">Invoice Final Amount ({currency}) *</span>
-            <div className="w-full border border-slate-200 bg-slate-100 rounded-lg px-3 py-2 text-sm font-bold text-slate-900">
-              {Number(finalInvoiceAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
-              {currency !== 'USD' && (
-                <div className="text-[11px] font-normal text-slate-500 mt-0.5">
-                  ≈ ${Number(finalInvoiceAmountUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
-                </div>
-              )}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-200 pt-3">
+          <div className="flex flex-col bg-slate-50 border border-slate-200 rounded-lg p-3">
+            <span className="text-xs font-semibold text-slate-700 mb-1">Invoice Final Amount (USD) *</span>
+            <div className="text-base font-bold text-slate-900">
+              ${Number(finalInvoiceAmountUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
+            {currency !== 'USD' && (
+              <div className="text-[11px] font-normal text-slate-500 mt-0.5">
+                ≈ {Number(finalInvoiceAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-emerald-800 mb-1">Total Amount Collected ({currency})</span>
-            <div className="w-full border border-emerald-200 bg-emerald-50 text-emerald-900 rounded-lg px-3 py-2 text-sm font-bold">
-              {Number(finalCollectedAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
-              {currency !== 'USD' && (
-                <div className="text-[11px] font-normal text-emerald-700 mt-0.5">
-                  ≈ ${Number(finalCollectedAmountUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
-                </div>
-              )}
+          <div className="flex flex-col bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+            <span className="text-xs font-semibold text-emerald-800 mb-1">Total Amount Collected (USD)</span>
+            <div className="text-base font-bold text-emerald-900">
+              ${Number(finalCollectedAmountUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
+            {currency !== 'USD' && (
+              <div className="text-[11px] font-normal text-emerald-700 mt-0.5">
+                ≈ {Number(finalCollectedAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
+              </div>
+            )}
+          </div>
+
+          <div className={`flex flex-col rounded-lg p-3 border ${
+            balanceAmountUsd > 0.009 
+              ? 'bg-amber-50 border-amber-200 text-amber-900' 
+              : balanceAmountUsd < -0.009
+              ? 'bg-blue-50 border-blue-200 text-blue-900'
+              : 'bg-slate-50 border-slate-200 text-slate-800'
+          }`}>
+            <span className="text-xs font-semibold mb-1">Balance Amount (USD)</span>
+            <div className="text-base font-bold">
+              ${Number(Math.abs(balanceAmountUsd)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {balanceAmountUsd > 0.009 && <span className="text-xs font-medium text-amber-700 ml-1.5">(Pending)</span>}
+              {balanceAmountUsd < -0.009 && <span className="text-xs font-medium text-blue-700 ml-1.5">(Overpaid)</span>}
+              {Math.abs(balanceAmountUsd) <= 0.009 && <span className="text-xs font-medium text-emerald-600 ml-1.5">(Settled)</span>}
+            </div>
+            {currency !== 'USD' && (
+              <div className="text-[11px] font-normal text-slate-500 mt-0.5">
+                ≈ {Number(Math.abs(balanceAmountPrimary)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}
+              </div>
+            )}
           </div>
         </div>
 
