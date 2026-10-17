@@ -128,36 +128,45 @@ function HotelExpensesInner() {
   }
 
   async function generateExpensesReport(selections, format) {
-    const range = resolveReportPeriod(selections.period, 1, selections.customFrom, selections.customTo)
+    const fyStart = activeCompany.fiscal_year_start_month || 1
+    const range = resolveReportPeriod(selections.period, fyStart, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
     
-    // We already have the current entries and amcContracts in state. 
-    // The report generator might fetch a different date range, so let's use the fetched data.
-    const { data: exp } = await supabase.from('hotel_expense_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).in('product', ['hotel', 'restaurant']).gte('expense_date', range.from).lte('expense_date', range.to).order('expense_date', { ascending: false })
+    // Fetch hotel expenses and purchase invoices for this date range
+    const [{ data: exp }, { data: pi }] = await Promise.all([
+      supabase.from('hotel_expense_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).in('product', ['hotel', 'restaurant']).gte('expense_date', range.from).lte('expense_date', range.to).order('expense_date', { ascending: false }),
+      supabase.from('purchase_invoices').select('*, contact:contacts(name), account:accounts(code, name)').eq('company_id', activeCompany.id).in('product', ['hotel', 'restaurant']).gte('invoice_date', range.from).lte('invoice_date', range.to).order('invoice_date', { ascending: false }),
+    ])
     
-    // Determine selected heads
-    const selectedHeads = selections.heads || []
+    // Determine selected heads (handle both selections.sections and selections.heads)
+    const selectedHeads = selections.sections || selections.heads || []
     const includeAll = selectedHeads.length === 0
     const includeAmc = includeAll || selectedHeads.includes('AMC Contracts (Amortized)')
     
     // Calculate AMC amortized amount for this range
-    const start = new Date(range.from)
-    const end = new Date(range.to)
-    const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
-    const fyStart = activeCompany.fiscal_year_start_month || 1;
     const amcTotalForView = amcContracts.reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, range.from, range.to), 0)
     
     let totalView = 0
-    let expenseRows = []
+    const expenseRows = []
     
-    (exp || []).forEach(r => {
+    const expList = exp || []
+    for (const r of expList) {
       const head = r.account ? `${r.account.code} - ${r.account.name}` : 'Unknown'
       if (includeAll || selectedHeads.includes(head)) {
         expenseRows.push([r.expense_date, head, f(r.amount_usd), r.notes || '—'])
         totalView += Number(r.amount_usd)
       }
-    })
+    }
+
+    const piList = pi || []
+    for (const r of piList) {
+      const head = r.account ? `${r.account.code} - ${r.account.name}` : (r.supplier_name_freeform || 'Unknown')
+      if (includeAll || selectedHeads.includes(head)) {
+        expenseRows.push([r.invoice_date, head, f(r.amount_usd), r.invoice_number ? `Invoice: ${r.invoice_number}` : 'Purchase Invoice'])
+        totalView += Number(r.amount_usd)
+      }
+    }
     
     if (includeAmc && amcTotalForView > 0) {
       expenseRows.unshift([range.to, 'AMC Contracts (Amortized)', f(amcTotalForView), 'Auto-Amortized Monthly Portion'])
@@ -183,9 +192,9 @@ function HotelExpensesInner() {
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
     const logoUrl = activeCompany.logo_url
     
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'hotel_expenses', logoUrl })
+    if (format === 'pdf' || format === 'preview') await exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'hotel_expenses', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'hotel_expenses' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'hotel_expenses' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'hotel_expenses', logoUrl })
   }
 
   if (!activeCompany) return null
@@ -632,7 +641,18 @@ function HotelExpensesInner() {
           fields={[
             { type: 'currency', key: 'currency', default: cp.displayCurrency },
             { type: 'period', key: 'period', default: 'ALL_TIME' },
-            { type: 'checkboxGroup', key: 'sections', label: 'Select Specific Expense Heads (Optional, leave blank for all)', options: [...new Set(entries.map(e => e.account ? `${e.account.code} - ${e.account.name}` : 'Unknown'))] }
+            {
+              type: 'checkboxGroup',
+              key: 'sections',
+              label: 'Select Specific Expense Heads (Optional, leave blank for all)',
+              options: [
+                ...(amcContracts.length > 0 ? ['AMC Contracts (Amortized)'] : []),
+                ...new Set([
+                  ...entries.map(e => e.account ? `${e.account.code} - ${e.account.name}` : 'Unknown'),
+                  ...purchaseInvoices.map(p => p.account ? `${p.account.code} - ${p.account.name}` : (p.supplier_name_freeform || 'Unknown'))
+                ])
+              ].filter(Boolean)
+            }
           ]}
           onGenerate={generateExpensesReport}
           onClose={() => setReportModalOpen(false)}
