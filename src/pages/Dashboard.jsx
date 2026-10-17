@@ -1,6 +1,6 @@
 import { getLocalDate } from '../lib/dateUtils'
 import { useEffect, useState } from 'react'
-import { TrendingUp, TrendingDown, DollarSign, Receipt, AlertCircle, Building2 } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, Receipt, AlertCircle, Building2, BedDouble, Utensils, Sparkles } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
@@ -35,6 +35,37 @@ function getAmcOverlapUsd(r, fyStart, rangeFrom, rangeTo) {
   const monthlyAmount = activeMonths > 0 ? amount / activeMonths : 0;
   const overlapMonths = getAmcMonthsInView(r.start_year, r.start_month, fyStart, rangeFrom, rangeTo);
   return monthlyAmount * overlapMonths;
+}
+
+function categorizeRevenueAccount(account) {
+  const subtype = (account?.subtype || '').trim().toLowerCase();
+  const name = (account?.name || '').trim().toLowerCase();
+  
+  if (
+    subtype.includes('room') ||
+    subtype.includes('front office') ||
+    name.includes('extra bed') ||
+    name.includes('early check') ||
+    name.includes('late check') ||
+    name.includes('room')
+  ) {
+    return 'room';
+  }
+  
+  if (
+    subtype.includes('f&b') ||
+    subtype.includes('food') ||
+    subtype.includes('beverage') ||
+    subtype.includes('kitchen') ||
+    name.includes('breakfast') ||
+    name.includes('food') ||
+    name.includes('beverage') ||
+    name.includes('f&b')
+  ) {
+    return 'fb';
+  }
+  
+  return 'other';
 }
 
 export default function Dashboard() {
@@ -157,13 +188,13 @@ export default function Dashboard() {
       supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }),
       supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }),
       supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).order('receipt_date', { ascending: false }),
-      supabase.from('accounts').select('id, type, name').eq('company_id', activeCompany.id).in('product', prodFilter),
+      supabase.from('accounts').select('id, code, name, type, subtype').eq('company_id', activeCompany.id).in('product', prodFilter),
       supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
       isHotel ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).order('stat_date', { ascending: false }) : Promise.resolve({ data: [] }),
       isHotel ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).order('invoice_date', { ascending: false }) : Promise.resolve({ data: [] }),
       isHotel ? supabase.from('hotel_expense_entries').select('*, account:accounts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('expense_date', { ascending: false }) : Promise.resolve({ data: [] }),
       isHotel ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
-      isHotel ? supabase.from('hotel_revenue_entries').select('*, account:accounts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).order('entry_date', { ascending: false }) : Promise.resolve({ data: [] }),
+      isHotel ? supabase.from('hotel_revenue_entries').select('*, account:accounts(id, code, name, subtype)').eq('company_id', activeCompany.id).in('product', prodFilter).order('entry_date', { ascending: false }) : Promise.resolve({ data: [] }),
       isHotel ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).order('revenue_date', { ascending: false }) : Promise.resolve({ data: [] })
     ]
     
@@ -215,6 +246,7 @@ export default function Dashboard() {
   }
 
   async function generateDashboardReport(selections, format) {
+    const prodFilter = activeProduct === 'hotel' ? ['hotel', 'restaurant'] : [activeProduct]
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const conv = (usd) => convertFromUsd(usd, selections.currency, { [selections.currency]: rate })
@@ -334,8 +366,82 @@ export default function Dashboard() {
     }
 
     if (selections.sections.includes('Outstanding Invoices')) {
-      const outstanding = sSel.filter(i => i.status !== 'Paid')
-      sections.push({ heading: 'Outstanding Invoices', columns: ['Invoice #', 'Customer', 'Due Date', selections.currency === 'USD' ? 'Balance Due (USD)' : `Balance Due (${selections.currency} & USD)`, 'Status'], rows: outstanding.map(i => [i.invoice_number, i.contact?.name || '—', i.due_date || '—', fmt(i.amount_usd), i.status]) })
+      let rptDraftInvoices = []
+      if (['hotel', 'restaurant'].includes(activeProduct)) {
+        const guestInvoices = (hgi || []).filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)).map(i => ({
+          invoice_number: i.invoice_number ? String(i.invoice_number) : (i.id ? i.id.slice(0, 8).toUpperCase() : '—'),
+          contact: { name: i.guest_name || 'Guest' },
+          due_date: i.invoice_date,
+          balance_due: Number(i.invoice_amount_usd) - Number(i.collected_amount_usd),
+          amount: Number(i.invoice_amount_usd),
+          amount_usd: Number(i.invoice_amount_usd),
+          status: Number(i.collected_amount_usd || 0) > 0 ? 'Partially Paid' : 'Pending'
+        }))
+        const unpaidSales = (s || []).filter(i => i.status !== 'Paid' && (Number(i.balance_due) > 0 || Number(i.amount_usd) > 0)).map(i => ({
+          invoice_number: i.invoice_number || '—',
+          contact: { name: i.contact?.name || 'Customer' },
+          due_date: i.due_date || i.invoice_date,
+          balance_due: Number(i.balance_due ?? i.amount),
+          amount: Number(i.amount),
+          amount_usd: Number(i.amount_usd),
+          status: i.status || 'Pending'
+        }))
+        const uncollectedRooms = (hrs || []).filter(r => Number(r.room_revenue_usd || 0) > (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0))).map(r => {
+          const bal = Number(r.room_revenue_usd || 0) - (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0))
+          return {
+            invoice_number: 'ROOM REV',
+            contact: { name: 'Daily Room Revenue' },
+            due_date: r.stat_date,
+            balance_due: bal,
+            amount: bal,
+            amount_usd: bal,
+            status: 'Uncollected'
+          }
+        })
+        const uncollectedAncillary = (hre || []).filter(r => Number(r.amount_usd || 0) > Number(r.collected_usd || 0)).map(r => {
+          const bal = Number(r.amount_usd || 0) - Number(r.collected_usd || 0)
+          return {
+            invoice_number: 'ANC REV',
+            contact: { name: r.account?.name || 'Ancillary Revenue' },
+            due_date: r.entry_date,
+            balance_due: bal,
+            amount: bal,
+            amount_usd: bal,
+            status: 'Uncollected'
+          }
+        })
+        const uncollectedRestaurant = (rdr || []).filter(r => {
+          const tot = Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0))
+          return tot > Number(r.collected_usd || 0)
+        }).map(r => {
+          const tot = Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0))
+          const bal = tot - Number(r.collected_usd || 0)
+          return {
+            invoice_number: 'F&B REV',
+            contact: { name: r.meal_period ? `${r.meal_period} F&B Revenue` : 'Restaurant Revenue' },
+            due_date: r.revenue_date,
+            balance_due: bal,
+            amount: bal,
+            amount_usd: bal,
+            status: 'Uncollected'
+          }
+        })
+        rptDraftInvoices = [...guestInvoices, ...unpaidSales, ...uncollectedRooms, ...uncollectedAncillary, ...uncollectedRestaurant]
+      } else {
+        rptDraftInvoices = (s || []).filter(i => i.status !== 'Paid')
+      }
+
+      sections.push({
+        heading: 'Outstanding Invoices',
+        columns: ['Invoice #', 'Customer', 'Due Date', selections.currency === 'USD' ? 'Balance Due (USD)' : `Balance Due (${selections.currency} & USD)`, 'Status'],
+        rows: rptDraftInvoices.map(i => [
+          i.invoice_number,
+          i.contact?.name || '—',
+          i.due_date || '—',
+          fmt((Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)),
+          i.status
+        ])
+      })
     }
 
     const title = 'Financial Dashboard'
@@ -354,16 +460,52 @@ export default function Dashboard() {
   
   let totalBilled = 0
   let totalExpenses = 0
-  let outstanding = 0
   let collected = 0
   let expensesMade = 0
+  let totalRoomRevenue = 0
+  let totalFbRevenue = 0
+  let totalOtherRevenue = 0
 
+  let draftInvoices = [];
   if (['hotel', 'restaurant'].includes(activeProduct)) {
-    // Link Total Revenue directly to Daily Revenue Collection stats to perfectly match the page
-    const roomRev = hotelRoomStats.reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
-    const ancRev = hotelRevenueEntries.reduce((s, r) => s + Number(r.amount_usd || 0), 0)
-    const restRev = restaurantRevenue.reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
-    totalBilled = roomRev + ancRev + restRev
+    // 1. Room stats (always Room Revenue)
+    const statsRoomRev = hotelRoomStats.reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0);
+    
+    // 2. Restaurant daily revenue (always F&B Revenue)
+    const statsRestRev = restaurantRevenue.reduce((s, r) => s + (Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0))), 0);
+    
+    // 3. Ancillary hotel revenue entries categorized by account subtype
+    let ancRoomRev = 0;
+    let ancFbRev = 0;
+    let ancOtherRev = 0;
+    hotelRevenueEntries.forEach(r => {
+      const acc = r.account || accounts.find(a => a.id === r.account_id);
+      const cat = categorizeRevenueAccount(acc);
+      const amt = Number(r.amount_usd || 0);
+      if (cat === 'room') ancRoomRev += amt;
+      else if (cat === 'fb') ancFbRev += amt;
+      else ancOtherRev += amt;
+    });
+
+    // 4. Any sales invoices categorized by account subtype
+    let salesRoomRev = 0;
+    let salesFbRev = 0;
+    let salesOtherRev = 0;
+    sales.forEach(i => {
+      const acc = accounts.find(a => a.id === i.account_id);
+      const cat = categorizeRevenueAccount(acc);
+      const amt = Number(i.amount_usd || 0);
+      if (cat === 'room') salesRoomRev += amt;
+      else if (cat === 'fb') salesFbRev += amt;
+      else salesOtherRev += amt;
+    });
+
+    totalRoomRevenue = statsRoomRev + ancRoomRev + salesRoomRev;
+    totalFbRevenue = statsRestRev + ancFbRev + salesFbRev;
+    totalOtherRevenue = ancOtherRev + salesOtherRev;
+
+    // Total Billed strictly equals the sum of the 3 revenue subtypes
+    totalBilled = totalRoomRevenue + totalFbRevenue + totalOtherRevenue;
     
     // Link Total Expenses directly to Expenses page
     const fyStart = activeCompany.fiscal_year_start_month || 1;
@@ -377,94 +519,110 @@ export default function Dashboard() {
     const ancillaryCollected = hotelRevenueEntries.reduce((s, r) => s + Number(r.collected_usd || 0), 0)
     const restRevCollected = restaurantRevenue.reduce((s, r) => s + Number(r.collected_usd || 0), 0)
     collected = roomCollected + ancillaryCollected + restRevCollected
-
-    // Outstanding = Total Billed - Collected
-    outstanding = totalBilled - collected
     
-    // Expenses Made = Actual cash out (hotel expense entries).
+    // Expenses Made = Actual cash out (hotel expense entries + AMC + paid purchase invoices).
     const piExpensesPaid = hotelPurchaseInvoices.reduce((s, e) => s + (e.status === 'Paid' ? Number(e.amount_usd || 0) : 0), 0)
     expensesMade = directExpenses + amcTotal + piExpensesPaid
+
+    // Build complete Outstanding Invoices list (guest invoices, sales invoices, uncollected rooms, uncollected ancillary, uncollected restaurant)
+    const guestInvoices = hotelGuestInvoices
+      .filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd))
+      .map(i => {
+        const bal = Number(i.invoice_amount_usd) - Number(i.collected_amount_usd);
+        return {
+          ...i,
+          contact: { name: i.guest_name || 'Guest' },
+          due_date: i.invoice_date,
+          balance_due: bal,
+          amount: Number(i.invoice_amount_usd),
+          amount_usd: Number(i.invoice_amount_usd),
+          currency: i.currency || 'USD',
+          status: Number(i.collected_amount_usd || 0) > 0 ? 'Partially Paid' : 'Pending',
+          invoice_number: i.invoice_number ? String(i.invoice_number) : (i.id ? i.id.slice(0, 8).toUpperCase() : '—')
+        };
+      });
+
+    const unpaidSales = sales
+      .filter(i => i.status !== 'Paid' && (Number(i.balance_due) > 0 || Number(i.amount_usd) > 0))
+      .map(i => ({
+        ...i,
+        contact: { name: i.contact?.name || 'Customer' },
+        due_date: i.due_date || i.invoice_date,
+        balance_due: Number(i.balance_due ?? i.amount),
+        amount: Number(i.amount),
+        amount_usd: Number(i.amount_usd),
+        currency: i.currency || 'USD',
+        status: i.status || 'Pending',
+        invoice_number: i.invoice_number || '—'
+      }));
+
+    const uncollectedRooms = hotelRoomStats
+      .filter(r => Number(r.room_revenue_usd || 0) > (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0)))
+      .map(r => {
+        const bal = Number(r.room_revenue_usd || 0) - (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0));
+        return {
+          invoice_number: 'ROOM REV',
+          contact: { name: 'Daily Room Revenue' },
+          due_date: r.stat_date,
+          balance_due: bal,
+          amount: bal,
+          amount_usd: bal,
+          currency: cp.displayCurrency,
+          status: 'Uncollected'
+        };
+      });
+
+    const uncollectedAncillary = hotelRevenueEntries
+      .filter(r => Number(r.amount_usd || 0) > Number(r.collected_usd || 0))
+      .map(r => {
+        const bal = Number(r.amount_usd || 0) - Number(r.collected_usd || 0);
+        return {
+          invoice_number: 'ANC REV',
+          contact: { name: r.account?.name || 'Ancillary Revenue' },
+          due_date: r.entry_date,
+          balance_due: bal,
+          amount: bal,
+          amount_usd: bal,
+          currency: cp.displayCurrency,
+          status: 'Uncollected'
+        };
+      });
+
+    const uncollectedRestaurant = restaurantRevenue
+      .filter(r => {
+        const tot = Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0));
+        return tot > Number(r.collected_usd || 0);
+      })
+      .map(r => {
+        const tot = Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0));
+        const bal = tot - Number(r.collected_usd || 0);
+        return {
+          invoice_number: 'F&B REV',
+          contact: { name: r.meal_period ? `${r.meal_period} F&B Revenue` : 'Restaurant Revenue' },
+          due_date: r.revenue_date,
+          balance_due: bal,
+          amount: bal,
+          amount_usd: bal,
+          currency: cp.displayCurrency,
+          status: 'Uncollected'
+        };
+      });
+
+    draftInvoices = [...guestInvoices, ...unpaidSales, ...uncollectedRooms, ...uncollectedAncillary, ...uncollectedRestaurant];
   } else {
     // For Basic, use standard invoices
     totalBilled = sales.reduce((sum, i) => sum + Number(i.amount_usd), 0)
     totalExpenses = purchases.reduce((sum, i) => sum + Number(i.amount_usd), 0)
-    outstanding = sales.reduce((sum, i) => sum + (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)), 0)
-    collected = totalBilled - outstanding
+    draftInvoices = sales.filter(i => i.status !== 'Paid');
+    collected = totalBilled - draftInvoices.reduce((sum, i) => sum + (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd), 0);
     expensesMade = purchases.reduce((sum, i) => sum + (i.status === 'Paid' ? Number(i.amount_usd) : 0), 0)
   }
 
-
-  const netProfit = totalBilled - totalExpenses
-  const actualProfit = collected - expensesMade
-  let draftInvoices = [];
-  if (['hotel', 'restaurant'].includes(activeProduct)) {
-    const guestInvoices = hotelGuestInvoices.filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)).map(i => ({
-        ...i,
-        contact: { name: i.guest_name || 'Guest' },
-        balance_due: Number(i.invoice_amount_usd) - Number(i.collected_amount_usd),
-        amount: i.invoice_amount_usd,
-        amount_usd: i.invoice_amount_usd,
-        due_date: i.invoice_date,
-        status: 'Pending',
-        invoice_number: i.id ? i.id.slice(0, 8).toUpperCase() : '—'
-    }));
-
-    const uncollectedRooms = hotelRoomStats
-        .filter(r => Number(r.room_revenue_usd || 0) > (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0)))
-        .map(r => {
-            const bal = Number(r.room_revenue_usd || 0) - (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0));
-            return {
-                invoice_number: 'ROOM REV',
-                contact: { name: 'Daily Room Revenue' },
-                due_date: r.stat_date,
-                balance_due: bal,
-                amount: bal,
-                amount_usd: bal,
-                currency: cp.displayCurrency,
-                status: 'Uncollected'
-            };
-        });
-
-    const uncollectedAncillary = hotelRevenueEntries
-        .filter(r => Number(r.amount_usd || 0) > Number(r.collected_usd || 0))
-        .map(r => {
-            const bal = Number(r.amount_usd || 0) - Number(r.collected_usd || 0);
-            return {
-                invoice_number: 'ANC REV',
-                contact: { name: r.account?.name || 'Ancillary Revenue' },
-                due_date: r.entry_date,
-                balance_due: bal,
-                amount: bal,
-                amount_usd: bal,
-                currency: cp.displayCurrency,
-                status: 'Uncollected'
-            };
-        });
-
-    const uncollectedRestaurant = restaurantRevenue
-        .filter(r => {
-            const tot = Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0));
-            return tot > Number(r.collected_usd || 0);
-        })
-        .map(r => {
-            const tot = Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0));
-            const bal = tot - Number(r.collected_usd || 0);
-            return {
-                invoice_number: 'F&B REV',
-                contact: { name: r.meal_period + ' F&B Revenue' },
-                due_date: r.revenue_date,
-                balance_due: bal,
-                amount: bal,
-                amount_usd: bal,
-                currency: cp.displayCurrency,
-                status: 'Uncollected'
-            };
-        });
-
-    draftInvoices = [...guestInvoices, ...uncollectedRooms, ...uncollectedAncillary, ...uncollectedRestaurant];
-  } else {
-    draftInvoices = sales.filter(i => i.status !== 'Paid');
-  }
+  // Outstanding is the exact sum of all uncollected / pending items in USD
+  const outstanding = draftInvoices.reduce((sum, i) => {
+    const balUsd = (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd);
+    return sum + (isNaN(balUsd) ? 0 : balUsd);
+  }, 0);
 
   const draftExpenses = activeProduct === 'hotel' ? [] : purchases.filter(i => i.status === 'Draft')
 
@@ -510,7 +668,14 @@ export default function Dashboard() {
     })
 
     Object.values(monthlyMap).forEach(m => {
-      m.Outstanding = m.Revenue - m.Collected
+      m.Outstanding = 0
+    })
+    draftInvoices.forEach(i => {
+      const key = (i.due_date || i.invoice_date || '').slice(0, 7)
+      if (key && monthlyMap[key]) {
+        const balUsd = (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)
+        monthlyMap[key].Outstanding += (isNaN(balUsd) ? 0 : balUsd)
+      }
     })
     
     hotelExpenseEntries.forEach(r => {
@@ -679,8 +844,34 @@ export default function Dashboard() {
         <KpiCard label="Total Revenue" value={cp.fmt(totalBilled)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'total accrued revenue' : 'sales invoices'} icon={TrendingUp} tone="green" />
         <KpiCard label="Total Expenses" value={cp.fmt(totalExpenses)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'total accrued expenses' : 'purchase invoices'} icon={TrendingDown} tone="red" />
         <KpiCard label={['hotel', 'restaurant'].includes(activeProduct) ? 'Accrued Net Profit' : 'Expected Net Profit'} value={cp.fmt(netProfit)} sublabel="revenue minus expenses" icon={DollarSign} tone={netProfit >= 0 ? 'green' : 'red'} />
-        <KpiCard label="Outstanding" value={cp.fmt(outstanding)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'uncollected revenue' : 'pending + overdue'} icon={AlertCircle} tone="slate" />
+        <KpiCard label="Outstanding" value={cp.fmt(outstanding)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'pending + uncollected' : 'pending + overdue'} icon={AlertCircle} tone="slate" />
       </div>
+
+      {activeProduct === 'hotel' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 mb-6">
+          <KpiCard 
+            label="Total Room Revenue" 
+            value={cp.fmt(totalRoomRevenue)} 
+            sublabel="subtype: Room Revenue" 
+            icon={BedDouble} 
+            tone="blue" 
+          />
+          <KpiCard 
+            label="Total F&B Revenue (F&B Service)" 
+            value={cp.fmt(totalFbRevenue)} 
+            sublabel="subtype: F&B Service" 
+            icon={Utensils} 
+            tone="gold" 
+          />
+          <KpiCard 
+            label="Total Other Revenue" 
+            value={cp.fmt(totalOtherRevenue)} 
+            sublabel="subtype: Other Revenue" 
+            icon={Sparkles} 
+            tone="slate" 
+          />
+        </div>
+      )}
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
         <KpiCard label="Total Revenue Collected" value={cp.fmt(collected)} sublabel="actual paid revenue" icon={Receipt} tone="gold" />
