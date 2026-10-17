@@ -624,6 +624,9 @@ export default function Dashboard() {
     return sum + (isNaN(balUsd) ? 0 : balUsd);
   }, 0);
 
+  const netProfit = totalBilled - totalExpenses;
+  const actualProfit = collected - expensesMade;
+
   const draftExpenses = activeProduct === 'hotel' ? [] : purchases.filter(i => i.status === 'Draft')
 
   // YTD & All-Time logic + Charts

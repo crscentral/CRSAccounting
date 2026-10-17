@@ -72,18 +72,6 @@ export default function HotelRevenue() {
   }
 
   function openEditRoom(row) {
-    setMode('room')
-    setEditingId(row.id)
-    setStatDate(row.stat_date)
-    setRoomsOccupied(row.rooms_occupied)
-    setCurrency(row.currency || 'USD')
-    setRoomRevenue(row.room_revenue)
-    setCollected(row.room_revenue_collected)
-    setNotes(row.notes || '')
-    setModalOpen(true)
-  }
-
-  function openEditRoom(row) {
     setEditingRow(row)
     setRoomModalOpen(true)
   }

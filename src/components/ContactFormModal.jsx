@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Modal, { Field } from './Modal'
 
-export default function ContactFormModal({ companyId, contact, defaultType = 'customer', onClose, onSaved }) {
+export default function ContactFormModal({ companyId, product = 'basic', contact, defaultType = 'customer', onClose, onSaved }) {
   const [form, setForm] = useState({
     type: contact?.type || defaultType,
     name: contact?.name || '',

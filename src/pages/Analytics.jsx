@@ -68,6 +68,7 @@ function AnalyticsInner() {
 
 
   async function generateAnalyticsReport(selections, format) {
+    const prodFilter = activeProduct === 'hotel' ? ['hotel', 'restaurant'] : [activeProduct]
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))

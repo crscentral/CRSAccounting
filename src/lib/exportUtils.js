@@ -88,7 +88,7 @@ function sanitizeText(str) {
  * Exports tabular data (columns + rows of plain values) as a PDF.
  * title: page/report title. subtitle: e.g. company name + period.
  */
-export function exportTableToPDF({ title, subtitle, columns, rows, filename }) {
+export function exportTableToPDF({ title, subtitle, columns, rows, filename, preview = false }) {
   const doc = new jsPDF()
   doc.setFontSize(16)
   doc.setTextColor(27, 58, 107) // navy
@@ -105,15 +105,6 @@ export function exportTableToPDF({ title, subtitle, columns, rows, filename }) {
     headStyles: { fillColor: [27, 58, 107] },
     styles: { fontSize: 9 },
   })
-  const pageCount = doc.internal.getNumberOfPages()
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i)
-    if (loadedLogo?.dataUrl) {
-      const logoH = 12
-      const logoW = logoH * loadedLogo.ratio
-      doc.addImage(loadedLogo.dataUrl, 'PNG', pageWidth - 14 - logoW, 10, logoW, logoH)
-    }
-  }
 
   if (preview) {
     const blob = doc.output('blob')

@@ -15,6 +15,7 @@ export default function HotelBudget() {
   const { activeCompany, activeProduct, can } = useAuth()
   const [totalRooms, setTotalRooms] = useState(0)
   const [savingRooms, setSavingRooms] = useState(false)
+  const [saving, setSaving] = useState({})
   const [startYear, setStartYear] = useState(new Date().getFullYear())
   const [startMonth, setStartMonth] = useState('all')
   const [rows, setRows] = useState({}) // key: "year-month" -> { occ, adr, revenue, currency }

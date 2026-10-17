@@ -9,7 +9,7 @@ import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 
-async function fetchAndProcessEntries(targetAccountId, rangeFrom, rangeTo, companyId, product, allAccounts) {
+async function fetchAndProcessEntries(targetAccountId, rangeFrom, rangeTo, companyId, product, allAccounts, fiscalYearStart = 1) {
   let query = supabase.from('ledger_entries').select('*')
     .eq('company_id', companyId).gte('entry_date', rangeFrom).lte('entry_date', rangeTo).order('entry_date')
     
@@ -177,7 +177,7 @@ async function fetchAndProcessEntries(targetAccountId, rangeFrom, rangeTo, compa
            if (amt > 0) combined.push({ id: `hee-c-${r.id}-${selectedAccount.id}`, entry_date: r.expense_date, description: r.notes || 'Expense Paid', currency: r.currency || 'USD', debit_usd: 0, credit_usd: amt, account_id: selectedAccount.id })
         })
         if (amc && amc.length > 0) {
-          const fyStart = comp?.fiscal_year_start_month || 1;
+          const fyStart = fiscalYearStart || 1;
           const start = new Date(rangeFrom < '2020-01-01' ? '2020-01-01' : rangeFrom)
           const end = new Date(rangeTo)
           let cur = new Date(start.getFullYear(), start.getMonth(), 1)
@@ -260,7 +260,7 @@ export default function Ledger() {
   }
 
   async function loadEntries() {
-    const combined = await fetchAndProcessEntries(accountId, cp.range.from, cp.range.to, activeCompany.id, activeProduct, accounts)
+    const combined = await fetchAndProcessEntries(accountId, cp.range.from, cp.range.to, activeCompany.id, activeProduct, accounts, activeCompany.fiscal_year_start_month || 1)
     setEntries(combined)
   }
 
@@ -277,7 +277,7 @@ export default function Ledger() {
     const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const account = (accounts || []).find(a => a.id === selections.account)
-    const combined = await fetchAndProcessEntries(selections.account, range.from, range.to, activeCompany.id, activeProduct, accounts)
+    const combined = await fetchAndProcessEntries(selections.account, range.from, range.to, activeCompany.id, activeProduct, accounts, activeCompany.fiscal_year_start_month || 1)
 
     let repRun = 0;
     const rows = combined.slice().reverse().map(e => {
