@@ -26,6 +26,7 @@ const ENTITY_LABELS = {
   sales_invoices: 'Sales Invoices',
   purchase_invoices: 'Purchase Invoices',
   payment_receipts: 'Payment Receipts',
+  hotel_revenue_entries: 'Other Revenue (Daily)',
   hotel_expense_entries: 'Expense Entries',
   hotel_amc_contracts: 'AMC Contracts',
   hotel_room_stats: 'Daily Room Stats',
@@ -35,11 +36,17 @@ const ENTITY_LABELS = {
   company_members: 'User Access & Members',
   hotel_expense_budget: 'Expense Budget',
   hotel_room_revenue_budget: 'Revenue Budget',
+  hotel_settings: 'Hotel Settings',
+  company_staff: 'Staff & Employees',
+  staff_loans_given: 'Staff Loans',
+  staff_loan_repayments: 'Staff Loan Repayments',
   loans_taken: 'Loans Taken',
   loan_principal_payments: 'Loan Payments',
   owner_contributions: 'Capital Contributions',
   owner_dividends: 'Owner Drawings',
   company_settings: 'Company Settings',
+  historical_imports: 'Historical Imports',
+  forecast_entries: 'Forecasts',
   app_events: 'System Events',
 }
 
@@ -91,7 +98,7 @@ export default function AuditTrail() {
   const [actionFilter, setActionFilter] = useState('ALL')
   const [entityFilter, setEntityFilter] = useState('ALL')
   const [userFilter, setUserFilter] = useState('ALL')
-  const [timeFilter, setTimeFilter] = useState('1_year') // 'all', '1_year', '30_days', '7_days', 'today', 'custom'
+  const [timeFilter, setTimeFilter] = useState('all') // 'all', '1_year', '3_months', '30_days', '7_days', 'today', 'custom'
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
 
@@ -132,6 +139,10 @@ export default function AuditTrail() {
       } else if (timeFilter === '30_days') {
         const d = new Date()
         d.setDate(d.getDate() - 30)
+        query = query.gte('created_at', d.toISOString())
+      } else if (timeFilter === '3_months') {
+        const d = new Date()
+        d.setDate(d.getDate() - 90)
         query = query.gte('created_at', d.toISOString())
       } else if (timeFilter === '1_year') {
         const d = new Date()
@@ -356,11 +367,12 @@ export default function AuditTrail() {
               onChange={e => { setTimeFilter(e.target.value); setPage(1) }}
               className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-500 bg-white text-slate-700"
             >
-              <option value="1_year">Retention: Last 1 Year (Default)</option>
               <option value="all">Retention: All Time (Unlimited)</option>
-              <option value="today">Today</option>
-              <option value="7_days">Last 7 Days</option>
+              <option value="1_year">Retention: Last 1 Year</option>
+              <option value="3_months">Retention: Last 3 Months (90 Days)</option>
               <option value="30_days">Last 30 Days</option>
+              <option value="7_days">Last 7 Days</option>
+              <option value="today">Today</option>
               <option value="custom">Custom Date Range</option>
             </select>
           </div>
