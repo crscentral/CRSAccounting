@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Plus, Pencil, Trash2, Users, DollarSign, TrendingUp } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts'
 import { supabase } from '../lib/supabaseClient'
@@ -11,11 +11,13 @@ import DataTable from '../components/DataTable'
 import KpiCard from '../components/KpiCard'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 import RestaurantRevenueFormModal from '../components/RestaurantRevenueFormModal'
+import RevenueBreakdownPie from '../components/RevenueBreakdownPie'
 
 export default function RestaurantRevenue() {
   const { activeCompany, activeProduct, can } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [entries, setEntries] = useState([])
+  const [accounts, setAccounts] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editingEntry, setEditingEntry] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
@@ -23,11 +25,17 @@ export default function RestaurantRevenue() {
   useEffect(() => { if (activeCompany) loadData() }, [activeCompany, activeProduct, cp.range.from, cp.range.to])
 
   async function loadData() {
-    const { data } = await supabase.from('restaurant_daily_revenue').select('*')
-      .eq('company_id', activeCompany.id).eq('product', activeProduct)
-      .gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
-      .order('revenue_date', { ascending: false })
-    setEntries(data || [])
+    const [{ data: revData }, { data: accData }] = await Promise.all([
+      supabase.from('restaurant_daily_revenue').select('*')
+        .eq('company_id', activeCompany.id).eq('product', activeProduct)
+        .gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
+        .order('revenue_date', { ascending: false }),
+      supabase.from('accounts')
+        .select('id, code, name, type, product')
+        .eq('company_id', activeCompany.id)
+    ])
+    setEntries(revData || [])
+    setAccounts(accData || [])
   }
 
   async function handleDelete(entry) {
@@ -134,6 +142,60 @@ export default function RestaurantRevenue() {
   })
   const dailyChartData = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date))
 
+  const revenuePieData = useMemo(() => {
+    const headTotalsUsd = {}
+
+    // Revenue accounts from Chart of Accounts
+    const revAccounts = accounts.filter(a => a.type === 'Revenue' || a.product === 'restaurant' || a.code?.startsWith('4'))
+
+    const foodAcc = revAccounts.find(a => a.code === '4104' || a.code === '4010' || a.name?.toLowerCase().includes('food'))
+    const bevAcc = revAccounts.find(a => a.code === '4105' || a.code === '4011' || a.name?.toLowerCase().includes('beverage'))
+    const otherAcc = revAccounts.find(a => a.code === '4019' || a.code === '4012' || a.name?.toLowerCase().includes('other'))
+
+    const foodLabel = foodAcc ? `${foodAcc.code ? `${foodAcc.code} - ` : ''}${foodAcc.name}` : '4104 - Food Sales'
+    const bevLabel = bevAcc ? `${bevAcc.code ? `${bevAcc.code} - ` : ''}${bevAcc.name}` : '4105 - Beverage Sales'
+    const otherLabel = otherAcc ? `${otherAcc.code ? `${otherAcc.code} - ` : ''}${otherAcc.name}` : '4019 - Other Operating Income'
+
+    headTotalsUsd[foodLabel] = 0
+    headTotalsUsd[bevLabel] = 0
+    headTotalsUsd[otherLabel] = 0
+
+    entries.forEach(e => {
+      const foodUsd = Number(e.food_amount_usd) || 0
+      const bevUsd = Number(e.beverage_amount_usd) || 0
+      const otherUsd = Number(e.other_amount_usd) || 0
+
+      headTotalsUsd[foodLabel] = (headTotalsUsd[foodLabel] || 0) + foodUsd
+      headTotalsUsd[bevLabel] = (headTotalsUsd[bevLabel] || 0) + bevUsd
+      headTotalsUsd[otherLabel] = (headTotalsUsd[otherLabel] || 0) + otherUsd
+    })
+
+    const totalRevenueUsd = Object.values(headTotalsUsd).reduce((s, v) => s + v, 0)
+    const totalDisplayVal = cp.convert(totalRevenueUsd)
+
+    // Sort top-to-bottom: highest revenue account remains on top and lowest at the bottom
+    const items = Object.entries(headTotalsUsd)
+      .filter(([_, usd]) => usd > 0.0001)
+      .map(([name, usd]) => {
+        const displayVal = cp.convert(usd)
+        const percent = totalDisplayVal > 0 ? (displayVal / totalDisplayVal) * 100 : 0
+        return {
+          name,
+          valueUsd: usd,
+          value: displayVal,
+          percent,
+          percentStr: `${percent.toFixed(1)}%`,
+        }
+      })
+      .sort((a, b) => b.value - a.value)
+
+    return {
+      items,
+      totalRevenueUsd,
+      totalDisplayVal,
+    }
+  }, [accounts, entries, cp.convert])
+
   return (
     <div>
       <PageHeader
@@ -165,6 +227,16 @@ export default function RestaurantRevenue() {
         <KpiCard label="Total Beverage Revenue" value={cp.fmt(totalBeverage)} icon={TrendingUp} tone="indigo" />
         <KpiCard label="Total Other Revenue" value={cp.fmt(totalOther)} icon={TrendingUp} tone="slate" />
       </div>
+
+      <RevenueBreakdownPie
+        title="Revenue Breakdown by Account / Head"
+        subtitle="Ranked from highest to lowest revenue contribution for the selected period"
+        totalLabel="Total Revenue"
+        totalFormatted={cp.fmt(revenuePieData.totalRevenueUsd)}
+        items={revenuePieData.items}
+        fmt={cp.fmt}
+        emptyMessage="No table revenue recorded for this period"
+      />
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mb-6">
         <h3 className="font-semibold text-slate-700 mb-4">Daily Revenue Bifurcation</h3>

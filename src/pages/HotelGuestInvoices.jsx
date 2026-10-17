@@ -14,6 +14,7 @@ import Modal, { Field } from '../components/Modal'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
 import InvoiceDownloadMenu from '../components/InvoiceDownloadMenu'
 import InvoicePreviewModal from '../components/InvoicePreviewModal'
+import RevenueBreakdownPie from '../components/RevenueBreakdownPie'
 
 export default function HotelGuestInvoices() {
   const { activeCompany, activeProduct, activeRole, can } = useAuth()
@@ -52,7 +53,7 @@ export default function HotelGuestInvoices() {
         .lte('invoice_date', maxTo)
         .order('invoice_date', { ascending: false }),
       supabase.from('accounts')
-        .select('id, code, name')
+        .select('id, code, name, type, product')
         .eq('company_id', activeCompany.id)
     ])
     setRows(invData || [])
@@ -139,6 +140,112 @@ export default function HotelGuestInvoices() {
     const stayMatch = r.checkin_date && (r.checkin_date <= (cp.range.to === '9999-12-31' ? today : cp.range.to) && (r.checkout_date || r.checkin_date) >= cp.range.from)
     return invMatch || stayMatch
   })
+
+  const revenuePieData = useMemo(() => {
+    const headTotalsUsd = {}
+
+    // Map of accounts: id -> 'CODE - NAME'
+    const accMap = {}
+    accounts.forEach(a => {
+      if (a.type === 'Revenue' || a.product === 'hotel' || a.code?.startsWith('4')) {
+        const label = `${a.code ? `${a.code} - ` : ''}${a.name}`
+        accMap[a.id] = label
+      }
+    })
+
+    // Identify Room Revenue account
+    const roomRevAcc = accounts.find(a => a.code === '4100' || a.name?.toLowerCase().includes('room revenue'))
+    const roomRevLabel = roomRevAcc ? `${roomRevAcc.code ? `${roomRevAcc.code} - ` : ''}${roomRevAcc.name}` : '4100 - Room Revenue'
+    headTotalsUsd[roomRevLabel] = 0
+
+    // Aggregate from all rows active in the period
+    rows.forEach(r => {
+      const fx = Number(r.fx_rate_locked) || 1
+      const totalRoomRev = Number(r.room_revenue) || 0
+      const totalNights = Number(r.nights) || 0
+
+      // 1. Room revenue in the selected period (distributed across stay nights)
+      let invRoomUsdInPeriod = 0
+      if (totalNights > 0 && r.checkin_date) {
+        const dailyRevUsd = (totalRoomRev / totalNights) / fx
+        const [y, m, d] = r.checkin_date.split('-').map(Number)
+        for (let i = 0; i < totalNights; i++) {
+          const curDate = new Date(Date.UTC(y, m - 1, d + i)).toISOString().split('T')[0]
+          if (curDate >= cp.range.from && (cp.range.to === '9999-12-31' || curDate <= cp.range.to)) {
+            invRoomUsdInPeriod += dailyRevUsd
+          }
+        }
+      } else {
+        if (r.invoice_date >= cp.range.from && (cp.range.to === '9999-12-31' || r.invoice_date <= cp.range.to)) {
+          invRoomUsdInPeriod += totalRoomRev / fx
+        }
+      }
+      headTotalsUsd[roomRevLabel] = (headTotalsUsd[roomRevLabel] || 0) + invRoomUsdInPeriod
+
+      // 2. Ancillary line items in period (attributed on invoice_date)
+      if (r.invoice_date >= cp.range.from && (cp.range.to === '9999-12-31' || r.invoice_date <= cp.range.to)) {
+        let sumLineItemsUsd = 0
+        if (Array.isArray(r.line_items) && r.line_items.length > 0) {
+          r.line_items.forEach(li => {
+            const itemFx = Number(li.fx_rate) || Number(li.fx_rate_locked) || fx || 1
+            const itemAmtUsd = Number(li.amount_usd) || (Number(li.amount) / itemFx) || 0
+            sumLineItemsUsd += itemAmtUsd
+
+            let label = accMap[li.account_id]
+            if (!label) {
+              const foundAcc = accounts.find(a => 
+                a.name?.toLowerCase() === li.description?.toLowerCase() ||
+                a.code === li.description ||
+                (a.type === 'Revenue' && a.id === li.account_id)
+              )
+              if (foundAcc) {
+                label = `${foundAcc.code ? `${foundAcc.code} - ` : ''}${foundAcc.name}`
+              } else if (li.description) {
+                label = li.description
+              } else {
+                label = '4013 - Miscellaneous Rooms Revenue'
+              }
+            }
+            headTotalsUsd[label] = (headTotalsUsd[label] || 0) + itemAmtUsd
+          })
+        }
+
+        // Remaining other_revenue not explicitly in line_items
+        const totalInvUsd = Number(r.invoice_amount_usd) || (Number(r.invoice_amount) / fx) || 0
+        const otherRevUsd = Math.max(0, totalInvUsd - (totalRoomRev / fx))
+        const unitemizedOtherUsd = Math.max(0, otherRevUsd - sumLineItemsUsd)
+        if (unitemizedOtherUsd > 0.01) {
+          const miscLabel = '4013 - Miscellaneous Rooms Revenue'
+          headTotalsUsd[miscLabel] = (headTotalsUsd[miscLabel] || 0) + unitemizedOtherUsd
+        }
+      }
+    })
+
+    const totalRevenueUsd = Object.values(headTotalsUsd).reduce((s, v) => s + v, 0)
+    const totalDisplayVal = cp.convert(totalRevenueUsd)
+
+    // Sort top-to-bottom: highest revenue account remains on top and lowest at the bottom
+    const items = Object.entries(headTotalsUsd)
+      .filter(([_, usd]) => usd > 0.0001)
+      .map(([name, usd]) => {
+        const displayVal = cp.convert(usd)
+        const percent = totalDisplayVal > 0 ? (displayVal / totalDisplayVal) * 100 : 0
+        return {
+          name,
+          valueUsd: usd,
+          value: displayVal,
+          percent,
+          percentStr: `${percent.toFixed(1)}%`,
+        }
+      })
+      .sort((a, b) => b.value - a.value)
+
+    return {
+      items,
+      totalRevenueUsd,
+      totalDisplayVal,
+    }
+  }, [accounts, rows, cp.range.from, cp.range.to, cp.convert])
 
   function formatCurrencyAmount(amt, curr) {
     const num = Number(amt) || 0
@@ -409,6 +516,16 @@ export default function HotelGuestInvoices() {
         <KpiCard label="YTD Generated" value={fmt(ytdRev)} tone="slate" />
         <KpiCard label="YTD Pending" value={fmt(ytdPend)} tone="amber" />
       </div>
+
+      <RevenueBreakdownPie
+        title="Revenue Breakdown by Account / Head"
+        subtitle="Ranked from highest to lowest revenue contribution for the selected period"
+        totalLabel="Total Revenue"
+        totalFormatted={fmt(revenuePieData.totalRevenueUsd)}
+        items={revenuePieData.items}
+        fmt={fmt}
+        emptyMessage="No guest invoice revenue recorded for this period"
+      />
 
       <DataTable
         compact
