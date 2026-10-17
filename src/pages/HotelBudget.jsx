@@ -410,21 +410,28 @@ export default function HotelBudget() {
         subtitle={`${activeCompany.name} • ${activeProduct === "restaurant" ? "Manage your Monthly Budgets for Food, Beverage, and Other Revenue." : "Feed any two of Occupancy % / ADR / Room Revenue — the third calculates automatically"}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 py-1">
-              <span className="text-sm text-slate-500 ml-1">Period:</span>
-              <select value={startYear} onChange={e => setStartYear(Number(e.target.value))} className="bg-transparent text-sm font-medium focus:outline-none pr-1">
+            <div className="h-[38px] flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-3 shadow-sm">
+              <span className="text-sm text-slate-500">Period:</span>
+              <select value={startYear} onChange={e => setStartYear(Number(e.target.value))} className="bg-transparent text-sm font-medium text-slate-700 focus:outline-none pr-1 cursor-pointer">
                 {Array.from({ length: 8 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => <option key={y} value={y}>{y}</option>)}
               </select>
               <span className="text-slate-300">/</span>
-              <select value={startMonth} onChange={e => setStartMonth(e.target.value)} className="bg-transparent text-sm font-medium focus:outline-none pl-1">
+              <select value={startMonth} onChange={e => setStartMonth(e.target.value)} className="bg-transparent text-sm font-medium text-slate-700 focus:outline-none pl-1 cursor-pointer">
                 <option value="all">Full Year</option>
                 {MONTH_NAMES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
               </select>
             </div>
-            <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400">
+            <button
+              onClick={() => setReportModalOpen(true)}
+              className="h-[38px] flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-4 rounded-lg hover:border-navy-400 hover:bg-slate-50 transition-colors shadow-sm"
+            >
               Download Report
             </button>
-            <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+            <select
+              value={displayCurrency}
+              onChange={e => setDisplayCurrency(e.target.value)}
+              className="h-[38px] border border-slate-300 rounded-lg px-3 text-sm font-medium text-slate-700 bg-white hover:border-navy-400 focus:outline-none focus:border-navy-500 shadow-sm cursor-pointer"
+            >
               {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
             </select>
           </div>

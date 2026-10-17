@@ -316,6 +316,7 @@ function HotelExpensesInner() {
     '#06b6d4', '#84cc16', '#d946ef', '#f97316', '#0ea5e9', '#a855f7', '#22c55e', '#eab308', '#38bdf8', '#fb7185',
     '#6366f1', '#475569'
   ]
+  const groupedEntriesMap = {}
   entries.forEach(r => {
     const key = r.account ? `${r.account.code} - ${r.account.name}` : 'Unknown'
     if (!groupedEntriesMap[key]) groupedEntriesMap[key] = { isGroupHeader: true, name: key, amount_usd: 0, paid_amount_usd: 0, transactions: [], account_id: r.account_id }

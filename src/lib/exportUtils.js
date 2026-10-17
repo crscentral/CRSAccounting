@@ -773,6 +773,15 @@ function renderGroupedBarChartDataUrl({ categories, series, width = 800, height 
  * ({ heading, keyValuePairs: [[label, value], ...] }), or a chart
  * ({ heading, chart: { categories, series } }).
  */
+function normalizeKeyValuePairs(pairs) {
+  if (!Array.isArray(pairs)) return []
+  return pairs.map(item => {
+    if (Array.isArray(item)) return item
+    if (item && typeof item === 'object') return [item.label || item.key || item.name || '', item.value ?? '']
+    return [String(item || ''), '']
+  })
+}
+
 export async function exportMultiSectionPDF(optionsOrCtx, sectionsArg) {
   let { title, subtitle, sections, filename, logoUrl, preview = false, orientation } =
     (Array.isArray(sectionsArg))
@@ -828,10 +837,10 @@ export async function exportMultiSectionPDF(optionsOrCtx, sectionsArg) {
       doc.setFont(undefined, 'normal')
     }
 
-    if (section.keyValuePairs) {
+    if (section.keyValuePairs && section.keyValuePairs.length > 0) {
       y += 4
       doc.setFontSize(9)
-      section.keyValuePairs.forEach(([label, val]) => {
+      normalizeKeyValuePairs(section.keyValuePairs).forEach(([label, val]) => {
         if (y > pageHeight - 15) { doc.addPage(); y = 20 }
         doc.setTextColor(90)
         doc.text(String(label), 16, y)
@@ -840,7 +849,9 @@ export async function exportMultiSectionPDF(optionsOrCtx, sectionsArg) {
         y += 5.5
       })
       y += 6
-    } else if (cols && rows) {
+    }
+    
+    if (cols && rows) {
       let columnStyles = section.columnStyles || {}
       if (cols.length === 3 && !section.columnStyles) {
         columnStyles = { 0: { cellWidth: 72 }, 1: { cellWidth: 55, halign: 'right' }, 2: { cellWidth: 55, halign: 'right' } }
@@ -919,9 +930,10 @@ export function exportMultiSectionExcel(optionsOrCtx, sectionsArg) {
     const secRows = section.rows || null
 
     if (heading) rows.push([heading])
-    if (section.keyValuePairs) {
-      section.keyValuePairs.forEach(([label, val]) => rows.push([label, val]))
-    } else if (cols && secRows) {
+    if (section.keyValuePairs && section.keyValuePairs.length > 0) {
+      normalizeKeyValuePairs(section.keyValuePairs).forEach(([label, val]) => rows.push([label, val]))
+    }
+    if (cols && secRows) {
       rows.push(cols)
       secRows.forEach(r => rows.push(r))
     } else if (section.chart) {
@@ -969,11 +981,12 @@ export function exportMultiSectionWord(optionsOrCtx, sectionsArg) {
     const secRows = section.rows || null
 
     let inner = ''
-    if (section.keyValuePairs) {
-      inner = section.keyValuePairs.map(([label, val]) =>
+    if (section.keyValuePairs && section.keyValuePairs.length > 0) {
+      inner += normalizeKeyValuePairs(section.keyValuePairs).map(([label, val]) =>
         `<p style="margin:2px 0;"><strong>${esc(label)}:</strong> ${esc(val)}</p>`
       ).join('')
-    } else if (cols && secRows) {
+    }
+    if (cols && secRows) {
       const rgb = section.headColor || [27, 58, 107]
       const bgColor = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
       
