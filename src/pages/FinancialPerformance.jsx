@@ -53,7 +53,7 @@ export default function FinancialPerformance() {
         supabase.from('hotel_revenue_entries').select('amount_usd, account_id, account:accounts(id, code, name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
         supabase.from('hotel_expense_entries').select('amount_usd, account_id, account:accounts(id, code, name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to),
         supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('restaurant_daily_revenue').select('meal_period, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
+        supabase.from('restaurant_daily_revenue').select('meal_period, amount_usd, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
       ])
 
       setSales(s || [])
@@ -85,7 +85,7 @@ export default function FinancialPerformance() {
         const f = Number(r.food_amount_usd) || 0
         const b = Number(r.beverage_amount_usd) || 0
         const o = Number(r.other_amount_usd) || 0
-        const total = Number(r.total_amount_usd) || (f + b + o)
+        const total = Number(r.amount_usd) || Number(r.total_amount_usd) || (f + b + o)
 
         const accBreakfast = accountsList.find(a => a.name === 'Breakfast Revenue') || accountsList.find(a => a.name?.toLowerCase().includes('breakfast'))
         const accBeverage = accountsList.find(a => a.name === 'Beverage Sales' || a.name === 'Beverage Revenue' || a.name === 'F&B Revenue')
@@ -258,7 +258,7 @@ export default function FinancialPerformance() {
         supabase.from('hotel_revenue_entries').select('amount_usd, account_id, account:accounts(id, code, name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', range.from).lte('entry_date', range.to),
         supabase.from('hotel_expense_entries').select('amount_usd, account_id, account:accounts(id, code, name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('expense_date', range.from).lte('expense_date', range.to),
         supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('restaurant_daily_revenue').select('meal_period, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to)
+        supabase.from('restaurant_daily_revenue').select('meal_period, amount_usd, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to)
       ])
 
       const accountsList = accs || []
@@ -286,7 +286,7 @@ export default function FinancialPerformance() {
         const f = Number(r.food_amount_usd) || 0
         const b = Number(r.beverage_amount_usd) || 0
         const o = Number(r.other_amount_usd) || 0
-        const total = Number(r.total_amount_usd) || (f + b + o)
+        const total = Number(r.amount_usd) || Number(r.total_amount_usd) || (f + b + o)
 
         const accBreakfast = accountsList.find(a => a.name === 'Breakfast Revenue') || accountsList.find(a => a.name?.toLowerCase().includes('breakfast'))
         const accBeverage = accountsList.find(a => a.name === 'Beverage Sales' || a.name === 'Beverage Revenue' || a.name === 'F&B Revenue')

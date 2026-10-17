@@ -80,7 +80,7 @@ export default function PortfolioDashboard() {
     if (isHotelOrRest) {
       const r_hrs = (hrs || []).reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
       const r_hre = (hre || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
-      const r_rdr = (rdr || []).reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0))), 0)
+      const r_rdr = (rdr || []).reduce((s, r) => s + (Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0))), 0)
       const r_sales = (salesInv || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
       
       revenue = r_hrs + r_hre + r_rdr + r_sales
@@ -116,7 +116,7 @@ export default function PortfolioDashboard() {
       // Collected
       const c_hrs = (hrs || []).reduce((s, r) => s + (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0) || Number(r.room_revenue_collected_usd || 0)), 0)
       const c_hre = (hre || []).reduce((s, r) => s + Number(r.collected_usd || 0), 0)
-      const c_rdr = (rdr || []).reduce((s, r) => s + Number(r.collected_usd !== null && r.collected_usd !== undefined ? r.collected_usd : (r.total_amount_usd || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0)))), 0)
+      const c_rdr = (rdr || []).reduce((s, r) => s + Number(r.collected_usd !== null && r.collected_usd !== undefined ? r.collected_usd : (Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0)))), 0)
       const c_sales = (receipts || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
 
       collected = c_hrs + c_hre + c_rdr + c_sales

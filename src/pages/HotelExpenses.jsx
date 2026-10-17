@@ -90,14 +90,14 @@ function HotelExpensesInner() {
       supabase.from('purchase_invoices').select('*, contact:contacts(name), account:accounts(code, name)').eq('company_id', activeCompany.id).in('product', ['hotel', 'restaurant']).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
       supabase.from('contacts').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).order('name'),
       supabase.from('hotel_revenue_entries').select('amount_usd').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
-      supabase.from('restaurant_daily_revenue').select('total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
+      supabase.from('restaurant_daily_revenue').select('amount_usd, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
     ])
     
     let rev = 0;
     (roomStats || []).forEach(r => rev += Number(r.room_revenue_usd) || 0);
     (hre || []).forEach(r => rev += Number(r.amount_usd) || 0);
     (rdr || []).forEach(r => {
-       const total = Number(r.total_amount_usd) || ((Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0) + (Number(r.other_amount_usd) || 0))
+       const total = Number(r.amount_usd) || Number(r.total_amount_usd) || ((Number(r.food_amount_usd) || 0) + (Number(r.beverage_amount_usd) || 0) + (Number(r.other_amount_usd) || 0))
        if (total > 0) rev += total;
     });
     setTotalRevenue(rev);

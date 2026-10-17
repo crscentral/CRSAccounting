@@ -95,7 +95,7 @@ function AnalyticsInner() {
     if (['hotel', 'restaurant'].includes(activeProduct)) {
       const roomRev = hrsSel.reduce((s2, r) => s2 + Number(r.room_revenue_usd || 0), 0)
       const ancRev = hreSel.reduce((s2, r) => s2 + Number(r.amount_usd || 0), 0)
-      const restRev = rdrSel.reduce((s2, r) => s2 + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
+      const restRev = rdrSel.reduce((s2, r) => s2 + (Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
       totalInvoiced = roomRev + ancRev + restRev
 
       const roomCollected = hrsSel.reduce((s2, r) => s2 + Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0), 0)
@@ -129,7 +129,7 @@ function AnalyticsInner() {
         const k = (r.revenue_date || '').slice(0, 7)
         if (!k) return
         monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }
-        monthlyMap[k].revenue += Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))
+        monthlyMap[k].revenue += Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))
         monthlyMap[k].collected += Number(r.collected_usd || 0)
       })
       hgiSel.forEach(i => {
@@ -180,7 +180,7 @@ function AnalyticsInner() {
   if (['hotel', 'restaurant'].includes(activeProduct)) {
     const roomRev = (hotelRoomStats || []).reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
     const ancRev = (hotelRevenueEntries || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
-    const restRev = (restaurantRevenue || []).reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
+    const restRev = (restaurantRevenue || []).reduce((s, r) => s + (Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
     totalInvoiced = roomRev + ancRev + restRev
 
     const roomCollected = (hotelRoomStats || []).reduce((s, r) => s + Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0), 0)
@@ -216,7 +216,7 @@ function AnalyticsInner() {
       const key = (r.revenue_date || '').slice(0, 7)
       if (!key) return
       monthlyMap[key] = monthlyMap[key] || { month: key, invoices: 0, revenue: 0, collected: 0 }
-      monthlyMap[key].revenue += Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))
+      monthlyMap[key].revenue += Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))
       monthlyMap[key].collected += Number(r.collected_usd || 0)
     })
     ;(hotelGuestInvoices || []).forEach(i => {

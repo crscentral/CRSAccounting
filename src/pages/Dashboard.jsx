@@ -105,7 +105,7 @@ export default function Dashboard() {
       supabase.from('hotel_guest_invoices').select('invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).eq('product', 'hotel').gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to),
       supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', 'hotel'),
       supabase.from('hotel_revenue_entries').select('entry_date, amount_usd').eq('company_id', activeCompany.id).in('product', ['hotel', 'restaurant']).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
-      supabase.from('restaurant_daily_revenue').select('revenue_date, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
+      supabase.from('restaurant_daily_revenue').select('revenue_date, amount_usd, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to)
     ])
     const totalRooms = settings?.total_rooms || 0
     const totalOccupied = (stats || []).reduce((s, r) => s + r.rooms_occupied, 0)
@@ -277,7 +277,7 @@ export default function Dashboard() {
         supabase.from('hotel_guest_invoices').select('invoice_date, invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
         supabase.from('hotel_expense_entries').select('expense_date, amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
         supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('restaurant_daily_revenue').select('revenue_date, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
+        supabase.from('restaurant_daily_revenue').select('revenue_date, amount_usd, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
         supabase.from('purchase_invoices').select('invoice_date, amount_usd, status').eq('company_id', activeCompany.id).in('product', prodFilter)
       ])
       allHrs = aHrs || []

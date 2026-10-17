@@ -76,7 +76,7 @@ export default function HotelOccupancyStats() {
       supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
       supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to),
-      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to) : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, amount_usd, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', range.from).lte('revenue_date', range.to) : Promise.resolve({ data: [] }),
       supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', targetYear),
       supabase.from('accounts').select('id, type').eq('company_id', activeCompany.id).eq('type', 'Revenue')
     ])
@@ -102,7 +102,7 @@ export default function HotelOccupancyStats() {
     const ancOtherAmt = aOther.reduce((sum, x) => sum + Number(x.amount_usd || 0), 0)
     const ancOtherCol = aOther.reduce((sum, x) => sum + Number(x.collected_usd || 0), 0)
     
-    const restAmt = (restRev || []).reduce((sum, x) => sum + (Number(x.total_amount_usd) || (Number(x.food_amount_usd||0) + Number(x.beverage_amount_usd||0) + Number(x.other_amount_usd||0))), 0)
+    const restAmt = (restRev || []).reduce((sum, x) => sum + (Number(x.amount_usd) || Number(x.total_amount_usd) || (Number(x.food_amount_usd||0) + Number(x.beverage_amount_usd||0) + Number(x.other_amount_usd||0))), 0)
     const restCol = (restRev || []).reduce((sum, x) => sum + Number(x.collected_usd || 0), 0)
     
     const roomRevOnly = (s || []).reduce((sum, x) => sum + Number(x.room_revenue_usd || 0), 0)

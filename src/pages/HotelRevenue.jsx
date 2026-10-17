@@ -41,7 +41,7 @@ export default function HotelRevenue() {
       supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name, subtype)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to).order('entry_date', { ascending: false }),
       supabase.from('accounts').select('id, code, name, subtype').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').neq('code', '4010').order('code'),
       supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
-      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to).order('revenue_date', { ascending: false }) : Promise.resolve({ data: [] }),
+      activeProduct === 'hotel' ? supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, amount_usd, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to).order('revenue_date', { ascending: false }) : Promise.resolve({ data: [] }),
       supabase.from('hotel_guest_invoices').select('id, invoice_number').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to)
     ])
     setRoomStats(room || [])
@@ -187,7 +187,7 @@ export default function HotelRevenue() {
   const totalCollected = roomStats.reduce((s, r) => s + Number(r.room_revenue_collected_usd), 0) + ancRoom.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0)
   const totalAncillary = ancOther.reduce((s, r) => s + Number(r.amount_usd), 0)
   const ancillaryCollected = ancOther.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0)
-  const fbRev = restRevenue.reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0) + ancFB.reduce((s, r) => s + Number(r.amount_usd), 0)
+  const fbRev = restRevenue.reduce((s, r) => s + (Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0) + ancFB.reduce((s, r) => s + Number(r.amount_usd), 0)
   const fbCollected = restRevenue.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0) + ancFB.reduce((s, r) => s + (Number(r.collected_usd) || 0), 0)
   
   const totalRev = totalRoomRevenue + totalAncillary + fbRev
@@ -285,9 +285,9 @@ export default function HotelRevenue() {
             columns={[
               { key: 'revenue_date', label: 'Date' },
               { key: 'meal_period', label: 'Meal Period' },
-              { key: 'total_amount_usd', label: 'Total F&B Rev', render: r => cp.fmt(r.total_amount_usd || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))) },
+              { key: 'total_amount_usd', label: 'Total F&B Rev', render: r => cp.fmt(r.amount_usd || r.total_amount_usd || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))) },
               { key: 'collected_usd', label: 'Collected', render: r => cp.fmt(r.collected_usd) },
-              { key: 'pending_collection', label: 'Pending Collection', render: r => { const total = r.total_amount_usd || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0)); return <span className="font-semibold text-red-500">{cp.fmt(total - (r.collected_usd || 0))}</span> } },
+              { key: 'pending_collection', label: 'Pending Collection', render: r => { const total = Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0)); return <span className="font-semibold text-red-500">{cp.fmt(total - (r.collected_usd || 0))}</span> } },
             ]}
             rows={restRevenue}
             emptyMessage="No F&B revenue entries in this range."

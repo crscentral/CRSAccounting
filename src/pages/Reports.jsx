@@ -180,7 +180,8 @@ export default function Reports() {
         const f = Number(r.food_amount_usd) || 0
         const b = Number(r.beverage_amount_usd) || 0
         const o = Number(r.other_amount_usd) || 0
-        const totalRev = f + b + o
+        const totalRev = Number(r.amount_usd) || Number(r.total_amount_usd) || (f + b + o)
+        const foodVal = (f === 0 && b === 0 && o === 0 && totalRev > 0) ? totalRev : f
         const col = r.collected_usd !== null && r.collected_usd !== undefined ? Number(r.collected_usd) : totalRev
         const uncol = Math.max(0, totalRev - col)
         
@@ -190,7 +191,7 @@ export default function Reports() {
         if (mealAcc && totalRev > 0) {
            combined.push({ account_id: mealAcc.id, debit_usd: 0, credit_usd: totalRev, entry_date: r.revenue_date, accounts: { type: mealAcc.type } })
         } else {
-           if (foodAcc && f > 0) combined.push({ account_id: foodAcc.id, debit_usd: 0, credit_usd: f, entry_date: r.revenue_date, accounts: { type: foodAcc.type } })
+           if (foodAcc && foodVal > 0) combined.push({ account_id: foodAcc.id, debit_usd: 0, credit_usd: foodVal, entry_date: r.revenue_date, accounts: { type: foodAcc.type } })
            if (bevAcc && b > 0) combined.push({ account_id: bevAcc.id, debit_usd: 0, credit_usd: b, entry_date: r.revenue_date, accounts: { type: bevAcc.type } })
            if (otherFbAcc && o > 0) combined.push({ account_id: otherFbAcc.id, debit_usd: 0, credit_usd: o, entry_date: r.revenue_date, accounts: { type: otherFbAcc.type } })
         }
@@ -422,7 +423,8 @@ export default function Reports() {
         const f = Number(r.food_amount_usd) || 0
         const b = Number(r.beverage_amount_usd) || 0
         const o = Number(r.other_amount_usd) || 0
-        const totalRev = f + b + o
+        const totalRev = Number(r.amount_usd) || Number(r.total_amount_usd) || (f + b + o)
+        const foodVal = (f === 0 && b === 0 && o === 0 && totalRev > 0) ? totalRev : f
         const col = r.collected_usd !== null && r.collected_usd !== undefined ? Number(r.collected_usd) : totalRev
         const uncol = Math.max(0, totalRev - col)
         
@@ -432,7 +434,7 @@ export default function Reports() {
         if (mealAcc && totalRev > 0) {
            combined.push({ account_id: mealAcc.id, debit_usd: 0, credit_usd: totalRev, entry_date: r.revenue_date, accounts: { type: mealAcc.type } })
         } else {
-           if (foodAcc && f > 0) combined.push({ account_id: foodAcc.id, debit_usd: 0, credit_usd: f, entry_date: r.revenue_date, accounts: { type: foodAcc.type } })
+           if (foodAcc && foodVal > 0) combined.push({ account_id: foodAcc.id, debit_usd: 0, credit_usd: foodVal, entry_date: r.revenue_date, accounts: { type: foodAcc.type } })
            if (bevAcc && b > 0) combined.push({ account_id: bevAcc.id, debit_usd: 0, credit_usd: b, entry_date: r.revenue_date, accounts: { type: bevAcc.type } })
            if (otherFbAcc && o > 0) combined.push({ account_id: otherFbAcc.id, debit_usd: 0, credit_usd: o, entry_date: r.revenue_date, accounts: { type: otherFbAcc.type } })
         }
