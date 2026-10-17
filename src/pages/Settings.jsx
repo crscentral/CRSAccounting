@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { User, Shield, Bell, Users, Plus, Trash2, ShieldCheck, Check, X, Layers, Download, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
@@ -12,7 +12,7 @@ const PRODUCT_LABELS = { basic: 'CRS Basic Accounting', hotel: 'CRS Hotel Accoun
 const ALL_PRODUCTS = ['basic', 'hotel', 'restaurant']
 
 export default function Settings() {
-  const { user, activeCompany, activeRole, can, refreshCompanies } = useAuth()
+  const { user, activeCompany, activeRole, availableProducts = [], can, refreshCompanies } = useAuth()
   const [tab, setTab] = useState('profile')
   const [fullName, setFullName] = useState('')
   const [fyMonth, setFyMonth] = useState(1)
@@ -35,9 +35,29 @@ export default function Settings() {
         }
       })
   }, [])
+  const allowedProducts = useMemo(() => {
+    if (availableProducts && availableProducts.length > 0) {
+      return ALL_PRODUCTS.filter(p => availableProducts.includes(p))
+    }
+    if (activeCompany?.company_products && activeCompany.company_products.length > 0) {
+      const prods = activeCompany.company_products.map(cp => cp.product)
+      return ALL_PRODUCTS.filter(p => prods.includes(p))
+    }
+    return ALL_PRODUCTS
+  }, [availableProducts, activeCompany])
+
   const [inviteRole, setInviteRole] = useState('viewer')
-  const [inviteProducts, setInviteProducts] = useState(['basic', 'hotel', 'restaurant'])
+  const [inviteProducts, setInviteProducts] = useState(allowedProducts)
   const [inviting, setInviting] = useState(false)
+
+  useEffect(() => {
+    if (allowedProducts.length > 0) {
+      setInviteProducts(prev => {
+        const valid = prev.filter(p => allowedProducts.includes(p))
+        return valid.length > 0 ? valid : [...allowedProducts]
+      })
+    }
+  }, [allowedProducts.join(',')])
   const [pendingCompanies, setPendingCompanies] = useState([])
   const [loadingPending, setLoadingPending] = useState(false)
   const [actionInProgress, setActionInProgress] = useState(null)
@@ -325,24 +345,17 @@ export default function Settings() {
               <div className="mb-5 text-sm text-slate-700 bg-slate-50 p-3 border border-slate-200 rounded-lg">
                 <div className="font-semibold mb-2">Access Granted:</div>
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" className="rounded text-navy-600 border-slate-300"
-                           checked={inviteProducts.includes('basic')}
-                           onChange={(e) => setInviteProducts(prev => e.target.checked ? [...prev, 'basic'] : prev.filter(p => p !== 'basic'))} />
-                    CRS Basic Accounting
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" className="rounded text-navy-600 border-slate-300"
-                           checked={inviteProducts.includes('hotel')}
-                           onChange={(e) => setInviteProducts(prev => e.target.checked ? [...prev, 'hotel'] : prev.filter(p => p !== 'hotel'))} />
-                    CRS Hotel Accounting
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" className="rounded text-navy-600 border-slate-300"
-                           checked={inviteProducts.includes('restaurant')}
-                           onChange={(e) => setInviteProducts(prev => e.target.checked ? [...prev, 'restaurant'] : prev.filter(p => p !== 'restaurant'))} />
-                    CRS Restaurant Accounting
-                  </label>
+                  {allowedProducts.map(prod => (
+                    <label key={prod} className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="rounded text-navy-600 border-slate-300"
+                        checked={inviteProducts.includes(prod)}
+                        onChange={(e) => setInviteProducts(prev => e.target.checked ? [...prev, prod] : prev.filter(p => p !== prod))}
+                      />
+                      {PRODUCT_LABELS[prod] || prod}
+                    </label>
+                  ))}
                 </div>
               </div>
 
@@ -352,7 +365,14 @@ export default function Settings() {
                   <div key={m.id} className="flex items-center justify-between text-sm border-b border-slate-50 py-2">
                     <div>
                       <div className="text-slate-700">{m.profile?.email || m.invited_email}</div>
-                      <div className="text-xs text-slate-400 capitalize">{m.role}{!m.profile && ' • invited, pending sign-up'}</div>
+                      <div className="text-xs text-slate-400 capitalize">
+                        {m.role}{!m.profile && ' • invited, pending sign-up'}
+                        {m.products && m.products.length > 0 && (
+                          <span className="text-slate-500 normal-case ml-2">
+                            • Access: {m.products.filter(p => allowedProducts.includes(p)).map(p => p === 'basic' ? 'Basic' : p === 'hotel' ? 'Hotel' : 'Restaurant').join(', ')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {(m.profile?.email !== 'crscentral.rm@gmail.com' && m.profile?.email !== user.email && m.invited_email !== 'crscentral.rm@gmail.com') && (
                       <button onClick={() => removeMember(m.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={15} /></button>
