@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import { resolveReportPeriod, MONTH_NAMES , getAmcActiveMonths, getAmcMonthsInView } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import { CURRENCY_LIST } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
@@ -101,7 +101,7 @@ export default function RestaurantExpenses() {
     const fyStart = activeCompany.fiscal_year_start_month || 1
     const range = resolveReportPeriod(selections.period, fyStart, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const f = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
     
     // Fetch restaurant expenses and purchase invoices for this date range
     const [{ data: exp }, { data: pi }] = await Promise.all([
@@ -153,7 +153,7 @@ export default function RestaurantExpenses() {
       },
       {
         heading: 'Expense Detail',
-        columns: ['Date', 'Expense Head', 'Amount', 'Notes'],
+        columns: ['Date', 'Expense Head', selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency} & USD)`, 'Notes'],
         rows: expenseRows
       }
     ]

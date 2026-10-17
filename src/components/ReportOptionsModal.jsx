@@ -3,6 +3,7 @@ import { X, FileText, FileSpreadsheet, FileType, Eye } from 'lucide-react'
 import { CURRENCY_LIST } from '../lib/currencies'
 import { MONTH_NAMES } from '../lib/fiscalYear'
 import { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../lib/exportUtils'
+import { getLatestRate, formatReportMoney } from '../lib/fx'
 
 const PERIOD_OPTIONS = [
   { value: 'MTD', label: 'This Month (MTD)' },
@@ -58,7 +59,13 @@ export default function ReportOptionsModal({ title, fields, onGenerate, onClose 
         resolved.customFrom = customFrom
         resolved.customTo = customTo
       }
-      await onGenerate(resolved, format)
+      const targetCurrency = resolved.currency || 'USD'
+      const rate = targetCurrency === 'USD' ? 1 : ((await getLatestRate(targetCurrency)) || 1)
+      resolved.currency = targetCurrency
+      resolved.rate = rate
+      resolved.f = (usd) => formatReportMoney(usd, targetCurrency, rate)
+      resolved.formatMoney = resolved.f
+      await onGenerate(resolved, format, resolved.f)
       onClose()
     } catch (err) {
       alert('Could not generate report: ' + err.message)
@@ -174,3 +181,5 @@ export default function ReportOptionsModal({ title, fields, onGenerate, onClose 
 }
 
 export { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord }
+export { formatReportMoney, formatDualMoney, formatDualMoneyRounded } from '../lib/fx'
+

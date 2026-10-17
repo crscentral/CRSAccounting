@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import { getAmcActiveMonths, getAmcMonthsInView, resolveReportPeriod, formatDate } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
@@ -81,7 +81,7 @@ export default function Transactions() {
   async function generateTransactionsReport(selections, format) {
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const wantSales = selections.txType.includes('Sales Invoices')
     const wantPurchase = selections.txType.includes('Purchase Invoices')
@@ -111,34 +111,49 @@ export default function Transactions() {
 
     const isHotelOrRest = ['hotel', 'restaurant'].includes(activeProduct)
     const combined = [
-      ...(si || []).map(r => ({ date: r.invoice_date, type: isHotelOrRest ? 'Guest Invoice' : 'Sales Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.contact || ''}`, amount: fmt(r.amount_usd), direction: '+' })),
-      ...(pi || []).map(r => ({ date: r.invoice_date, type: isHotelOrRest ? 'Expense' : 'Purchase Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.supplier_name_freeform || r.contact || 'Expense'}`, amount: fmt(r.amount_usd), direction: '-' })),
-      ...(pr || []).map(r => ({ date: r.receipt_date, type: 'Payment Receipt', desc: 'Payment received', amount: fmt(r.amount_usd), direction: '+' })),
-      ...(rdr || []).map(r => { const total = Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0)); return { date: r.revenue_date, type: 'F&B Revenue', desc: `${r.meal_period} F&B Revenue`, amount: fmt(total), direction: '+' } }),
-      ...(hre || []).filter(r => !isHotelOrRest || !r.notes?.startsWith('Invoice ')).map(r => ({ date: r.entry_date, type: 'Ancillary Revenue', desc: r.account?.name || r.notes || 'Revenue', amount: fmt(r.amount_usd), direction: '+' })),
-      ...(hrs || []).filter(r => isHotelOrRest ? Number(r.manual_room_revenue_usd) > 0 : Number(r.room_revenue_usd) > 0).map(r => ({ date: r.stat_date, type: 'Room Revenue', desc: isHotelOrRest ? 'Daily Room Revenue (Walk-in)' : 'Daily Room Revenue', amount: fmt(isHotelOrRest ? r.manual_room_revenue_usd : r.room_revenue_usd), direction: '+' })),
+      ...(si || []).map(r => ({ date: r.invoice_date, type: isHotelOrRest ? 'Guest Invoice' : 'Sales Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.contact || ''}`, amount: fmt(r.amount_usd), amount_usd: Number(r.amount_usd || 0), direction: '+' })),
+      ...(pi || []).map(r => ({ date: r.invoice_date, type: isHotelOrRest ? 'Expense' : 'Purchase Invoice', desc: `${(r.invoice_number || '').substring(0,8)} — ${r.contact?.name || r.supplier_name_freeform || r.contact || 'Expense'}`, amount: fmt(r.amount_usd), amount_usd: Number(r.amount_usd || 0), direction: '-' })),
+      ...(pr || []).map(r => ({ date: r.receipt_date, type: 'Payment Receipt', desc: 'Payment received', amount: fmt(r.amount_usd), amount_usd: Number(r.amount_usd || 0), direction: '+' })),
+      ...(rdr || []).map(r => { const total = Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0)); return { date: r.revenue_date, type: 'F&B Revenue', desc: `${r.meal_period} F&B Revenue`, amount: fmt(total), amount_usd: total, direction: '+' } }),
+      ...(hre || []).filter(r => !isHotelOrRest || !r.notes?.startsWith('Invoice ')).map(r => ({ date: r.entry_date, type: 'Ancillary Revenue', desc: r.account?.name || r.notes || 'Revenue', amount: fmt(r.amount_usd), amount_usd: Number(r.amount_usd || 0), direction: '+' })),
+      ...(hrs || []).filter(r => isHotelOrRest ? Number(r.manual_room_revenue_usd) > 0 : Number(r.room_revenue_usd) > 0).map(r => { const amt = isHotelOrRest ? Number(r.manual_room_revenue_usd || 0) : Number(r.room_revenue_usd || 0); return { date: r.stat_date, type: 'Room Revenue', desc: isHotelOrRest ? 'Daily Room Revenue (Walk-in)' : 'Daily Room Revenue', amount: fmt(amt), amount_usd: amt, direction: '+' } }),
     ]
 
-        // Add AMC Contract lines (Actual Posting or Amortized depending on view)
+    // Add AMC Contract lines (Actual Posting or Amortized depending on view)
     if (amc && amc.length > 0) {
       const isMonth = selections.period.includes('MONTH') || selections.period === 'LAST_30_DAYS' || (new Date(range.to) - new Date(range.from)) <= 35 * 24 * 60 * 60 * 1000
       amc.forEach(r => {
         if (isMonth) {
-          combined.push({ date: range.from, type: 'AMC Contract', desc: `${r.contract_name || 'AMC Contract'} - Amortized AMC (Monthly)`, amount: fmt(Number(r.annual_amount_usd) / (getAmcActiveMonths(r.start_year, r.start_month, activeCompany.fiscal_year_start_month || 1).totalMonths || 1)), direction: '-' })
+          const mAmount = Number(r.annual_amount_usd) / (getAmcActiveMonths(r.start_year, r.start_month, activeCompany.fiscal_year_start_month || 1).totalMonths || 1)
+          combined.push({ date: range.from, type: 'AMC Contract', desc: `${r.contract_name || 'AMC Contract'} - Amortized AMC (Monthly)`, amount: fmt(mAmount), amount_usd: mAmount, direction: '-' })
         } else {
           const dStr = r.start_year ? `${r.start_year}-${String(r.start_month).padStart(2, '0')}-01` : (r.created_at || '').split('T')[0] || range.from
-          combined.push({ date: dStr >= range.from && dStr <= range.to ? dStr : range.from, type: 'AMC Contract', desc: r.contract_name || 'AMC Contract', amount: fmt(r.annual_amount_usd), direction: '-' })
+          combined.push({ date: dStr >= range.from && dStr <= range.to ? dStr : range.from, type: 'AMC Contract', desc: r.contract_name || 'AMC Contract', amount: fmt(r.annual_amount_usd), amount_usd: Number(r.annual_amount_usd || 0), direction: '-' })
         }
       })
     }
     
     combined.sort((a, b) => b.date.localeCompare(a.date))
 
-    const sections = [{
-      heading: 'Transactions',
-      columns: ['Date', 'Type', 'Description', `Amount (${selections.currency})`],
-      rows: combined.map(t => [t.date, t.type, t.desc, `${t.direction}${t.amount}`]),
-    }]
+    const totalInflow = combined.filter(t => t.direction === '+').reduce((s, t) => s + (t.amount_usd || 0), 0)
+    const totalOutflow = combined.filter(t => t.direction === '-').reduce((s, t) => s + (t.amount_usd || 0), 0)
+    const curLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} & USD`
+
+    const sections = [
+      {
+        heading: 'Summary',
+        keyValuePairs: [
+          ['Total Inflows (+)', fmt(totalInflow)],
+          ['Total Outflows (-)', fmt(totalOutflow)],
+          ['Net Movement', fmt(totalInflow - totalOutflow)],
+        ]
+      },
+      {
+        heading: 'Transactions',
+        columns: ['Date', 'Type', 'Description', `Amount (${curLabel})`],
+        rows: combined.map(t => [t.date, t.type, t.desc, `${t.direction} ${t.amount}`]),
+      }
+    ]
 
     const title = 'Transactions'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`

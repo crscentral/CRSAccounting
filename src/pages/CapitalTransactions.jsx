@@ -4,7 +4,7 @@ import { Plus, Trash2, Landmark, Users } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import Modal, { Field } from '../components/Modal'
@@ -92,16 +92,21 @@ export default function CapitalTransactions() {
   async function generateCapitalReport(selections, format) {
     const range = resolveReportPeriod(selections.period, 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const f = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
+    const currencyLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} / USD`
 
     const sections = []
     if (selections.sections.includes("Owner's Equity (Contributions)")) {
       const { data } = await supabase.from('owner_contributions').select('*')
         .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
+      const rows = (data || []).map(r => [r.payment_date, r.owner_name, `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—'])
+      const totalUsd = (data || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+      rows.push(['Total', `${(data || []).length} Contributions`, '—', f(totalUsd), '—'])
       sections.push({
         heading: "Owner's Equity (Contributions)",
-        columns: ['Date', 'Owner', 'Amount', `Amount (${selections.currency})`, 'Notes'],
-        rows: (data || []).map(r => [r.payment_date, r.owner_name, `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
+        columns: ['Date', 'Owner', 'Original Amount', `Amount (${currencyLabel})`, 'Notes'],
+        rows,
+        keyValuePairs: [{ label: 'Total Contributions', value: f(totalUsd) }]
       })
     }
     if (selections.sections.includes('Owner Loan Balance Summary')) {
@@ -124,7 +129,12 @@ export default function CapitalTransactions() {
         summaryMap[n].repaid += Number(r.amount_usd || 0)
       })
 
+      let totalTaken = 0
+      let totalRepaid = 0
+
       const rows = Object.values(summaryMap).map(s => {
+        totalTaken += s.taken
+        totalRepaid += s.repaid
         const bal = s.taken - s.repaid
         const status = bal > 0 ? 'To Be Paid' : bal < 0 ? 'Overpaid' : (s.taken > 0 || s.repaid > 0 ? 'Settled' : 'No Loans')
         return [
@@ -136,37 +146,57 @@ export default function CapitalTransactions() {
         ]
       })
 
+      const netBalance = totalTaken - totalRepaid
+      rows.push(['Total', f(totalTaken), f(totalRepaid), netBalance > 0 ? 'To Be Paid' : 'Settled', f(Math.abs(netBalance))])
+
       sections.push({
         heading: 'Owner Loan Balance Summary',
-        columns: ['Owner', `Total Loans Taken (${selections.currency})`, `Total Repaid (${selections.currency})`, 'Status', `Net Balance (${selections.currency})`],
+        columns: ['Owner', `Total Loans Taken (${currencyLabel})`, `Total Repaid (${currencyLabel})`, 'Status', `Net Balance (${currencyLabel})`],
         rows,
+        keyValuePairs: [
+          { label: 'Total Loans Taken', value: f(totalTaken) },
+          { label: 'Total Repaid', value: f(totalRepaid) },
+          { label: 'Net Outstanding', value: f(Math.abs(netBalance)) }
+        ]
       })
     }
     if (selections.sections.includes('Loans Taken')) {
       const { data } = await supabase.from('loans_taken').select('*, loan_account:accounts!loans_taken_loan_account_id_fkey(name, code)')
         .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
+      const rows = (data || []).map(r => [r.payment_date, r.owner_name || '—', r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—'])
+      const totalUsd = (data || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+      rows.push(['Total', '—', `${(data || []).length} Loans`, '—', f(totalUsd), '—'])
       sections.push({
         heading: 'Loans Taken',
-        columns: ['Date', 'Owner', 'Loan Account', 'Amount', `Amount (${selections.currency})`, 'Notes'],
-        rows: (data || []).map(r => [r.payment_date, r.owner_name || '—', r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
+        columns: ['Date', 'Owner', 'Loan Account', 'Original Amount', `Amount (${currencyLabel})`, 'Notes'],
+        rows,
+        keyValuePairs: [{ label: 'Total Loans Taken', value: f(totalUsd) }]
       })
     }
     if (selections.sections.includes('Loan Principal Repayments')) {
       const { data } = await supabase.from('loan_principal_payments').select('*, loan_account:accounts!loan_principal_payments_loan_account_id_fkey(name, code)')
         .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
+      const rows = (data || []).map(r => [r.payment_date, r.owner_name || '—', r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—'])
+      const totalUsd = (data || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+      rows.push(['Total', '—', `${(data || []).length} Payments`, '—', f(totalUsd), '—'])
       sections.push({
         heading: 'Loan Principal Repayments',
-        columns: ['Date', 'Owner', 'Loan Account', 'Amount', `Amount (${selections.currency})`, 'Notes'],
-        rows: (data || []).map(r => [r.payment_date, r.owner_name || '—', r.loan_account ? `${r.loan_account.code} - ${r.loan_account.name}` : '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
+        columns: ['Date', 'Owner', 'Loan Account', 'Original Amount', `Amount (${currencyLabel})`, 'Notes'],
+        rows,
+        keyValuePairs: [{ label: 'Total Repayments', value: f(totalUsd) }]
       })
     }
     if (selections.sections.includes('Owner Dividends')) {
       const { data } = await supabase.from('owner_dividends').select('*')
         .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
+      const rows = (data || []).map(r => [r.payment_date, r.owner_name, `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—'])
+      const totalUsd = (data || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+      rows.push(['Total', `${(data || []).length} Dividends`, '—', f(totalUsd), '—'])
       sections.push({
         heading: 'Owner Dividends',
-        columns: ['Date', 'Owner', 'Amount', `Amount (${selections.currency})`, 'Notes'],
-        rows: (data || []).map(r => [r.payment_date, r.owner_name, `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
+        columns: ['Date', 'Owner', 'Original Amount', `Amount (${currencyLabel})`, 'Notes'],
+        rows,
+        keyValuePairs: [{ label: 'Total Dividends Paid', value: f(totalUsd) }]
       })
     }
     if (selections.sections.includes('Staff Loan Balance Summary')) {
@@ -189,7 +219,12 @@ export default function CapitalTransactions() {
         summaryMap[n].repaid += Number(r.amount_usd || 0)
       })
 
+      let totalTaken = 0
+      let totalRepaid = 0
+
       const rows = Object.values(summaryMap).map(s => {
+        totalTaken += s.taken
+        totalRepaid += s.repaid
         const bal = s.taken - s.repaid
         const status = bal > 0 ? 'To Be Repaid' : bal < 0 ? 'Overpaid' : (s.taken > 0 || s.repaid > 0 ? 'Settled' : 'No Loans')
         return [
@@ -201,36 +236,53 @@ export default function CapitalTransactions() {
         ]
       })
 
+      const netBalance = totalTaken - totalRepaid
+      rows.push(['Total', f(totalTaken), f(totalRepaid), netBalance > 0 ? 'To Be Repaid' : 'Settled', f(Math.abs(netBalance))])
+
       sections.push({
         heading: 'Staff Loan Balance Summary',
-        columns: ['Staff Member', `Total Loans Given (${selections.currency})`, `Total Repaid (${selections.currency})`, 'Status', `Net Balance (${selections.currency})`],
+        columns: ['Staff Member', `Total Loans Given (${currencyLabel})`, `Total Repaid (${currencyLabel})`, 'Status', `Net Balance (${currencyLabel})`],
         rows,
+        keyValuePairs: [
+          { label: 'Total Loans Given', value: f(totalTaken) },
+          { label: 'Total Repaid by Staff', value: f(totalRepaid) },
+          { label: 'Net Staff Debt', value: f(Math.abs(netBalance)) }
+        ]
       })
     }
     if (selections.sections.includes('Loan Given to Staff')) {
       const { data } = await supabase.from('staff_loans_given').select('*')
         .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
+      const rows = (data || []).map(r => [r.payment_date, r.staff_name || '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—'])
+      const totalUsd = (data || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+      rows.push(['Total', `${(data || []).length} Loans`, '—', f(totalUsd), '—'])
       sections.push({
         heading: 'Loan Given to Staff',
-        columns: ['Date', 'Staff Member', 'Amount', `Amount (${selections.currency})`, 'Notes'],
-        rows: (data || []).map(r => [r.payment_date, r.staff_name || '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
+        columns: ['Date', 'Staff Member', 'Original Amount', `Amount (${currencyLabel})`, 'Notes'],
+        rows,
+        keyValuePairs: [{ label: 'Total Loans Given', value: f(totalUsd) }]
       })
     }
     if (selections.sections.includes('Loan Repayment From Staff')) {
       const { data } = await supabase.from('staff_loan_repayments').select('*')
         .eq('company_id', activeCompany.id).eq('product', activeProduct).gte('payment_date', range.from).lte('payment_date', range.to).order('payment_date', { ascending: false })
+      const rows = (data || []).map(r => [r.payment_date, r.staff_name || '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—'])
+      const totalUsd = (data || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+      rows.push(['Total', `${(data || []).length} Repayments`, '—', f(totalUsd), '—'])
       sections.push({
         heading: 'Loan Repayment From Staff',
-        columns: ['Date', 'Staff Member', 'Amount', `Amount (${selections.currency})`, 'Notes'],
-        rows: (data || []).map(r => [r.payment_date, r.staff_name || '—', `${r.amount} ${r.currency}`, f(r.amount_usd), r.notes || '—']),
+        columns: ['Date', 'Staff Member', 'Original Amount', `Amount (${currencyLabel})`, 'Notes'],
+        rows,
+        keyValuePairs: [{ label: 'Total Repaid by Staff', value: f(totalUsd) }]
       })
     }
 
     const title = 'Capital & Loans'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'capital_loans_report' })
+    const logoUrl = activeCompany?.logo_url
+    if (format === 'pdf' || format === 'preview') await exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'capital_loans_report', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'capital_loans_report' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'capital_loans_report' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'capital_loans_report', logoUrl })
   }
 
   if (!activeCompany) return null

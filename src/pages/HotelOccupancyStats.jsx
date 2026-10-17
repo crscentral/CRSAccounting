@@ -5,7 +5,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { getMTDRange, getYTDRange, getYearRange } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import { CURRENCY_LIST, CURRENCIES } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
@@ -145,28 +145,52 @@ export default function HotelOccupancyStats() {
 
   async function generateStatsReport(selections, format) {
     const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
+    const f = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rrate))
     const reportView = selections.view || view
     const reportRange = rangeFor(reportView)
 
     const { data: statRows } = await supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', reportRange.from).lte('stat_date', reportRange.to).order('stat_date')
     const rows = statRows || []
-    const sections = [{
-      heading: `Occupancy & Revenue Statistics — ${VIEWS.find(v => v.key === reportView)?.label}`,
-      columns: ['Date', 'Rooms Occupied', 'Occupancy %', 'ADR', 'RevPAR', 'Room Revenue', 'Collected'],
-      rows: rows.map(r => {
-        const occPct = totalRooms > 0 ? ((r.rooms_occupied / totalRooms) * 100).toFixed(1) + '%' : '—'
-        const adr = r.rooms_occupied > 0 ? f(r.room_revenue_usd / r.rooms_occupied) : '—'
-        const revpar = totalRooms > 0 ? f(r.room_revenue_usd / totalRooms) : '—'
-        return [r.stat_date, r.rooms_occupied, occPct, adr, revpar, f(r.room_revenue_usd), f(r.room_revenue_collected_usd)]
-      }),
-    }]
+
+    const totOcc = rows.reduce((s, r) => s + Number(r.rooms_occupied || 0), 0)
+    const totRev = rows.reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
+    const totCol = rows.reduce((s, r) => s + Number(r.room_revenue_collected_usd || 0), 0)
+    const avgAdr = totOcc > 0 ? totRev / totOcc : 0
+    const curLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} & USD`
+
+    const statTableRows = rows.map(r => {
+      const occPct = totalRooms > 0 ? ((r.rooms_occupied / totalRooms) * 100).toFixed(1) + '%' : '—'
+      const adr = r.rooms_occupied > 0 ? f(r.room_revenue_usd / r.rooms_occupied) : '—'
+      const revpar = totalRooms > 0 ? f(r.room_revenue_usd / totalRooms) : '—'
+      return [r.stat_date, r.rooms_occupied, occPct, adr, revpar, f(r.room_revenue_usd), f(r.room_revenue_collected_usd)]
+    })
+    if (statTableRows.length > 0) {
+      statTableRows.push(['Total / Average', totOcc, '', f(avgAdr), '', f(totRev), f(totCol)])
+    }
+
+    const sections = [
+      {
+        heading: 'Summary',
+        keyValuePairs: [
+          ['Total Rooms Occupied', String(totOcc)],
+          ['Total Room Revenue', f(totRev)],
+          ['Total Collected', f(totCol)],
+          ['Average ADR', f(avgAdr)],
+        ]
+      },
+      {
+        heading: `Occupancy & Revenue Statistics — ${VIEWS.find(v => v.key === reportView)?.label}`,
+        columns: ['Date', 'Rooms Occupied', 'Occupancy %', `ADR (${curLabel})`, `RevPAR (${curLabel})`, `Room Revenue (${curLabel})`, `Collected (${curLabel})`],
+        rows: statTableRows,
+      }
+    ]
 
     const title = 'Hotel Revenue & Occupancy Statistics'
     const subtitle = `${activeCompany.name} • ${reportRange.from} to ${reportRange.to} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'hotel_occupancy_stats' })
+    const logoUrl = activeCompany.logo_url
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'hotel_occupancy_stats', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'hotel_occupancy_stats' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'hotel_occupancy_stats' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'hotel_occupancy_stats', logoUrl })
   }
 
   if (!activeCompany) return null

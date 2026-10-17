@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import { getMTDRange, getYTDRange, MONTH_NAMES } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import { CURRENCY_LIST } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
@@ -128,23 +128,52 @@ export default function HotelGuestInvoices() {
   })
 
   async function generateInvoicesReport(selections, format) {
-    const sections = [{
-      heading: 'Guest Invoices',
-      columns: ['Date', 'Room #', 'Guest Name', 'Check-in', 'Check-out', 'Invoice Amount', 'Collected', 'Pending', 'Remarks / Notes'],
-      rows: cpRows.map(r => [
-        r.invoice_date,
-        r.room_number || '—',
-        r.guest_name,
-        r.checkin_date || '—',
-        r.checkout_date || '—',
-        fmt(r.invoice_amount_usd),
-        fmt(r.collected_amount_usd),
-        fmt(Math.max(0, (Number(r.invoice_amount_usd) || 0) - (Number(r.collected_amount_usd) || 0))),
-        r.notes || '—'
-      ]),
-    }]
+    const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
+    const f = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
+
+    const totInv = cpRows.reduce((s, r) => s + Number(r.invoice_amount_usd || 0), 0)
+    const totCol = cpRows.reduce((s, r) => s + Number(r.collected_amount_usd || 0), 0)
+    const totPend = totInv - totCol
+
+    const invoiceRows = cpRows.map(r => [
+      r.invoice_date,
+      r.room_number || '—',
+      r.guest_name,
+      r.checkin_date || '—',
+      r.checkout_date || '—',
+      f(r.invoice_amount_usd),
+      f(r.collected_amount_usd),
+      f(Math.max(0, (Number(r.invoice_amount_usd) || 0) - (Number(r.collected_amount_usd) || 0))),
+      r.notes || '—'
+    ])
+    if (invoiceRows.length > 0) {
+      invoiceRows.push(['Total', '', '', '', '', f(totInv), f(totCol), f(totPend), ''])
+    }
+
+    const sections = [
+      {
+        heading: 'Summary',
+        keyValuePairs: [
+          ['Total Invoices', String(cpRows.length)],
+          ['Total Invoice Amount', f(totInv)],
+          ['Total Collected', f(totCol)],
+          ['Total Pending', f(totPend)],
+        ]
+      },
+      {
+        heading: 'Guest Invoices',
+        columns: [
+          'Date', 'Room #', 'Guest Name', 'Check-in', 'Check-out',
+          selections.currency === 'USD' ? 'Invoice Amount (USD)' : `Invoice Amount (${selections.currency} & USD)`,
+          selections.currency === 'USD' ? 'Collected (USD)' : `Collected (${selections.currency} & USD)`,
+          selections.currency === 'USD' ? 'Pending (USD)' : `Pending (${selections.currency} & USD)`,
+          'Remarks / Notes'
+        ],
+        rows: invoiceRows,
+      }
+    ]
     const title = 'Guest Invoices'
-    const subtitle = `${activeCompany.name} • ${cp.range.from} to ${cp.range.to}`
+    const subtitle = `${activeCompany.name} • ${cp.range.from} to ${cp.range.to} • ${selections.currency}`
     const logoUrl = activeCompany.logo_url
     if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'guest_invoices', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'guest_invoices' })

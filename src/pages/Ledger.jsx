@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import { getAmcActiveMonths, getAmcMonthsInView, resolveReportPeriod } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
@@ -274,7 +274,7 @@ export default function Ledger() {
   async function generateLedgerReport(selections, format) {
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const account = (accounts || []).find(a => a.id === selections.account)
     const combined = await fetchAndProcessEntries(selections.account, range.from, range.to, activeCompany.id, activeProduct, accounts)
@@ -290,20 +290,22 @@ export default function Ledger() {
     const totalDebit = combined.reduce((s, e) => s + Number(e.debit_usd), 0)
     const totalCredit = combined.reduce((s, e) => s + Number(e.credit_usd), 0)
 
+    const curLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} & USD`
     const sections = [{
       heading: account ? `${account.code} - ${account.name}` : (selections.account === 'all' ? 'All Accounts Ledger' : 'Account Ledger'),
-      columns: ['Date', 'Description', 'Orig. Currency', `Debit (${selections.currency})`, `Credit (${selections.currency})`, `Balance (${selections.currency})`],
+      columns: ['Date', 'Description', 'Orig. Currency', `Debit (${curLabel})`, `Credit (${curLabel})`, `Balance (${curLabel})`],
       rows,
     }, {
       heading: 'Totals',
-      keyValuePairs: [[`Total Debit (${selections.currency})`, fmt(totalDebit)], [`Total Credit (${selections.currency})`, fmt(totalCredit)]],
+      keyValuePairs: [['Total Debit', fmt(totalDebit)], ['Total Credit', fmt(totalCredit)], ['Net Movement', fmt(totalDebit - totalCredit)]],
     }]
 
     const title = 'Account Ledger'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'account_ledger_report' })
+    const logoUrl = activeCompany.logo_url
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'account_ledger_report', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'account_ledger_report' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'account_ledger_report' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'account_ledger_report', logoUrl })
   }
 
   if (!activeCompany) return null

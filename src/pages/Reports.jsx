@@ -6,7 +6,7 @@ import { getAmcActiveMonths, getAmcMonthsInView, resolveReportPeriod } from '../
 import { Printer } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 
 
 function getAmcOverlapUsd(r, fyStart, rangeFrom, rangeTo) {
@@ -259,7 +259,7 @@ export default function Reports() {
 
   async function generateFinancialReport(selections, format) {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
 
     const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date, source_type, accounts!inner(type)').eq('company_id', activeCompany.id).eq('product', activeProduct)
@@ -438,12 +438,13 @@ export default function Reports() {
 
     let sections = []
     const reportKey = selections.reportType
+    const amtCol = selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency} & USD)`
     if (reportKey === 'trial_balance') {
       const totDeb = accounts.reduce((s, a) => s + ((bal[a.id] || 0) > 0 ? (bal[a.id] || 0) : 0), 0)
       const totCred = accounts.reduce((s, a) => s + ((bal[a.id] || 0) < 0 ? -(bal[a.id] || 0) : 0), 0)
       sections = [{
         heading: 'Trial Balance',
-        columns: ['Code', 'Account', 'Debit', 'Credit'],
+        columns: ['Code', 'Account', selections.currency === 'USD' ? 'Debit (USD)' : `Debit (${selections.currency} & USD)`, selections.currency === 'USD' ? 'Credit (USD)' : `Credit (${selections.currency} & USD)`],
         rows: [
           ...accounts.map(a => { const b = bal[a.id] || 0; return [a.code, a.name, b > 0 ? fmt(b) : '—', b < 0 ? fmt(-b) : '—'] }),
           ['', 'Total', fmt(totDeb), fmt(totCred)]
@@ -454,7 +455,7 @@ export default function Reports() {
         {
           heading: 'Income Statement',
           headColor: [5, 150, 105], // emerald-600
-          columns: ['REVENUE', '% of Total', 'Amount'],
+          columns: ['REVENUE', '% of Total', amtCol],
           rows: [
             ...by('Revenue').map(a => {
               const v = -(bal[a.id] || 0)
@@ -467,7 +468,7 @@ export default function Reports() {
         {
           heading: '',
           headColor: [225, 29, 72], // rose-600
-          columns: ['OPERATING EXPENSES', '% of Total', 'Amount'],
+          columns: ['OPERATING EXPENSES', '% of Total', amtCol],
           rows: [
             ...operatingAccs.map(a => {
               const v = bal[a.id] || 0
@@ -480,7 +481,7 @@ export default function Reports() {
         {
           heading: '',
           headColor: [27, 58, 107], // navy
-          columns: ['Profitability & Other', '% of Revenue', 'Amount'],
+          columns: ['Profitability & Other', '% of Revenue', amtCol],
           rows: [
             [gopVal >= 0 ? 'GOP (Gross Operating Profit)' : 'GOL (Gross Operating Loss)', rev ? ((gopVal / rev) * 100).toFixed(1) + '%' : '0.0%', fmt(gopVal)],
             ...(otherBelowLineAccs.length > 0 ? [...otherBelowLineAccs.map(a => [a.name, '', fmt(bal[a.id] || 0)]), ['Management Fees, Taxes, Rent & Licenses', '', fmt(otherBL)]] : []),
@@ -498,8 +499,8 @@ export default function Reports() {
       }
       const sumBsExportType = (type) => by(type).reduce((s, a) => s + (bsExportBal[a.id] || 0), 0)
       sections = [
-        { heading: 'Assets', columns: ['Account', 'Amount'], rows: [...by('Assets').map(a => [`${a.code} - ${a.name}`, fmt(bsExportBal[a.id] || 0)]), ['Total Assets', fmt(assets)]] },
-        { heading: 'Liabilities & Equity', columns: ['Account', 'Amount'], rows: [...[...by('Liabilities'), ...by('Equity')].map(a => [`${a.code} - ${a.name}`, fmt(-(bsExportBal[a.id] || 0))]), ['Total Liabilities & Equity', fmt(liab + sumBsExportType('Equity') * -1)]] },
+        { heading: 'Assets', columns: ['Account', amtCol], rows: [...by('Assets').map(a => [`${a.code} - ${a.name}`, fmt(bsExportBal[a.id] || 0)]), ['Total Assets', fmt(assets)]] },
+        { heading: 'Liabilities & Equity', columns: ['Account', amtCol], rows: [...[...by('Liabilities'), ...by('Equity')].map(a => [`${a.code} - ${a.name}`, fmt(-(bsExportBal[a.id] || 0))]), ['Total Liabilities & Equity', fmt(liab + sumBsExportType('Equity') * -1)]] },
       ]
     }
 

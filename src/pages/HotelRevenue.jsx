@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import { resolveReportPeriod } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import { CURRENCY_LIST } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
@@ -107,21 +107,53 @@ export default function HotelRevenue() {
   async function generateRevenueReport(selections, format) {
     const range = resolveReportPeriod(selections.period, 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const f = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const [{ data: room }, { data: anc }] = await Promise.all([
       supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('stat_date', range.from).lte('stat_date', range.to).order('stat_date', { ascending: false }),
       supabase.from('hotel_revenue_entries').select('*, account:accounts(code, name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('entry_date', range.from).lte('entry_date', range.to).order('entry_date', { ascending: false }),
     ])
+
+    const totRoomRev = (room || []).reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
+    const totRoomCol = (room || []).reduce((s, r) => s + Number(r.room_revenue_collected_usd || 0), 0)
+    const totOcc = (room || []).reduce((s, r) => s + Number(r.rooms_occupied || 0), 0)
+    const roomRows = (room || []).map(r => [r.stat_date, r.rooms_occupied, f(r.room_revenue_usd), f(r.room_revenue_collected_usd)])
+    if (roomRows.length > 0) {
+      roomRows.push(['Total', totOcc, f(totRoomRev), f(totRoomCol)])
+    }
+
+    const totAnc = (anc || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+    const ancRows = (anc || []).map(r => [r.entry_date, r.account ? `${r.account.code} - ${r.account.name}` : '—', f(r.amount_usd), r.notes || '—'])
+    if (ancRows.length > 0) {
+      ancRows.push(['Total', '', f(totAnc), ''])
+    }
+
     const sections = [
-      { heading: 'Room Revenue', columns: ['Date', 'Rooms Occupied', 'Room Revenue', 'Collected'], rows: (room || []).map(r => [r.stat_date, r.rooms_occupied, f(r.room_revenue_usd), f(r.room_revenue_collected_usd)]) },
-      { heading: 'Ancillary Revenue', columns: ['Date', 'Head', 'Amount', 'Notes'], rows: (anc || []).map(r => [r.entry_date, r.account ? `${r.account.code} - ${r.account.name}` : '—', f(r.amount_usd), r.notes || '—']) },
+      {
+        heading: 'Summary',
+        keyValuePairs: [
+          ['Total Revenue', f(totRoomRev + totAnc)],
+          ['Total Collected', f(totRoomCol)],
+          ['Total Pending', f((totRoomRev + totAnc) - totRoomCol)],
+        ]
+      },
+      {
+        heading: 'Room Revenue',
+        columns: ['Date', 'Rooms Occupied', selections.currency === 'USD' ? 'Room Revenue (USD)' : `Room Revenue (${selections.currency} & USD)`, selections.currency === 'USD' ? 'Collected (USD)' : `Collected (${selections.currency} & USD)`],
+        rows: roomRows
+      },
+      {
+        heading: 'Ancillary Revenue',
+        columns: ['Date', 'Head', selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency} & USD)`, 'Notes'],
+        rows: ancRows
+      },
     ]
     const title = 'Daily Revenue Collection'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'daily_revenue_collection' })
+    const logoUrl = activeCompany.logo_url
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'daily_revenue_collection', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'daily_revenue_collection' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'daily_revenue_collection' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'daily_revenue_collection', logoUrl })
   }
 
   const ancillaryCols = [

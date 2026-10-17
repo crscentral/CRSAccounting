@@ -3,7 +3,7 @@ import { Save, TrendingUp, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { MONTH_NAMES } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney, formatMoneyRounded } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatMoneyRounded, formatReportMoney } from '../lib/fx'
 import { CURRENCY_LIST, CURRENCIES } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
@@ -323,7 +323,7 @@ export default function HotelBudget() {
 
   async function generateBudgetReport(selections, format) {
     const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
+    const f = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rrate))
     
     const pYear = selections.reportYear || String(startYear)
     const pMonth = selections.reportMonth || 'all'
@@ -360,12 +360,14 @@ export default function HotelBudget() {
         ])
       }
     })
-    const sections = [{ heading: 'Room Revenue Budget', columns: ['Month', 'Budgeted Occ %', 'Budgeted ADR', 'Budgeted Monthly Revenue', 'Actual Revenue', 'Variance'], rows: tableRows }]
+    const curLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} & USD`
+    const sections = [{ heading: 'Room Revenue Budget', columns: ['Month', 'Budgeted Occ %', `Budgeted ADR (${curLabel})`, `Budgeted Monthly Revenue (${curLabel})`, `Actual Revenue (${curLabel})`, `Variance (${curLabel})`], rows: tableRows }]
     const title = 'Room Revenue Budget'
     const subtitle = `${activeCompany.name} • ${pYear === 'all' ? 'All Years' : pYear + (pMonth !== 'all' ? ' ' + MONTH_NAMES[Number(pMonth)-1] : '')} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'room_revenue_budget' })
+    const logoUrl = activeCompany.logo_url
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'room_revenue_budget', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'room_revenue_budget' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'room_revenue_budget' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'room_revenue_budget', logoUrl })
   }
 
   if (!activeCompany) return null

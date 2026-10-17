@@ -3,7 +3,7 @@ import { Save, TrendingUp, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { MONTH_NAMES } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney, formatMoneyRounded } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatMoneyRounded, formatReportMoney } from '../lib/fx'
 import { CURRENCIES } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
@@ -189,10 +189,11 @@ export default function HotelExpenseBudget() {
   
   // Reports
   async function generateReport(selections, format) {
-    const rrate = selections.currency === 'USD' ? 1 : (rates[selections.currency] || 1)
-    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rrate }), selections.currency)
+    const rrate = selections.currency === 'USD' ? 1 : (rates[selections.currency] || (await getLatestRate(selections.currency)) || 1)
+    const f = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rrate))
     
     const sections = []
+    const currencyLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} / USD`
     
     // 1. Annual Summary
     const summaryRows = []
@@ -212,52 +213,63 @@ export default function HotelExpenseBudget() {
     ])
     
     sections.push({
-      title: `${selectedYear} Annual Summary`,
-      headers: ['Month', 'Budget', 'Actual', 'Variance'],
-      rows: summaryRows
+      heading: `${selectedYear} Annual Summary`,
+      columns: ['Month', `Budget (${currencyLabel})`, `Actual (${currencyLabel})`, `Variance (${currencyLabel})`],
+      rows: summaryRows,
+      keyValuePairs: [
+        { label: 'Total Annual Budget', value: f(monthlySummary.totalBudget) },
+        { label: 'Total Annual Actual', value: f(monthlySummary.totalActual) },
+        { label: 'Total Annual Variance', value: f(monthlySummary.totalVariance) }
+      ]
     })
     
     // 2. Selected Month Detailed Budget
-    const monthName = MONTH_NAMES[selectedMonth - 1]
+    const monthName = selectedMonth === 'all' ? 'Full Year' : MONTH_NAMES[selectedMonth - 1]
     const detailRows = []
+    let totalDetailedBudgetUsd = 0
+    let totalDetailedActualUsd = 0
+    
     for (const a of accounts) {
       const key = `${a.code}-${selectedMonth}`
       const row = budgets[key] || { amount: 0, currency: displayCurrency, amount_usd: 0 }
       const monthlyUsd = Number(row.amount_usd) || 0
       const actualUsd = actuals[key] || 0
-      
-      const cur = row.currency || displayCurrency
-      const rr = cur === 'USD' ? 1 : (rates[cur] || rate)
-      const actualLocal = cur === 'USD' ? actualUsd : (actualUsd * rr)
-      const monthlyLocal = cur === 'USD' ? monthlyUsd : (monthlyUsd * rr)
+      totalDetailedBudgetUsd += monthlyUsd
+      totalDetailedActualUsd += actualUsd
       
       detailRows.push([
         `${a.code} - ${a.name}`,
-        formatMoney(monthlyLocal, cur),
         f(monthlyUsd),
-        formatMoney(actualLocal, cur),
         f(actualUsd),
-        formatMoney(actualLocal - monthlyLocal, cur),
         f(actualUsd - monthlyUsd)
       ])
     }
     
+    detailRows.push([
+      'Total',
+      f(totalDetailedBudgetUsd),
+      f(totalDetailedActualUsd),
+      f(totalDetailedActualUsd - totalDetailedBudgetUsd)
+    ])
+    
     sections.push({
-      title: `${monthName} ${selectedYear} Detailed Budget`,
-      headers: ['Account', 'Monthly Budget', 'Monthly (USD)', 'Actual', 'Actual (USD)', 'Variance', 'Variance (USD)'],
-      rows: detailRows
+      heading: `${monthName} ${selectedYear} Detailed Budget`,
+      columns: ['Account', `Budget (${currencyLabel})`, `Actual (${currencyLabel})`, `Variance (${currencyLabel})`],
+      rows: detailRows,
+      keyValuePairs: [
+        { label: 'Detailed Budget Total', value: f(totalDetailedBudgetUsd) },
+        { label: 'Detailed Actual Total', value: f(totalDetailedActualUsd) },
+        { label: 'Detailed Variance Total', value: f(totalDetailedActualUsd - totalDetailedBudgetUsd) }
+      ]
     })
     
-    const ctx = {
-      companyName: activeCompany.name,
-      reportName: `Expenses Budget - ${selectedYear}`,
-      currencyCode: selections.currency,
-      dateRange: `${selectedYear}`
-    }
-    
-    if (format === 'pdf') exportMultiSectionPDF(ctx, sections)
-    else if (format === 'excel') exportMultiSectionExcel(ctx, sections)
-    else if (format === 'word') exportMultiSectionWord(ctx, sections)
+    const title = activeProduct === "restaurant" ? "Expense Budget" : "Expenses Budget"
+    const subtitle = `${activeCompany.name} • ${selectedYear} • ${selections.currency}`
+    const logoUrl = activeCompany?.logo_url
+
+    if (format === 'pdf' || format === 'preview') await exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'expenses_budget', logoUrl })
+    else if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'expenses_budget' })
+    else if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'expenses_budget', logoUrl })
   }
 
   return (

@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import { resolveReportPeriod } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import KpiCard from '../components/KpiCard'
@@ -40,7 +40,7 @@ export default function RestaurantRevenue() {
   async function generateRevenueReport(selections, format) {
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const { data } = await supabase.from('restaurant_daily_revenue').select('*')
       .eq('company_id', activeCompany.id).eq('product', activeProduct)
@@ -51,14 +51,23 @@ export default function RestaurantRevenue() {
     const sections = []
 
     if (selections.sections.includes('Entries')) {
+      const totCovers = rows.reduce((s, r) => s + Number(r.covers || 0), 0)
+      const totFood = rows.reduce((s, r) => s + Number(r.food_amount_usd || 0), 0)
+      const totBev = rows.reduce((s, r) => s + Number(r.beverage_amount_usd || 0), 0)
+      const totOth = rows.reduce((s, r) => s + Number(r.other_amount_usd || 0), 0)
+      const totAll = rows.reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+      const entryRows = rows.map(r => {
+        const total = fmt(r.amount_usd)
+        const perCover = r.covers > 0 ? fmt(r.amount_usd / r.covers) : '—'
+        return [r.revenue_date, r.meal_period || '—', r.table_or_section || '—', r.covers, fmt(r.food_amount_usd), fmt(r.beverage_amount_usd), fmt(r.other_amount_usd), total, perCover]
+      })
+      if (entryRows.length > 0) {
+        entryRows.push(['Total', '', '', totCovers, fmt(totFood), fmt(totBev), fmt(totOth), fmt(totAll), totCovers > 0 ? fmt(totAll / totCovers) : '—'])
+      }
       sections.push({
         heading: 'Table Revenue Entries',
-        columns: ['Date', 'Meal Period', 'Table/Section', 'Covers', 'Food', 'Beverage', 'Other', 'Total', 'Rev/Cover'],
-        rows: rows.map(r => {
-          const total = fmt(r.amount_usd)
-          const perCover = r.covers > 0 ? fmt(r.amount_usd / r.covers) : '—'
-          return [r.revenue_date, r.meal_period || '—', r.table_or_section || '—', r.covers, fmt(r.food_amount_usd), fmt(r.beverage_amount_usd), fmt(r.other_amount_usd), total, perCover]
-        }),
+        columns: ['Date', 'Meal Period', 'Table/Section', 'Covers', 'Food', 'Beverage', 'Other', selections.currency === 'USD' ? 'Total (USD)' : `Total (${selections.currency} & USD)`, 'Rev/Cover'],
+        rows: entryRows,
       })
     }
 
@@ -101,9 +110,10 @@ export default function RestaurantRevenue() {
 
     const title = 'Table Revenue Report'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'restaurant_revenue_report' })
+    const logoUrl = activeCompany.logo_url
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'restaurant_revenue_report', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'restaurant_revenue_report' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'restaurant_revenue_report' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'restaurant_revenue_report', logoUrl })
   }
 
   if (!activeCompany) return null

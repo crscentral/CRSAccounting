@@ -1,0 +1,17 @@
+# CRS Accounting
+> CRS Accounting is a multi-currency hospitality and business accounting software designed for hotel, restaurant, and enterprise financial management.
+
+## Overview
+CRS Accounting provides financial dashboards, room revenue & occupancy tracking, guest invoicing, purchase invoices, daily revenue collections, accounts payable & expenses, capital & loans management, and standard financial reports including Balance Sheet, Income Statement (P&L), and Trial Balance.
+
+## Application Endpoints
+- [/login](https://accounting.crscentral.com/login): Secure user authentication and sign-in portal.
+- [/](https://accounting.crscentral.com/): Primary financial dashboard and KPI overview.
+- [/data-security](https://accounting.crscentral.com/data-security): Data security and compliance policies.
+- [/privacy-policy](https://accounting.crscentral.com/privacy-policy): Privacy policy and data handling documentation.
+
+## Core Capabilities
+- Multi-currency transaction logging and automated FX rate conversion.
+- Room revenue, CPOR (Cost Per Occupied Room), and PAR (Cost Per Available Room) analytics.
+- Real-time Balance Sheet, Income Statement, Trial Balance, and Account Ledgers.
+- PDF, Excel, and Word multi-section financial reports generation.

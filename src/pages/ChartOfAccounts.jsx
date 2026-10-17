@@ -6,7 +6,7 @@ import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import AccountFormModal from '../components/AccountFormModal'
 
 const TYPE_COLORS = {
@@ -43,24 +43,35 @@ export default function ChartOfAccounts() {
 
   async function generateAccountsReport(selections, format) {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const scoped = selections.accountType === 'All' ? accounts : accounts.filter(a => a.type === selections.accountType)
     const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd').eq('company_id', activeCompany.id)
     const balances = {}
     ;(entries || []).forEach(e => { balances[e.account_id] = (balances[e.account_id] || 0) + Number(e.debit_usd) - Number(e.credit_usd) })
 
+    const totalBalance = scoped.reduce((sum, a) => sum + (balances[a.id] || 0), 0)
+    const currencyLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} / USD`
+
     const sections = [{
       heading: selections.accountType === 'All' ? 'All Accounts' : `${selections.accountType} Accounts`,
-      columns: ['Code', 'Name', 'Type', 'Subtype', `Balance (${selections.currency})`],
-      rows: scoped.map(a => [a.code, a.name, a.type, a.subtype || '—', fmt(balances[a.id] || 0)]),
+      columns: ['Code', 'Name', 'Type', 'Subtype', `Balance (${currencyLabel})`],
+      rows: [
+        ...scoped.map(a => [a.code, a.name, a.type, a.subtype || '—', fmt(balances[a.id] || 0)]),
+        ['Total', `${scoped.length} Accounts`, '—', '—', fmt(totalBalance)]
+      ],
+      keyValuePairs: [
+        { label: 'Total Accounts', value: String(scoped.length) },
+        { label: 'Net Balance', value: fmt(totalBalance) }
+      ]
     }]
 
     const title = 'Chart of Accounts'
     const subtitle = `${activeCompany.name} • ${selections.accountType} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'chart_of_accounts' })
+    const logoUrl = activeCompany?.logo_url
+    if (format === 'pdf' || format === 'preview') await exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'chart_of_accounts', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'chart_of_accounts' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'chart_of_accounts' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'chart_of_accounts', logoUrl })
   }
 
   if (!activeCompany) return null

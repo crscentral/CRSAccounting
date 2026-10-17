@@ -6,7 +6,7 @@ import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import { resolveReportPeriod, getAmcActiveMonths, getAmcMonthsInView } from '../lib/fiscalYear'
 import { DollarSign, TrendingDown, TrendingUp } from 'lucide-react'
 
@@ -237,7 +237,7 @@ export default function FinancialPerformance() {
   async function generatePerformanceReport(selections, format) {
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const isHotel = ['hotel', 'restaurant'].includes(activeProduct)
     const prodFilter = activeProduct === 'hotel' ? ['hotel', 'restaurant'] : [activeProduct]
@@ -369,34 +369,37 @@ export default function FinancialPerformance() {
     const gop = rev - exp
     const marginPct = rev ? (gop / rev) * 100 : 0
 
+    const curLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} & USD`
     const sections = [
       {
         heading: 'Profit & Loss Summary',
-        columns: ['Item', 'Amount', 'Amount %'],
+        columns: ['Item', `Amount (${curLabel})`, 'Amount %'],
         rows: [
           ['Total Revenue', fmt(rev), '100.0%'],
           ['Total Expenses', `-${fmt(exp)}`, rev ? `${((exp / rev) * 100).toFixed(1)}%` : '0%'],
           ['Gross Operating Profit (GOP)', fmt(gop), `${marginPct.toFixed(1)}%`],
         ],
       },
-      { heading: 'Revenue by Account', columns: ['Code', 'Account', `Amount (${selections.currency})`], rows: Object.values(revMap).map(a => [a.code, a.name, fmt(a.amount)]) },
-      { heading: 'Expenses by Account', columns: ['Code', 'Account', `Amount (${selections.currency})`], rows: Object.values(expMap).map(a => [a.code, a.name, fmt(a.amount)]) },
+      { heading: 'Revenue by Account', columns: ['Code', 'Account', `Amount (${curLabel})`], rows: Object.values(revMap).map(a => [a.code, a.name, fmt(a.amount)]) },
+      { heading: 'Expenses by Account', columns: ['Code', 'Account', `Amount (${curLabel})`], rows: Object.values(expMap).map(a => [a.code, a.name, fmt(a.amount)]) },
     ]
 
     const title = 'Financial Performance'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'financial_performance_report' })
+    const logoUrl = activeCompany.logo_url
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'financial_performance_report', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'financial_performance_report' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'financial_performance_report' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'financial_performance_report', logoUrl })
   }
 
   async function generateForecastReport(selections, format) {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const years = selections.forecastYears === 'Selected Year Only' ? [forecastYear] : Array.from({ length: 5 }, (_, i) => new Date().getFullYear() + i)
     const { data } = await supabase.from('forecast_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).in('forecast_year', years).order('forecast_year').order('forecast_month')
 
+    const curLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} & USD`
     const rows = (data || []).map(f => {
       const profit = Number(f.revenue_usd) - Number(f.expenses_usd)
       const margin = f.revenue_usd ? (profit / f.revenue_usd) * 100 : 0
@@ -407,14 +410,15 @@ export default function FinancialPerformance() {
       if (selections.forecastColumns.includes('Profit Margin %')) cols.push(`${margin.toFixed(1)}%`)
       return cols
     })
-    const columns = ['Month', ...selections.forecastColumns.map(c => `${c} (${c.includes('%') ? '' : selections.currency})`.replace(' ()', ''))]
+    const columns = ['Month', ...selections.forecastColumns.map(c => `${c} (${c.includes('%') ? '' : curLabel})`.replace(' ()', ''))]
 
     const sections = [{ heading: `Forecast — ${years.join(', ')}`, columns, rows }]
     const title = 'Financial Performance — Forecast'
     const subtitle = `${activeCompany.name} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'forecast_report' })
+    const logoUrl = activeCompany.logo_url
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'forecast_report', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'forecast_report' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'forecast_report' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'forecast_report', logoUrl })
   }
 
   if (!activeCompany) return null

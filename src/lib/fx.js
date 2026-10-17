@@ -117,3 +117,41 @@ export function formatMoneyRounded(amount, currencyCode) {
     return `${Math.round(amount)} ${currencyCode}`
   }
 }
+
+/**
+ * Formats a USD amount for reports:
+ * - If targetCurrency is 'USD' or empty: returns "$1,234.56"
+ * - If targetCurrency is non-USD (e.g. 'THB'): returns "THB 43,210.00 ($1,234.56)"
+ */
+export function formatDualMoney(amountUsd, targetCurrency = 'USD', ratesMapOrRate = 1) {
+  const usdNum = Number(amountUsd) || 0
+  const usdFormatted = formatMoney(usdNum, 'USD')
+  if (!targetCurrency || targetCurrency === 'USD') {
+    return usdFormatted
+  }
+  const rate = typeof ratesMapOrRate === 'number'
+    ? ratesMapOrRate
+    : (ratesMapOrRate?.[targetCurrency] ?? 1)
+  const converted = usdNum * rate
+  const targetFormatted = formatMoney(converted, targetCurrency)
+  return `${targetFormatted} (${usdFormatted})`
+}
+
+export const formatReportMoney = formatDualMoney
+
+export function formatDualMoneyRounded(amountUsd, targetCurrency = 'USD', ratesMapOrRate = 1) {
+  const usdNum = Number(amountUsd) || 0
+  const usdFormatted = formatMoneyRounded(usdNum, 'USD')
+  if (!targetCurrency || targetCurrency === 'USD') {
+    return usdFormatted
+  }
+  const rate = typeof ratesMapOrRate === 'number'
+    ? ratesMapOrRate
+    : (ratesMapOrRate?.[targetCurrency] ?? 1)
+  const converted = Math.round(usdNum * rate)
+  const targetFormatted = formatMoneyRounded(converted, targetCurrency)
+  return `${targetFormatted} (${usdFormatted})`
+}
+
+export const formatReportMoneyRounded = formatDualMoneyRounded
+

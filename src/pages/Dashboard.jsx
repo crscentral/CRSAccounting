@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import { getYTDRange, resolveReportPeriod, getAmcActiveMonths, getAmcMonthsInView } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
 import DataTable from '../components/DataTable'
@@ -218,7 +218,7 @@ export default function Dashboard() {
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const conv = (usd) => convertFromUsd(usd, selections.currency, { [selections.currency]: rate })
-    const fmt = (usd) => formatMoney(conv(usd), selections.currency)
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
         const [{ data: s }, { data: p }, { data: r }, { data: allS }, { data: allP }, { data: accs }, { data: led }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }, { data: hPi }] = await Promise.all([
       supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
@@ -330,12 +330,12 @@ export default function Dashboard() {
         ...pSel.map(i => ({ date: i.invoice_date, label: i.invoice_number, amount: fmt(i.amount_usd) })),
         ...rSel.map(i => ({ date: i.receipt_date, label: 'Payment Received', amount: fmt(i.amount_usd) })),
       ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 3)
-      sections.push({ heading: 'Recent Transactions', columns: ['Date', 'Description', 'Amount'], rows: combined.map(t => [t.date, t.label, t.amount]) })
+      sections.push({ heading: 'Recent Transactions', columns: ['Date', 'Description', selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency} & USD)`], rows: combined.map(t => [t.date, t.label, t.amount]) })
     }
 
     if (selections.sections.includes('Outstanding Invoices')) {
       const outstanding = sSel.filter(i => i.status !== 'Paid')
-      sections.push({ heading: 'Outstanding Invoices', columns: ['Invoice #', 'Customer', 'Due Date', 'Balance Due', 'Status'], rows: outstanding.map(i => [i.invoice_number, i.contact?.name || '—', i.due_date || '—', fmt(i.amount_usd), i.status]) })
+      sections.push({ heading: 'Outstanding Invoices', columns: ['Invoice #', 'Customer', 'Due Date', selections.currency === 'USD' ? 'Balance Due (USD)' : `Balance Due (${selections.currency} & USD)`, 'Status'], rows: outstanding.map(i => [i.invoice_number, i.contact?.name || '—', i.due_date || '—', fmt(i.amount_usd), i.status]) })
     }
 
     const title = 'Financial Dashboard'

@@ -6,7 +6,7 @@ import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import { resolveReportPeriod, formatDate } from '../lib/fiscalYear'
 import InvoiceDownloadMenu from '../components/InvoiceDownloadMenu'
 import SalesInvoiceFormModal from '../components/SalesInvoiceFormModal'
@@ -160,23 +160,59 @@ export default function SalesInvoices() {
   async function generateSalesReport(selections, format) {
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const sections = []
+    const summaryPairs = []
+
     if (selections.dataType === 'Invoices' || selections.dataType === 'Both') {
       const { data: inv } = await supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to).order('invoice_date', { ascending: false })
+      const invList = inv || []
+      const totalInvUsd = invList.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
+      const totalPaidUsd = invList.reduce((s, i) => s + (i.status === 'Paid' ? Number(i.amount_usd || 0) : 0), 0)
+      const totalPendUsd = totalInvUsd - totalPaidUsd
+
+      summaryPairs.push(['Total Invoices', String(invList.length)])
+      summaryPairs.push(['Total Invoiced Amount', fmt(totalInvUsd)])
+      summaryPairs.push(['Total Invoiced Paid', fmt(totalPaidUsd)])
+      summaryPairs.push(['Total Invoiced Pending', fmt(totalPendUsd)])
+
+      const invRows = invList.map(i => [i.invoice_number, i.contact?.name || '—', i.invoice_date, i.due_date || '—', `${i.amount} ${i.currency}`, fmt(i.amount_usd), i.status])
+      if (invRows.length > 0) {
+        invRows.push(['Total', '', '', '', '', fmt(totalInvUsd), ''])
+      }
+
       sections.push({
         heading: 'Invoices',
-        columns: ['Invoice #', 'Customer', 'Date', 'Due', 'Amount', `Amount (${selections.currency})`, 'Status'],
-        rows: (inv || []).map(i => [i.invoice_number, i.contact?.name || '—', i.invoice_date, i.due_date || '—', `${i.amount} ${i.currency}`, fmt(i.amount_usd), i.status]),
+        columns: ['Invoice #', 'Customer', 'Date', 'Due', 'Amount', selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency} & USD)`, 'Status'],
+        rows: invRows,
       })
     }
+
     if (selections.dataType === 'Payment Receipts' || selections.dataType === 'Both') {
       const { data: rec } = await supabase.from('payment_receipts').select('*, invoice:sales_invoices(invoice_number), contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('receipt_date', range.from).lte('receipt_date', range.to).order('receipt_date', { ascending: false })
+      const recList = rec || []
+      const totalRecUsd = recList.reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+
+      summaryPairs.push(['Total Receipts', String(recList.length)])
+      summaryPairs.push(['Total Receipts Collected', fmt(totalRecUsd)])
+
+      const recRows = recList.map(r => [r.invoice?.invoice_number || '—', r.receipt_date, `${r.amount} ${r.currency}`, fmt(r.amount_usd), r.method || '—'])
+      if (recRows.length > 0) {
+        recRows.push(['Total', '', '', fmt(totalRecUsd), ''])
+      }
+
       sections.push({
         heading: 'Payment Receipts',
-        columns: ['Invoice #', 'Date', 'Amount', `Amount (${selections.currency})`, 'Method'],
-        rows: (rec || []).map(r => [r.invoice?.invoice_number || '—', r.receipt_date, `${r.amount} ${r.currency}`, fmt(r.amount_usd), r.method || '—']),
+        columns: ['Invoice #', 'Date', 'Amount', selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency} & USD)`, 'Method'],
+        rows: recRows,
+      })
+    }
+
+    if (summaryPairs.length > 0) {
+      sections.unshift({
+        heading: 'Summary',
+        keyValuePairs: summaryPairs,
       })
     }
 

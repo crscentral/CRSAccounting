@@ -8,8 +8,26 @@
     <title>CRS Accounting</title>
     <meta name="description" content="CRS Accounting — finance and revenue management software by CRS Central." />
 
+    <!-- Agentic Browsing / LLMs -->
+    <link rel="describedby" href="/llms.txt" />
+
+    <!-- Preconnect to Supabase API for faster initial load -->
+    <link rel="preconnect" href="https://pxygyucscjmvgvfilohq.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://pxygyucscjmvgvfilohq.supabase.co" />
+
     <!-- PWA: installable "Add to Home Screen" app -->
     <link rel="manifest" href="/manifest.webmanifest" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "CRS Accounting",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "All",
+        "description": "Multi-currency financial and revenue management software for hotels, restaurants, and businesses."
+      }
+    </script>
 
     <!-- iOS "Add to Home Screen" support (Safari ignores manifest.json for install UI) -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -32,8 +50,10 @@
         }
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index-DyUTE8Ay.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BW84xSmx.css">
+    <script type="module" crossorigin src="/assets/index-kEDNuULi.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-hePW80VL.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-supabase-CBVPdc_P.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-BOOIp8k4.css">
   </head>
   <body>
     <div id="root"></div>

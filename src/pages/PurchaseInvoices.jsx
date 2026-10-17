@@ -6,7 +6,7 @@ import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import { resolveReportPeriod, formatDate } from '../lib/fiscalYear'
 import InvoiceDownloadMenu from '../components/InvoiceDownloadMenu'
 import PurchaseInvoiceFormModal from '../components/PurchaseInvoiceFormModal'
@@ -121,14 +121,43 @@ export default function PurchaseInvoices() {
   async function generatePurchaseReport(selections, format) {
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const { data: inv } = await supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to).order('invoice_date', { ascending: false })
-    const sections = [{
-      heading: 'Purchase Invoices',
-      columns: ['Invoice #', 'Date', 'Supplier', 'Currency', 'Amount', `Amount (${selections.currency})`, 'Status'],
-      rows: (inv || []).map(i => [i.invoice_number, i.invoice_date, i.contact?.name || i.supplier_name_freeform || '—', i.currency, `${i.amount} ${i.currency}`, fmt(i.amount_usd), i.status]),
-    }]
+    const list = inv || []
+    const totalUsdVal = list.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
+    const totalPaidUsd = list.reduce((s, i) => s + (i.status === 'Paid' ? Number(i.amount_usd || 0) : 0), 0)
+    const totalPendingUsd = totalUsdVal - totalPaidUsd
+
+    const invoiceRows = list.map(i => [
+      i.invoice_number,
+      i.invoice_date,
+      i.contact?.name || i.supplier_name_freeform || '—',
+      i.currency,
+      `${i.amount} ${i.currency}`,
+      fmt(i.amount_usd),
+      i.status
+    ])
+    if (invoiceRows.length > 0) {
+      invoiceRows.push(['Total', '', '', '', '', fmt(totalUsdVal), ''])
+    }
+
+    const sections = [
+      {
+        heading: 'Summary',
+        keyValuePairs: [
+          ['Total Invoices', String(list.length)],
+          ['Total Amount', fmt(totalUsdVal)],
+          ['Total Paid', fmt(totalPaidUsd)],
+          ['Total Pending', fmt(totalPendingUsd)],
+        ]
+      },
+      {
+        heading: 'Purchase Invoices',
+        columns: ['Invoice #', 'Date', 'Supplier', 'Currency', 'Amount', selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency} & USD)`, 'Status'],
+        rows: invoiceRows,
+      }
+    ]
 
     const title = 'Purchase Invoices'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`

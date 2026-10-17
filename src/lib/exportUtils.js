@@ -69,8 +69,19 @@ function renderRichText(doc, text, startX, startY, maxWidth) {
 
 function sanitizeText(str) {
   if (typeof str !== 'string') return str;
-  return str.replace(/₹/g, 'INR ').replace(/฿/g, 'THB ').replace(/€/g, 'EUR ').replace(/£/g, 'GBP ').replace(/[^\x00-\x7F]/g, '');
+  return str
+    .replace(/₹/g, 'INR ')
+    .replace(/฿/g, 'THB ')
+    .replace(/₭/g, 'LAK ')
+    .replace(/€/g, 'EUR ')
+    .replace(/£/g, 'GBP ')
+    .replace(/¥/g, 'JPY ')
+    .replace(/₩/g, 'KRW ')
+    .replace(/₫/g, 'VND ')
+    .replace(/₱/g, 'PHP ')
+    .replace(/[^\x00-\x7F]/g, '');
 }
+
 
 
 /**
@@ -762,15 +773,32 @@ function renderGroupedBarChartDataUrl({ categories, series, width = 800, height 
  * ({ heading, keyValuePairs: [[label, value], ...] }), or a chart
  * ({ heading, chart: { categories, series } }).
  */
-export async function exportMultiSectionPDF({ title, subtitle, sections, filename, logoUrl, preview = false, orientation }) {
-  const isWide = orientation === 'landscape' || (sections || []).some(s => s.columns && s.columns.length >= 8)
+export async function exportMultiSectionPDF(optionsOrCtx, sectionsArg) {
+  let { title, subtitle, sections, filename, logoUrl, preview = false, orientation } =
+    (Array.isArray(sectionsArg))
+      ? {
+          title: optionsOrCtx?.reportName || optionsOrCtx?.title || 'Report',
+          subtitle: `${optionsOrCtx?.companyName || ''} • ${optionsOrCtx?.dateRange || ''} • ${optionsOrCtx?.currencyCode || ''}`.replace(/^ • | • $/g, '').replace(/ •  • /g, ' • '),
+          sections: sectionsArg,
+          filename: (optionsOrCtx?.reportName || 'report').toLowerCase().replace(/[^a-z0-9-_]+/g, '_'),
+          logoUrl: optionsOrCtx?.logoUrl,
+          preview: optionsOrCtx?.preview || false,
+          orientation: optionsOrCtx?.orientation
+        }
+      : (optionsOrCtx || {})
+
+  sections = sections || []
+  const isWide = orientation === 'landscape' || sections.some(s => {
+    const cols = s.columns || s.headers || []
+    return cols.length >= 7
+  })
   const doc = new jsPDF({ orientation: isWide ? 'landscape' : 'portrait' })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
 
   doc.setFontSize(16)
   doc.setTextColor(27, 58, 107)
-  doc.text(title, 14, 18)
+  doc.text(title || 'Report', 14, 18)
   if (subtitle) {
     doc.setFontSize(10)
     doc.setTextColor(100)
@@ -785,14 +813,20 @@ export async function exportMultiSectionPDF({ title, subtitle, sections, filenam
   let y = subtitle ? 33 : 27
 
   sections.forEach(section => {
+    const heading = section.heading || section.title || ''
+    const cols = section.columns || section.headers || null
+    const rows = section.rows || null
+
     if (y > pageHeight - 30) { doc.addPage(); y = 20 }
 
-    doc.setFontSize(12)
-    doc.setTextColor(20)
-    doc.setFont(undefined, 'bold')
-    doc.text(section.heading, 14, y)
-    y += 3
-    doc.setFont(undefined, 'normal')
+    if (heading) {
+      doc.setFontSize(12)
+      doc.setTextColor(20)
+      doc.setFont(undefined, 'bold')
+      doc.text(heading, 14, y)
+      y += 3
+      doc.setFont(undefined, 'normal')
+    }
 
     if (section.keyValuePairs) {
       y += 4
@@ -802,37 +836,37 @@ export async function exportMultiSectionPDF({ title, subtitle, sections, filenam
         doc.setTextColor(90)
         doc.text(String(label), 16, y)
         doc.setTextColor(20)
-        doc.text(String(val), 100, y)
+        doc.text(String(val), pageWidth - 16, y, { align: 'right' })
         y += 5.5
       })
       y += 6
-    } else if (section.columns && section.rows) {
+    } else if (cols && rows) {
       let columnStyles = {}
-      if (section.columns.length === 3) {
-        columnStyles = { 0: { cellWidth: 102 }, 1: { cellWidth: 40, halign: 'right' }, 2: { cellWidth: 40, halign: 'right' } }
-      } else if (section.columns.length === 2) {
-        columnStyles = { 0: { cellWidth: 142 }, 1: { cellWidth: 40, halign: 'right' } }
+      if (cols.length === 3) {
+        columnStyles = { 0: { cellWidth: 72 }, 1: { cellWidth: 55, halign: 'right' }, 2: { cellWidth: 55, halign: 'right' } }
+      } else if (cols.length === 2) {
+        columnStyles = { 0: { cellWidth: 112 }, 1: { cellWidth: 70, halign: 'right' } }
       }
       
-      const isNumericCol = (header) => /amount|total|collected|pending|price|rate|balance|qty|rev/i.test(String(header))
-      const safeHead = section.columns.map((c, i) => {
+      const isNumericCol = (header) => /amount|total|collected|pending|price|rate|balance|qty|rev|debit|credit|budget|actual|variance/i.test(String(header))
+      const safeHead = cols.map((c, i) => {
         const text = sanitizeText(c)
-        const alignRight = section.columns.length <= 3 ? (i > 0) : isNumericCol(c)
+        const alignRight = cols.length <= 3 ? (i > 0) : isNumericCol(c)
         return alignRight ? { content: text, styles: { halign: 'right' } } : { content: text, styles: { halign: 'left' } }
       })
-      const safeBody = section.rows.map(row => row.map((cell, i) => {
+      const safeBody = rows.map(row => row.map((cell, i) => {
         const text = sanitizeText(cell)
-        const alignRight = section.columns.length <= 3 ? (i > 0) : isNumericCol(section.columns[i])
+        const alignRight = cols.length <= 3 ? (i > 0) : isNumericCol(cols[i])
         return alignRight ? { content: text, styles: { halign: 'right' } } : { content: text, styles: { halign: 'left' } }
       }))
 
-      const tableFontSize = section.columns.length >= 8 ? 7 : 8
+      const tableFontSize = cols.length >= 8 ? 7 : (cols.length >= 6 ? 7.5 : 8)
       autoTable(doc, {
         startY: y + 3,
         head: [safeHead],
         body: safeBody,
         headStyles: { fillColor: section.headColor || [27, 58, 107], fontSize: tableFontSize },
-        styles: { fontSize: tableFontSize, cellPadding: section.columns.length >= 8 ? 2 : 2.5 },
+        styles: { fontSize: tableFontSize, cellPadding: cols.length >= 7 ? 2 : 2.5 },
         columnStyles: columnStyles,
         margin: { left: 14, right: 14 },
       })
@@ -862,20 +896,34 @@ export async function exportMultiSectionPDF({ title, subtitle, sections, filenam
     const url = URL.createObjectURL(blob)
     window.open(url, '_blank')
   } else {
-    doc.save(`${filename}.pdf`)
+    doc.save(`${filename || 'report'}.pdf`)
   }
 }
 
 /** Multi-section Excel export -- one section per block, stacked in a single sheet with spacing rows. */
-export function exportMultiSectionExcel({ title, sections, filename }) {
-  const rows = [[title], []]
+export function exportMultiSectionExcel(optionsOrCtx, sectionsArg) {
+  let { title, sections, filename } =
+    (Array.isArray(sectionsArg))
+      ? {
+          title: optionsOrCtx?.reportName || optionsOrCtx?.title || 'Report',
+          sections: sectionsArg,
+          filename: (optionsOrCtx?.reportName || 'report').toLowerCase().replace(/[^a-z0-9-_]+/g, '_'),
+        }
+      : (optionsOrCtx || {})
+
+  sections = sections || []
+  const rows = [[title || 'Report'], []]
   sections.forEach(section => {
-    rows.push([section.heading])
+    const heading = section.heading || section.title || ''
+    const cols = section.columns || section.headers || null
+    const secRows = section.rows || null
+
+    if (heading) rows.push([heading])
     if (section.keyValuePairs) {
       section.keyValuePairs.forEach(([label, val]) => rows.push([label, val]))
-    } else if (section.columns && section.rows) {
-      rows.push(section.columns)
-      section.rows.forEach(r => rows.push(r))
+    } else if (cols && secRows) {
+      rows.push(cols)
+      secRows.forEach(r => rows.push(r))
     } else if (section.chart) {
       rows.push(['(Chart shown as data -- Excel export cannot embed a native chart image)'])
       rows.push(['Category', ...section.chart.series.map(s => s.name)])
@@ -884,34 +932,60 @@ export function exportMultiSectionExcel({ title, sections, filename }) {
     rows.push([])
   })
   const ws = XLSX.utils.aoa_to_sheet(rows)
+  const colWidths = []
+  rows.forEach(row => {
+    if (Array.isArray(row)) {
+      row.forEach((cell, i) => {
+        const len = cell != null ? String(cell).length : 0
+        colWidths[i] = Math.max(colWidths[i] || 10, Math.min(len + 3, 50))
+      })
+    }
+  })
+  ws['!cols'] = colWidths.map(w => ({ wch: w }))
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, title.slice(0, 31) || 'Report')
-  XLSX.writeFile(wb, `${filename}.xlsx`)
+  XLSX.utils.book_append_sheet(wb, ws, (title || 'Report').slice(0, 31))
+  XLSX.writeFile(wb, `${filename || 'report'}.xlsx`)
 }
 
 /** Multi-section Word export. */
-export function exportMultiSectionWord({ title, subtitle, sections, filename, logoUrl }) {
+export function exportMultiSectionWord(optionsOrCtx, sectionsArg) {
+  let { title, subtitle, sections, filename, logoUrl } =
+    (Array.isArray(sectionsArg))
+      ? {
+          title: optionsOrCtx?.reportName || optionsOrCtx?.title || 'Report',
+          subtitle: `${optionsOrCtx?.companyName || ''} • ${optionsOrCtx?.dateRange || ''} • ${optionsOrCtx?.currencyCode || ''}`.replace(/^ • | • $/g, '').replace(/ •  • /g, ' • '),
+          sections: sectionsArg,
+          filename: (optionsOrCtx?.reportName || 'report').toLowerCase().replace(/[^a-z0-9-_]+/g, '_'),
+          logoUrl: optionsOrCtx?.logoUrl,
+        }
+      : (optionsOrCtx || {})
+
+  sections = sections || []
   const esc = escapeHtml
-  const isNumericCol = (header) => /amount|total|collected|pending|price|rate|balance|qty|rev/i.test(String(header))
+  const isNumericCol = (header) => /amount|total|collected|pending|price|rate|balance|qty|rev|debit|credit|budget|actual|variance/i.test(String(header))
   const sectionsHtml = sections.map(section => {
+    const heading = section.heading || section.title || ''
+    const cols = section.columns || section.headers || null
+    const secRows = section.rows || null
+
     let inner = ''
     if (section.keyValuePairs) {
       inner = section.keyValuePairs.map(([label, val]) =>
         `<p style="margin:2px 0;"><strong>${esc(label)}:</strong> ${esc(val)}</p>`
       ).join('')
-    } else if (section.columns && section.rows) {
+    } else if (cols && secRows) {
       const rgb = section.headColor || [27, 58, 107]
       const bgColor = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`
       
-      const head = section.columns.map((c, i) => {
-        const align = section.columns.length <= 3 ? (i > 0 ? 'right' : 'left') : (isNumericCol(c) ? 'right' : 'left')
-        const width = (section.columns.length === 3 && i > 0) ? 'width:15%;' : ((section.columns.length === 2 && i > 0) ? 'width:20%;' : 'width:auto;')
+      const head = cols.map((c, i) => {
+        const align = cols.length <= 3 ? (i > 0 ? 'right' : 'left') : (isNumericCol(c) ? 'right' : 'left')
+        const width = (cols.length === 3 && i > 0) ? 'width:18%;' : ((cols.length === 2 && i > 0) ? 'width:25%;' : 'width:auto;')
         return `<th style="background:${bgColor};color:#fff;padding:5px 8px;text-align:${align};${width}">${esc(c)}</th>`
       }).join('')
       
-      const body = section.rows.map(r =>
+      const body = secRows.map(r =>
         `<tr>${r.map((cell, i) => {
-          const align = section.columns.length <= 3 ? (i > 0 ? 'right' : 'left') : (isNumericCol(section.columns[i]) ? 'right' : 'left')
+          const align = cols.length <= 3 ? (i > 0 ? 'right' : 'left') : (isNumericCol(cols[i]) ? 'right' : 'left')
           return `<td style="padding:5px 8px;border:1px solid #ddd;text-align:${align};">${esc(cell)}</td>`
         }).join('')}</tr>`
       ).join('')
@@ -920,23 +994,24 @@ export function exportMultiSectionWord({ title, subtitle, sections, filename, lo
       const dataUrl = renderGroupedBarChartDataUrl(section.chart)
       inner = `<img src="${dataUrl}" style="max-width:100%;margin-bottom:12px;" />`
     }
-    return `<h3 style="color:#1B3A6B;margin-top:20px;">${esc(section.heading)}</h3>${inner}`
+    return `${heading ? `<h3 style="color:#1B3A6B;margin-top:20px;">${esc(heading)}</h3>` : ''}${inner}`
   }).join('')
 
   const html = `
     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-    <head><meta charset="utf-8"><title>${esc(title)}</title></head>
+    <head><meta charset="utf-8"><title>${esc(title || 'Report')}</title></head>
     <body style="font-family:Arial,sans-serif;">
       ${logoUrl ? `<img src="${logoUrl}" style="max-height:50px;float:right;" />` : ''}
-      <h1 style="color:#1B3A6B;margin-bottom:0;">${esc(title)}</h1>
+      <h1 style="color:#1B3A6B;margin-bottom:0;">${esc(title || 'Report')}</h1>
       ${subtitle ? `<p style="color:#666;">${esc(subtitle)}</p>` : ''}
       ${sectionsHtml}
     </body>
     </html>
   `
   const blob = new Blob(['\ufeff', html], { type: 'application/msword' })
-  downloadBlob(blob, `${filename}.doc`)
+  downloadBlob(blob, `${filename || 'report'}.doc`)
 }
+
 
 export async function exportReceiptPDF({ invoice: receipt, company, contact, preview = false }) {
   const doc = new jsPDF()

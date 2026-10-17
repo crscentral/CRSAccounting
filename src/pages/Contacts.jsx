@@ -5,7 +5,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import PageHeader from '../components/PageHeader'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import ContactFormModal from '../components/ContactFormModal'
 import ContactDetailModal from '../components/ContactDetailModal'
 
@@ -46,38 +46,64 @@ export default function Contacts() {
 
   async function generateContactsReport(selections, format) {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const sections = []
     const wantCustomers = selections.contactType === 'All' || selections.contactType === 'Customers'
     const wantSuppliers = selections.contactType === 'All' || selections.contactType === 'Suppliers'
+    const currencyLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} / USD`
 
     if (wantCustomers) {
+      const custRows = customers.map(c => {
+        const invs = invoicesFor(c.id, true)
+        return [c.name, c.email || '—', c.phone || '—', invs.length, fmt(invs.reduce((s, i) => s + Number(i.amount_usd), 0))]
+      })
+      const totalCustAmount = customers.reduce((sum, c) => {
+        const invs = invoicesFor(c.id, true)
+        return sum + invs.reduce((s, i) => s + Number(i.amount_usd), 0)
+      }, 0)
+      custRows.push(['Total', `${customers.length} Customers`, '—', salesInvoices.length, fmt(totalCustAmount)])
+
       sections.push({
         heading: 'Customers',
-        columns: ['Name', 'Email', 'Phone', 'Invoices', `Total (${selections.currency})`],
-        rows: customers.map(c => {
-          const invs = invoicesFor(c.id, true)
-          return [c.name, c.email || '—', c.phone || '—', invs.length, fmt(invs.reduce((s, i) => s + Number(i.amount_usd), 0))]
-        }),
+        columns: ['Name', 'Email', 'Phone', 'Invoices', `Total (${currencyLabel})`],
+        rows: custRows,
+        keyValuePairs: [
+          { label: 'Total Customers', value: String(customers.length) },
+          { label: 'Total Customer Invoices', value: String(salesInvoices.length) },
+          { label: 'Total Billed', value: fmt(totalCustAmount) }
+        ]
       })
     }
     if (wantSuppliers) {
+      const suppRows = suppliers.map(c => {
+        const invs = invoicesFor(c.id, false)
+        return [c.name, c.email || '—', c.phone || '—', invs.length, fmt(invs.reduce((s, i) => s + Number(i.amount_usd), 0))]
+      })
+      const totalSuppAmount = suppliers.reduce((sum, c) => {
+        const invs = invoicesFor(c.id, false)
+        return sum + invs.reduce((s, i) => s + Number(i.amount_usd), 0)
+      }, 0)
+      suppRows.push(['Total', `${suppliers.length} Suppliers`, '—', purchaseInvoices.length, fmt(totalSuppAmount)])
+
       sections.push({
         heading: 'Suppliers',
-        columns: ['Name', 'Email', 'Phone', 'Invoices', `Total (${selections.currency})`],
-        rows: suppliers.map(c => {
-          const invs = invoicesFor(c.id, false)
-          return [c.name, c.email || '—', c.phone || '—', invs.length, fmt(invs.reduce((s, i) => s + Number(i.amount_usd), 0))]
-        }),
+        columns: ['Name', 'Email', 'Phone', 'Invoices', `Total (${currencyLabel})`],
+        rows: suppRows,
+        keyValuePairs: [
+          { label: 'Total Suppliers', value: String(suppliers.length) },
+          { label: 'Total Supplier Invoices', value: String(purchaseInvoices.length) },
+          { label: 'Total Billed', value: fmt(totalSuppAmount) }
+        ]
       })
     }
 
     const title = 'Customers & Suppliers'
     const subtitle = `${activeCompany.name} • ${selections.contactType} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'contacts_report' })
+    const logoUrl = activeCompany?.logo_url
+    if (format === 'pdf' || format === 'preview') await exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'contacts_report', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'contacts_report' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'contacts_report' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'contacts_report', logoUrl })
   }
 
   if (!activeCompany) return null

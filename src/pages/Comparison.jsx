@@ -3,7 +3,7 @@ import { ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { MONTH_NAMES, getMonthRange, getYearRange } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import { CURRENCY_LIST } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
@@ -149,7 +149,7 @@ export default function Comparison() {
 
   async function generateComparisonReport(selections, format) {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const f = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
     const [a, b] = await Promise.all([computeMetrics(rangeA), computeMetrics(rangeB)])
 
     const rows = [
@@ -158,13 +158,25 @@ export default function Comparison() {
       ['EBITDA', f(a.ebitda), f(b.ebitda), f(b.ebitda - a.ebitda)],
       ['Net Income', f(a.netIncome), f(b.netIncome), f(b.netIncome - a.netIncome)],
     ]
-    const sections = [{ heading: 'Period Comparison', columns: ['Metric', labelA, labelB, 'Variance'], rows }]
+    const currencyLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} / USD`
+    const sections = [{
+      heading: 'Period Comparison',
+      columns: ['Metric', `${labelA} (${currencyLabel})`, `${labelB} (${currencyLabel})`, `Variance (${currencyLabel})`],
+      rows,
+      keyValuePairs: [
+        { label: `Revenue (${labelB})`, value: f(b.revenue) },
+        { label: `Operating Expenses (${labelB})`, value: f(b.operatingExpenses) },
+        { label: `EBITDA (${labelB})`, value: f(b.ebitda) },
+        { label: `Net Income (${labelB})`, value: f(b.netIncome) }
+      ]
+    }]
 
     const title = 'Period Comparison'
     const subtitle = `${activeCompany.name} • ${labelA} vs ${labelB} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'period_comparison' })
+    const logoUrl = activeCompany?.logo_url
+    if (format === 'pdf' || format === 'preview') await exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'period_comparison', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'period_comparison' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'period_comparison' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'period_comparison', logoUrl })
   }
 
   if (!activeCompany) return null

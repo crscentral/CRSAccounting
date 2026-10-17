@@ -6,7 +6,7 @@ import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import PageHeader from '../components/PageHeader'
 import KpiCard from '../components/KpiCard'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import { resolveReportPeriod , getAmcActiveMonths, getAmcMonthsInView } from '../lib/fiscalYear'
 import { DollarSign, CheckCircle2, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
 
@@ -70,7 +70,7 @@ function AnalyticsInner() {
   async function generateAnalyticsReport(selections, format) {
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const fmt = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const [{ data: s }, { data: p }, { data: r }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }, { data: hpi }] = await Promise.all([
       supabase.from('sales_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', range.from).lte('invoice_date', range.to),
@@ -151,16 +151,18 @@ function AnalyticsInner() {
 
     const monthlySel = Object.values(monthlyMap).sort((a, b) => (a.month || '').localeCompare(b.month || ''))
 
+    const curLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} & USD`
     const sections = [
       { heading: 'Summary', keyValuePairs: [['Total Invoiced', fmt(totalInvoiced)], ['Collected', fmt(collected)], ['Outstanding', fmt(outstanding)], ['Expenses', fmt(expenses)]] },
-      { heading: 'Monthly Summary', columns: ['Month', 'Invoices', `Revenue (${selections.currency})`, `Collected (${selections.currency})`], rows: monthlySel.map(m => [m.month, m.invoices, fmt(m.revenue), fmt(m.collected)]) },
+      { heading: 'Monthly Summary', columns: ['Month', 'Invoices', `Revenue (${curLabel})`, `Collected (${curLabel})`], rows: monthlySel.map(m => [m.month, m.invoices, fmt(m.revenue), fmt(m.collected)]) },
     ]
 
     const title = 'Analytics'
     const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'analytics_report' })
+    const logoUrl = activeCompany.logo_url
+    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'analytics_report', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'analytics_report' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'analytics_report' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'analytics_report', logoUrl })
   }
 
   if (!activeCompany) return null

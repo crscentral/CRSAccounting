@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useCurrencyAndPeriod } from '../lib/useCurrencyAndPeriod'
 import { getAmcActiveMonths, getAmcMonthsInView, resolveReportPeriod } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatReportMoney } from '../lib/fx'
 import KpiCard from '../components/KpiCard'
 import PageHeader from '../components/PageHeader'
 import ReportOptionsModal, { exportMultiSectionPDF, exportMultiSectionExcel, exportMultiSectionWord } from '../components/ReportOptionsModal'
@@ -144,7 +144,7 @@ export default function PortfolioDashboard() {
   async function generatePortfolioReport(selections, format) {
     const range = resolveReportPeriod(selections.period, 1, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const f = (usd) => formatMoney(convertFromUsd(usd, selections.currency, { [selections.currency]: rate }), selections.currency)
+    const f = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const tasks = []
     companies.forEach(({ company }) => {
@@ -159,9 +159,28 @@ export default function PortfolioDashboard() {
       ebitda: acc.ebitda + r.ebitda, invoicesRaised: acc.invoicesRaised + r.invoicesRaised, collected: acc.collected + r.collected,
     }), { revenue: 0, expenses: 0, gop: 0, ebitda: 0, invoicesRaised: 0, collected: 0 })
 
+    const currencyLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} / USD`
+
     const sections = [
-      { heading: 'Combined Totals', keyValuePairs: [['Combined Sales', f(combined.revenue)], ['Combined Expenses', f(combined.expenses)], ['Combined GOP', f(combined.gop)], ['Combined EBITDA', f(combined.ebitda)], ['Invoices Raised', combined.invoicesRaised], ['Money Collected', f(combined.collected)]] },
-      { heading: 'By Company & Product', columns: ['Company', 'Product', 'Revenue', 'Expenses', 'GOP', 'EBITDA', 'Invoices', 'Collected'], rows: reportRows.map(r => [r.companyName, PRODUCT_LABELS[r.product], f(r.revenue), f(r.expenses), f(r.gop), f(r.ebitda), r.invoicesRaised, f(r.collected)]) },
+      {
+        heading: 'Combined Totals',
+        keyValuePairs: [
+          ['Combined Sales', f(combined.revenue)],
+          ['Combined Expenses', f(combined.expenses)],
+          ['Combined GOP', f(combined.gop)],
+          ['Combined EBITDA', f(combined.ebitda)],
+          ['Invoices Raised', String(combined.invoicesRaised)],
+          ['Money Collected', f(combined.collected)]
+        ]
+      },
+      {
+        heading: 'By Company & Product',
+        columns: ['Company', 'Product', `Revenue (${currencyLabel})`, `Expenses (${currencyLabel})`, `GOP (${currencyLabel})`, `EBITDA (${currencyLabel})`, 'Invoices', `Collected (${currencyLabel})`],
+        rows: [
+          ...reportRows.map(r => [r.companyName, PRODUCT_LABELS[r.product], f(r.revenue), f(r.expenses), f(r.gop), f(r.ebitda), r.invoicesRaised, f(r.collected)]),
+          ['Total', '—', f(combined.revenue), f(combined.expenses), f(combined.gop), f(combined.ebitda), combined.invoicesRaised, f(combined.collected)]
+        ]
+      },
     ]
     if (selections.charts.includes('Revenue by Company (Bar Chart)')) {
       sections.push({
