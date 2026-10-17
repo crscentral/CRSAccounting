@@ -311,8 +311,11 @@ function HotelExpensesInner() {
       </ul>
     );
   }
-  const COLORS = ['#1e293b', '#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f43f5e', '#64748b']
-  const groupedEntriesMap = {}
+  const COLORS = [
+    '#1e293b', '#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#ef4444', '#64748b',
+    '#06b6d4', '#84cc16', '#d946ef', '#f97316', '#0ea5e9', '#a855f7', '#22c55e', '#eab308', '#38bdf8', '#fb7185',
+    '#6366f1', '#475569'
+  ]
   entries.forEach(r => {
     const key = r.account ? `${r.account.code} - ${r.account.name}` : 'Unknown'
     if (!groupedEntriesMap[key]) groupedEntriesMap[key] = { isGroupHeader: true, name: key, amount_usd: 0, paid_amount_usd: 0, transactions: [], account_id: r.account_id }
@@ -409,71 +412,98 @@ function HotelExpensesInner() {
         <KpiCard label="Total Paid" value={cp.fmt(totalPaid)} tone="green" />
         <KpiCard label="Total Pending" value={cp.fmt(totalPending)} tone="red" />
       </div>
-      <div className="grid lg:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (Cost Per Occupied Room: {totalOccupied > 0 ? cp.fmt(totalExpenses/totalOccupied) : '—'})</h3>
-          <div className="flex flex-col sm:flex-row items-center h-64 gap-3">
-            <div className="w-full sm:w-[180px] shrink-0 h-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2}>
-                    {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <RechartsTooltip formatter={(value) => cp.fmt(value)} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex-1 w-full h-full max-h-60 overflow-y-auto pl-2 pr-1 border-t sm:border-t-0 sm:border-l border-slate-100">
-              {pieData.length === 0 ? (
-                <div className="text-xs text-slate-400 py-8 text-center">No expenses recorded</div>
-              ) : (
-                <ul className="text-[11px] space-y-1.5 w-full">
-                  {pieData.map((entry, index) => (
-                    <li key={`cpor-${index}`} className="flex items-center justify-between text-slate-600 gap-1">
-                      <div className="flex items-center min-w-0 mr-1.5">
-                        <span className="w-10 text-right mr-2 text-slate-500 font-medium shrink-0">{entry.percentStr}</span>
-                        <span className="w-2.5 h-2.5 mr-2 rounded-[2px] shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
-                        <span className="truncate max-w-[150px] font-medium" title={entry.name}>{entry.name}</span>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-700 shrink-0">{cp.fmt(entry.value)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+      {/* Expense Breakdown Full Length Colour Wheel */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6 mb-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-slate-100 gap-2">
+          <div>
+            <h3 className="text-sm sm:text-base font-bold text-slate-800">
+              Expense Breakdown
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Cost Per Occupied Room (CPOR): {totalOccupied > 0 ? cp.fmt(totalExpenses / totalOccupied) : '—'} • Cost Per Available Room (PAR): {availableRoomNights > 0 ? cp.fmt(totalExpenses / availableRoomNights) : '—'}
+            </p>
           </div>
+          <span className="text-xs font-bold text-navy-800 bg-navy-50 border border-navy-100 px-3 py-1.5 rounded-lg shrink-0 self-start sm:self-auto">
+            Total Expenses: {cp.fmt(totalExpenses)}
+          </span>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-800 mb-4">Expense Breakdown (Cost Per Available Room: {availableRoomNights > 0 ? cp.fmt(totalExpenses/availableRoomNights) : '—'})</h3>
-          <div className="flex flex-col sm:flex-row items-center h-64 gap-3">
-            <div className="w-full sm:w-[180px] shrink-0 h-full">
+
+        <div className="flex flex-col md:flex-row items-center gap-6">
+          {/* Left: Full Colour Wheel Pie Chart */}
+          <div className="w-full md:w-[320px] lg:w-[340px] h-72 sm:h-80 shrink-0 flex items-center justify-center">
+            {pieData.length === 0 ? (
+              <div className="text-xs text-slate-400 text-center py-10">
+                No expenses recorded for this period
+              </div>
+            ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}>
-                    {pieData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={0}
+                    outerRadius={105}
+                  >
+                    {pieData.map((e, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
                   </Pie>
-                  <RechartsTooltip formatter={(value) => cp.fmt(value)} />
+                  <RechartsTooltip
+                    formatter={(value, name, props) => [
+                      `${cp.fmt(value)} (${props?.payload?.percentStr || ''})`,
+                      props?.payload?.name || name,
+                    ]}
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      borderColor: '#e2e8f0',
+                      borderRadius: '0.5rem',
+                      fontSize: '12px',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
-            </div>
-            <div className="flex-1 w-full h-full max-h-60 overflow-y-auto pl-2 pr-1 border-t sm:border-t-0 sm:border-l border-slate-100">
-              {pieData.length === 0 ? (
-                <div className="text-xs text-slate-400 py-8 text-center">No expenses recorded</div>
-              ) : (
-                <ul className="text-[11px] space-y-1.5 w-full">
-                  {pieData.map((entry, index) => (
-                    <li key={`cpar-${index}`} className="flex items-center justify-between text-slate-600 gap-1">
-                      <div className="flex items-center min-w-0 mr-1.5">
-                        <span className="w-10 text-right mr-2 text-slate-500 font-medium shrink-0">{entry.percentStr}</span>
-                        <span className="w-2.5 h-2.5 mr-2 rounded-[2px] shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
-                        <span className="truncate max-w-[150px] font-medium" title={entry.name}>{entry.name}</span>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-700 shrink-0">{cp.fmt(entry.value)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            )}
+          </div>
+
+          {/* Right: Ranked List from Top to Bottom */}
+          <div className="flex-1 w-full max-h-80 overflow-y-auto pr-2 border-t md:border-t-0 md:border-l border-slate-100 pt-4 md:pt-0 md:pl-6">
+            {pieData.length === 0 ? (
+              <div className="text-xs text-slate-400 py-16 text-center">
+                No expense heads with activity in this period
+              </div>
+            ) : (
+              <ul className="text-xs space-y-2.5 w-full">
+                {pieData.map((entry, index) => (
+                  <li
+                    key={`head-${index}`}
+                    className="flex items-center justify-between text-slate-700 gap-3 py-1 hover:bg-slate-50/80 px-2 rounded-lg transition-colors"
+                  >
+                    <div className="flex items-center min-w-0 flex-1">
+                      <span className="w-12 text-right mr-3 text-slate-500 font-semibold text-xs shrink-0">
+                        {entry.percentStr}
+                      </span>
+                      <span
+                        className="w-3 h-3 mr-2.5 rounded-[3px] shrink-0"
+                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                      />
+                      <span
+                        className="truncate font-semibold text-slate-800 text-xs sm:text-sm"
+                        title={entry.name}
+                      >
+                        {entry.name}
+                      </span>
+                    </div>
+                    <span className="text-xs sm:text-sm font-bold text-slate-900 shrink-0">
+                      {cp.fmt(entry.value)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </div>
