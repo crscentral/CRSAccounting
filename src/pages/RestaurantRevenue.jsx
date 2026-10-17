@@ -143,39 +143,41 @@ export default function RestaurantRevenue() {
   const dailyChartData = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date))
 
   const revenuePieData = useMemo(() => {
-    const headTotalsUsd = {}
-
-    // Revenue accounts from Chart of Accounts
-    const revAccounts = accounts.filter(a => a.type === 'Revenue' || a.product === 'restaurant' || a.code?.startsWith('4'))
-
-    const foodAcc = revAccounts.find(a => a.code === '4104' || a.code === '4010' || a.name?.toLowerCase().includes('food'))
-    const bevAcc = revAccounts.find(a => a.code === '4105' || a.code === '4011' || a.name?.toLowerCase().includes('beverage'))
-    const otherAcc = revAccounts.find(a => a.code === '4019' || a.code === '4012' || a.name?.toLowerCase().includes('other'))
-
-    const foodLabel = foodAcc ? `${foodAcc.code ? `${foodAcc.code} - ` : ''}${foodAcc.name}` : '4104 - Food Sales'
-    const bevLabel = bevAcc ? `${bevAcc.code ? `${bevAcc.code} - ` : ''}${bevAcc.name}` : '4105 - Beverage Sales'
-    const otherLabel = otherAcc ? `${otherAcc.code ? `${otherAcc.code} - ` : ''}${otherAcc.name}` : '4019 - Other Operating Income'
-
-    headTotalsUsd[foodLabel] = 0
-    headTotalsUsd[bevLabel] = 0
-    headTotalsUsd[otherLabel] = 0
+    const headTotalsUsd = {
+      'Food Revenue': 0,
+      'Beverage Revenue': 0,
+      'Other Revenue': 0,
+    }
 
     entries.forEach(e => {
       const foodUsd = Number(e.food_amount_usd) || 0
       const bevUsd = Number(e.beverage_amount_usd) || 0
       const otherUsd = Number(e.other_amount_usd) || 0
+      const totalUsd = Number(e.amount_usd) || 0
 
-      headTotalsUsd[foodLabel] = (headTotalsUsd[foodLabel] || 0) + foodUsd
-      headTotalsUsd[bevLabel] = (headTotalsUsd[bevLabel] || 0) + bevUsd
-      headTotalsUsd[otherLabel] = (headTotalsUsd[otherLabel] || 0) + otherUsd
+      // If specific categories are 0 but total amount_usd is positive, attribute to Food Revenue
+      if (foodUsd === 0 && bevUsd === 0 && otherUsd === 0 && totalUsd > 0) {
+        headTotalsUsd['Food Revenue'] += totalUsd
+      } else {
+        headTotalsUsd['Food Revenue'] += foodUsd
+        headTotalsUsd['Beverage Revenue'] += bevUsd
+        headTotalsUsd['Other Revenue'] += otherUsd
+      }
     })
 
     const totalRevenueUsd = Object.values(headTotalsUsd).reduce((s, v) => s + v, 0)
     const totalDisplayVal = cp.convert(totalRevenueUsd)
 
+    if (totalRevenueUsd <= 0.0001) {
+      return {
+        items: [],
+        totalRevenueUsd: 0,
+        totalDisplayVal: 0,
+      }
+    }
+
     // Sort top-to-bottom: highest revenue account remains on top and lowest at the bottom
     const items = Object.entries(headTotalsUsd)
-      .filter(([_, usd]) => usd > 0.0001)
       .map(([name, usd]) => {
         const displayVal = cp.convert(usd)
         const percent = totalDisplayVal > 0 ? (displayVal / totalDisplayVal) * 100 : 0
@@ -194,7 +196,7 @@ export default function RestaurantRevenue() {
       totalRevenueUsd,
       totalDisplayVal,
     }
-  }, [accounts, entries, cp.convert])
+  }, [entries, cp.convert])
 
   return (
     <div>

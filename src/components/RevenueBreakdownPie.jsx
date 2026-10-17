@@ -28,6 +28,8 @@ export default function RevenueBreakdownPie({
   fmt = (v) => v,
   emptyMessage = 'No revenue recorded for this period',
 }) {
+  const chartItems = items.filter(i => (i.valueUsd !== undefined ? i.valueUsd : i.value) > 0.0001)
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6 mb-6 shadow-sm">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-slate-100 gap-2">
@@ -49,7 +51,7 @@ export default function RevenueBreakdownPie({
       <div className="flex flex-col md:flex-row items-center gap-6">
         {/* Left: Donut Chart */}
         <div className="w-full md:w-[260px] h-64 shrink-0 flex items-center justify-center">
-          {items.length === 0 ? (
+          {chartItems.length === 0 ? (
             <div className="text-xs text-slate-400 text-center py-10">
               {emptyMessage}
             </div>
@@ -57,18 +59,25 @@ export default function RevenueBreakdownPie({
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={items}
+                  data={chartItems}
                   dataKey="value"
                   nameKey="name"
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
                   outerRadius={88}
-                  paddingAngle={2}
+                  paddingAngle={chartItems.length > 1 ? 2 : 0}
                 >
-                  {items.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={REVENUE_PIE_COLORS[index % REVENUE_PIE_COLORS.length]} />
-                  ))}
+                  {chartItems.map((entry, index) => {
+                    const originalIndex = items.findIndex(it => it.name === entry.name)
+                    const colorIndex = originalIndex >= 0 ? originalIndex : index
+                    return (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={entry.color || REVENUE_PIE_COLORS[colorIndex % REVENUE_PIE_COLORS.length]}
+                      />
+                    )
+                  })}
                 </Pie>
                 <RechartsTooltip
                   formatter={(val, name, props) => [
