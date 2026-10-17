@@ -37,8 +37,11 @@ export function AuthProvider({ children }) {
     setCompanies(data || [])
     setLoadingCompanies(false)
     if (data && data.length > 0 && !activeCompanyId) {
-      setActiveCompanyId(data[0].company.id)
-      localStorage.setItem('crs_active_company', data[0].company.id)
+      const firstValid = data.find(c => c?.company?.id)?.company
+      if (firstValid) {
+        setActiveCompanyId(firstValid.id)
+        localStorage.setItem('crs_active_company', firstValid.id)
+      }
     }
   }
 
@@ -52,7 +55,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('crs_active_product', product)
   }
 
-  const activeMembership = companies.find(c => c.company.id === activeCompanyId) || companies[0]
+  const activeMembership = companies.find(c => c?.company?.id === activeCompanyId) || companies[0]
   const activeCompany = activeMembership?.company || null
   const activeRole = activeMembership?.role || null
   const memberProducts = activeMembership?.products || ['basic', 'hotel', 'restaurant']

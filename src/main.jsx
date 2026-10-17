@@ -15,8 +15,24 @@ if (typeof window !== 'undefined') {
   if (isIPad && isStandalone) {
     document.documentElement.classList.add('ipad-standalone');
   }
-}
 
+  // Handle chunk loading errors when a new deployment invalidates old asset hashes
+  window.addEventListener('vite:preloadError', (event) => {
+    console.warn('Vite preloadError detected (new deployment). Reloading page...', event);
+    event.preventDefault();
+    try {
+      if ('caches' in window) {
+        caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).finally(() => {
+          window.location.reload();
+        });
+      } else {
+        window.location.reload();
+      }
+    } catch (e) {
+      window.location.reload();
+    }
+  });
+}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -27,7 +43,19 @@ createRoot(document.getElementById('root')).render(
 // Register the service worker for PWA installability ("Add to Home Screen" / "Install app").
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
+    navigator.serviceWorker.register('/sw.js').then((registration) => {
+      // Check for worker updates
+      registration.onupdatefound = () => {
+        const installingWorker = registration.installing;
+        if (installingWorker) {
+          installingWorker.onstatechange = () => {
+            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('New service worker update available.');
+            }
+          };
+        }
+      };
+    }).catch((err) => {
       console.warn('Service worker registration failed:', err)
     })
   })

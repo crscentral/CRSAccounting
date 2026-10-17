@@ -7,39 +7,71 @@ import CreateFirstCompanyScreen from './components/CreateFirstCompanyScreen'
 import PendingApprovalScreen from './components/PendingApprovalScreen'
 import Login from './pages/Login'
 
-const Dashboard = lazy(() => import('./pages/Dashboard'))
-const Companies = lazy(() => import('./pages/Companies'))
-const ChartOfAccounts = lazy(() => import('./pages/ChartOfAccounts'))
-const Contacts = lazy(() => import('./pages/Contacts'))
-const SalesInvoices = lazy(() => import('./pages/SalesInvoices'))
-const PurchaseInvoices = lazy(() => import('./pages/PurchaseInvoices'))
-const Transactions = lazy(() => import('./pages/Transactions'))
-const Ledger = lazy(() => import('./pages/Ledger'))
-const Analytics = lazy(() => import('./pages/Analytics'))
-const FinancialPerformance = lazy(() => import('./pages/FinancialPerformance'))
-const Reports = lazy(() => import('./pages/Reports'))
-const Settings = lazy(() => import('./pages/Settings'))
-const RestaurantRevenue = lazy(() => import('./pages/RestaurantRevenue'))
-const RestaurantExpenses = lazy(() => import('./pages/RestaurantExpenses'))
-const CapitalTransactions = lazy(() => import('./pages/CapitalTransactions'))
-const Comparison = lazy(() => import('./pages/Comparison'))
-const HistoricalImport = lazy(() => import('./pages/HistoricalImport'))
-const PortfolioDashboard = lazy(() => import('./pages/PortfolioDashboard'))
-const HotelOccupancyStats = lazy(() => import('./pages/HotelOccupancyStats'))
-const HotelBudget = lazy(() => import('./pages/HotelBudget'))
-const HotelExpenseBudget = lazy(() => import('./pages/HotelExpenseBudget'))
-const HotelRevenue = lazy(() => import('./pages/HotelRevenue'))
-const HotelExpenses = lazy(() => import('./pages/HotelExpenses'))
-const HotelGuestInvoices = lazy(() => import('./pages/HotelGuestInvoices'))
-const DataSecurity = lazy(() => import('./pages/DataSecurity'))
-const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'))
+function lazyWithRetry(componentImport) {
+  return lazy(async () => {
+    try {
+      return await componentImport();
+    } catch (error) {
+      const msg = String(error?.message || '');
+      const isChunkError =
+        msg.includes('dynamically imported module') ||
+        msg.includes('Failed to fetch') ||
+        msg.includes('Loading chunk') ||
+        msg.includes('Importing a module script failed') ||
+        error?.name === 'ChunkLoadError';
 
-const TallyLayout = lazy(() => import('./pages/TallyMode/TallyLayout'))
-const TallyGateway = lazy(() => import('./pages/TallyMode/TallyGateway'))
-const TallyVouchers = lazy(() => import('./pages/TallyMode/TallyVouchers'))
-const TallyMasterCreate = lazy(() => import('./pages/TallyMode/TallyMasterCreate'))
-const TallyReports = lazy(() => import('./pages/TallyMode/TallyReports'))
-const TallyDashboardEmbed = lazy(() => import('./pages/TallyMode/TallyDashboardEmbed'))
+      if (isChunkError) {
+        const lastRetry = sessionStorage.getItem('crs_lazy_retry');
+        const now = Date.now();
+        if (!lastRetry || now - parseInt(lastRetry, 10) > 15000) {
+          sessionStorage.setItem('crs_lazy_retry', String(now));
+          if ('caches' in window) {
+            try {
+              await caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
+            } catch (e) {}
+          }
+          window.location.reload();
+          return new Promise(() => {});
+        }
+      }
+      throw error;
+    }
+  });
+}
+
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'))
+const Companies = lazyWithRetry(() => import('./pages/Companies'))
+const ChartOfAccounts = lazyWithRetry(() => import('./pages/ChartOfAccounts'))
+const Contacts = lazyWithRetry(() => import('./pages/Contacts'))
+const SalesInvoices = lazyWithRetry(() => import('./pages/SalesInvoices'))
+const PurchaseInvoices = lazyWithRetry(() => import('./pages/PurchaseInvoices'))
+const Transactions = lazyWithRetry(() => import('./pages/Transactions'))
+const Ledger = lazyWithRetry(() => import('./pages/Ledger'))
+const Analytics = lazyWithRetry(() => import('./pages/Analytics'))
+const FinancialPerformance = lazyWithRetry(() => import('./pages/FinancialPerformance'))
+const Reports = lazyWithRetry(() => import('./pages/Reports'))
+const Settings = lazyWithRetry(() => import('./pages/Settings'))
+const RestaurantRevenue = lazyWithRetry(() => import('./pages/RestaurantRevenue'))
+const RestaurantExpenses = lazyWithRetry(() => import('./pages/RestaurantExpenses'))
+const CapitalTransactions = lazyWithRetry(() => import('./pages/CapitalTransactions'))
+const Comparison = lazyWithRetry(() => import('./pages/Comparison'))
+const HistoricalImport = lazyWithRetry(() => import('./pages/HistoricalImport'))
+const PortfolioDashboard = lazyWithRetry(() => import('./pages/PortfolioDashboard'))
+const HotelOccupancyStats = lazyWithRetry(() => import('./pages/HotelOccupancyStats'))
+const HotelBudget = lazyWithRetry(() => import('./pages/HotelBudget'))
+const HotelExpenseBudget = lazyWithRetry(() => import('./pages/HotelExpenseBudget'))
+const HotelRevenue = lazyWithRetry(() => import('./pages/HotelRevenue'))
+const HotelExpenses = lazyWithRetry(() => import('./pages/HotelExpenses'))
+const HotelGuestInvoices = lazyWithRetry(() => import('./pages/HotelGuestInvoices'))
+const DataSecurity = lazyWithRetry(() => import('./pages/DataSecurity'))
+const PrivacyPolicy = lazyWithRetry(() => import('./pages/PrivacyPolicy'))
+
+const TallyLayout = lazyWithRetry(() => import('./pages/TallyMode/TallyLayout'))
+const TallyGateway = lazyWithRetry(() => import('./pages/TallyMode/TallyGateway'))
+const TallyVouchers = lazyWithRetry(() => import('./pages/TallyMode/TallyVouchers'))
+const TallyMasterCreate = lazyWithRetry(() => import('./pages/TallyMode/TallyMasterCreate'))
+const TallyReports = lazyWithRetry(() => import('./pages/TallyMode/TallyReports'))
+const TallyDashboardEmbed = lazyWithRetry(() => import('./pages/TallyMode/TallyDashboardEmbed'))
 
 function PageLoader() {
   return (
@@ -60,6 +92,9 @@ function Gate({ children }) {
   }
   if (companies.length === 0) {
     return <CreateFirstCompanyScreen />
+  }
+  if (!activeCompany) {
+    return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Loading Company Details…</div>
   }
   if (activeCompany?.approval_status === 'pending' || activeCompany?.approval_status === 'rejected') {
     return <PendingApprovalScreen />
@@ -126,10 +161,10 @@ export default function App() {
   return (
     <BrowserRouter basename="/">
       <ErrorBoundary>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-          </ErrorBoundary>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </ErrorBoundary>
     </BrowserRouter>
   )
 }

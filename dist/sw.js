@@ -11,7 +11,7 @@
 // forever, since this file's own bytes rarely change and browsers only re-check a
 // service worker for updates when its file content changes.
 
-const CACHE_NAME = 'crs-accounting-shell-v150'
+const CACHE_NAME = 'crs-accounting-shell-v151'
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -47,9 +47,11 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Keep the offline fallback copy up to date with whatever we just fetched.
-        const copy = response.clone()
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {})
+        // Only cache successful OK responses (never 404s or error pages)
+        if (response && response.ok && response.status === 200) {
+          const copy = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {})
+        }
         return response
       })
       .catch(() => caches.match(event.request))

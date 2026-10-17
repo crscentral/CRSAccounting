@@ -627,7 +627,7 @@ export default function Dashboard() {
   const draftExpenses = activeProduct === 'hotel' ? [] : purchases.filter(i => i.status === 'Draft')
 
   // YTD & All-Time logic + Charts
-  const ytdRange = getYTDRange(activeCompany.fiscal_year_start_month || 1)
+  const ytdRange = getYTDRange(activeCompany?.fiscal_year_start_month || 1)
   let ytdRevenue = 0
   let ytdExpenses = 0
   let allTimeRevenue = 0
@@ -830,7 +830,7 @@ export default function Dashboard() {
     <div>
       <PageHeader
         title="Financial Dashboard"
-        subtitle={`${activeCompany.name} • Showing in ${cp.displayCurrency}`}
+        subtitle={`${activeCompany?.name || ''} • Showing in ${cp.displayCurrency}`}
         currencyProps={cp.currencyProps}
         periodProps={cp.periodProps}
         actions={
@@ -1097,10 +1097,10 @@ export default function Dashboard() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5 mb-6">
-        <OverviewCard title="Company Overview - YTD" subtitle={`${activeCompany.name} • Amounts in ${cp.displayCurrency}`}
+        <OverviewCard title="Company Overview - YTD" subtitle={`${activeCompany?.name || ''} • Amounts in ${cp.displayCurrency}`}
           revenue={cp.fmt(ytdRevenue)} expenses={cp.fmt(ytdExpenses)} profit={cp.fmt(ytdRevenue - ytdExpenses)} profitValue={ytdRevenue - ytdExpenses}
           revenueLabel="YTD Revenue" expensesLabel="YTD Expenses" profitLabel="YTD Net Profit" />
-        <OverviewCard title="Company Overview - All Time" subtitle={`${activeCompany.name} • Amounts in ${cp.displayCurrency}`}
+        <OverviewCard title="Company Overview - All Time" subtitle={`${activeCompany?.name || ''} • Amounts in ${cp.displayCurrency}`}
           revenue={cp.fmt(allTimeRevenue)} expenses={cp.fmt(allTimeExpenses)} profit={cp.fmt(allTimeRevenue - allTimeExpenses)} profitValue={allTimeRevenue - allTimeExpenses}
           revenueLabel="All Time Revenue" expensesLabel="All Time Expenses" profitLabel="All Time Net Profit" />
         <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5">
