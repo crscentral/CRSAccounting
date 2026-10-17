@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo } from 'react'
-import { User, Shield, Bell, Users, Plus, Trash2, ShieldCheck, Check, X, Layers, Download, AlertTriangle } from 'lucide-react'
+import { User, Shield, Bell, Users, Plus, Trash2, ShieldCheck, Check, X, Layers, Download, AlertTriangle, History } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { MONTH_NAMES } from '../lib/fiscalYear'
 import { CURRENCY_LIST } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import BackupRestore from '../components/BackupRestore'
+import AuditTrail from '../components/AuditTrail'
 
 const ROLES = ['owner', 'admin', 'accountant', 'viewer']
 const PRODUCT_LABELS = { basic: 'CRS Basic Accounting', hotel: 'CRS Hotel Accounting', restaurant: 'CRS Restaurant Accounting' }
@@ -246,6 +247,7 @@ export default function Settings() {
     { key: 'notifications', label: 'Notifications', desc: 'Email and app notifications', icon: Bell },
     { key: 'access', label: 'User Access & Permissions', desc: 'Invite users and set their access permissions', icon: Users },
     { key: 'backup', label: 'Backup & Restore', desc: 'Export and import company data', icon: Download },
+    { key: 'audit', label: 'Audit Trail', desc: 'Track all changes by users with time and diffs', icon: History },
     ...(isPlatformAdmin ? [{ key: 'admin', label: 'Platform Admin', desc: 'Approve companies & manage product access', icon: ShieldCheck }] : []),
   ]
 
@@ -253,7 +255,7 @@ export default function Settings() {
     <div>
       <PageHeader title="Settings" subtitle="Manage your account and application preferences" />
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         {cards.map(c => (
           <button key={c.key} onClick={() => setTab(c.key)}
             className={`text-left rounded-xl border p5 ${tab === c.key ? 'border-navy-400 bg-navy-50' : 'border-slate-200 bg-white'}`}>
@@ -387,6 +389,10 @@ export default function Settings() {
       
       {tab === 'backup' && (
         <BackupRestore />
+      )}
+
+      {tab === 'audit' && (
+        <AuditTrail />
       )}
 
       {tab === 'admin' && isPlatformAdmin && (
