@@ -104,6 +104,7 @@ export function exportTableToPDF({ title, subtitle, columns, rows, filename, pre
     body: rows,
     headStyles: { fillColor: [27, 58, 107] },
     styles: { fontSize: 9 },
+    margin: { top: 20, left: 14, right: 14, bottom: 15 },
   })
 
   if (preview) {
@@ -378,6 +379,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     headStyles: { fillColor: [27, 58, 107], fontSize: 9 },
     styles: { fontSize: 9, cellPadding: 3 },
     columnStyles: (isSales || isGuest) ? { 0: { cellWidth: 90 } } : { 0: { cellWidth: 70 } },
+    margin: { top: 20, left: 14, right: 14, bottom: 15 },
     didParseCell: (data) => {
       if (data.column.index === 0 && data.cell.raw && String(data.cell.raw).includes('\n')) {
         data.cell.styles.fontStyle = 'normal'
@@ -810,6 +812,13 @@ export async function exportMultiSectionPDF(optionsOrCtx, sectionsArg) {
     loadedLogo = await loadImageAsDataUrl(logoUrl)
   }
 
+  // Draw company logo on Page 1 header alongside the title and subtitle
+  if (loadedLogo?.dataUrl) {
+    const logoH = 12
+    const logoW = logoH * loadedLogo.ratio
+    doc.addImage(loadedLogo.dataUrl, 'PNG', pageWidth - 14 - logoW, 10, logoW, logoH)
+  }
+
   let y = subtitle ? 33 : 27
 
   sections.forEach(section => {
@@ -870,7 +879,7 @@ export async function exportMultiSectionPDF(optionsOrCtx, sectionsArg) {
         headStyles: { fillColor: section.headColor || [27, 58, 107], fontSize: tableFontSize },
         styles: { fontSize: tableFontSize, cellPadding: cols.length >= 10 ? 1.5 : (cols.length >= 7 ? 2 : 2.5) },
         columnStyles: columnStyles,
-        margin: { left: 14, right: 14 },
+        margin: { top: 20, left: 14, right: 14, bottom: 15 },
       })
       y = doc.lastAutoTable.finalY + 10
     } else if (section.chart) {
@@ -884,12 +893,13 @@ export async function exportMultiSectionPDF(optionsOrCtx, sectionsArg) {
   })
 
   const pageCount = doc.internal.getNumberOfPages()
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i)
-    if (loadedLogo?.dataUrl) {
-      const logoH = 12
-      const logoW = logoH * loadedLogo.ratio
-      doc.addImage(loadedLogo.dataUrl, 'PNG', pageWidth - 14 - logoW, 10, logoW, logoH)
+  if (pageCount > 1) {
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i)
+      doc.setFontSize(8)
+      doc.setTextColor(150)
+      doc.setFont(undefined, 'normal')
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: 'right' })
     }
   }
 
@@ -1165,7 +1175,7 @@ export async function exportReceiptPDF({ invoice: receipt, company, contact, pre
       2: { halign: 'right', fontStyle: 'bold' }
     },
     theme: 'plain',
-    margin: { left: 14, right: 14 }
+    margin: { top: 20, left: 14, right: 14, bottom: 15 }
   })
   
   let finalY = doc.lastAutoTable.finalY + 2
