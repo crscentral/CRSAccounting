@@ -67,14 +67,14 @@ export default function RestaurantRevenue() {
       const entryRows = rows.map(r => {
         const total = fmt(r.amount_usd)
         const perCover = r.covers > 0 ? fmt(r.amount_usd / r.covers) : '—'
-        return [r.revenue_date, r.meal_period || '—', r.table_or_section || '—', r.covers, fmt(r.food_amount_usd), fmt(r.beverage_amount_usd), fmt(r.other_amount_usd), total, perCover]
+        return [r.revenue_date, r.meal_period || '—', r.table_or_section || '—', r.covers, r.payment_mode || 'Cash', fmt(r.food_amount_usd), fmt(r.beverage_amount_usd), fmt(r.other_amount_usd), total, perCover]
       })
       if (entryRows.length > 0) {
-        entryRows.push(['Total', '', '', totCovers, fmt(totFood), fmt(totBev), fmt(totOth), fmt(totAll), totCovers > 0 ? fmt(totAll / totCovers) : '—'])
+        entryRows.push(['Total', '', '', totCovers, '', fmt(totFood), fmt(totBev), fmt(totOth), fmt(totAll), totCovers > 0 ? fmt(totAll / totCovers) : '—'])
       }
       sections.push({
         heading: 'Table Revenue Entries',
-        columns: ['Date', 'Meal Period', 'Table/Section', 'Covers', 'Food', 'Beverage', 'Other', selections.currency === 'USD' ? 'Total (USD)' : `Total (${selections.currency} & USD)`, 'Rev/Cover'],
+        columns: ['Date', 'Meal Period', 'Table/Section', 'Covers', 'Payment Mode', 'Food', 'Beverage', 'Other', selections.currency === 'USD' ? 'Total (USD)' : `Total (${selections.currency} & USD)`, 'Rev/Cover'],
         rows: entryRows,
       })
     }
@@ -264,6 +264,15 @@ export default function RestaurantRevenue() {
           { key: 'meal_period', label: 'Meal Period', render: r => r.meal_period || '—' },
           { key: 'table_or_section', label: 'Table/Section', render: r => r.table_or_section || '—' },
           { key: 'covers', label: 'Covers' },
+          {
+            key: 'payment_mode',
+            label: 'Mode of Payment',
+            render: r => r.payment_mode ? (
+              <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-700 whitespace-nowrap">
+                {r.payment_mode}
+              </span>
+            ) : <span className="text-slate-400">—</span>
+          },
           { key: 'food_amount_usd', label: 'Food', render: r => cp.fmt(r.food_amount_usd) },
           { key: 'beverage_amount_usd', label: 'Beverage', render: r => cp.fmt(r.beverage_amount_usd) },
           { key: 'other_amount_usd', label: 'Other', render: r => cp.fmt(r.other_amount_usd) },
@@ -292,6 +301,7 @@ export default function RestaurantRevenue() {
           product={activeProduct}
           company={activeCompany}
           entry={editingEntry}
+          accounts={accounts}
           onClose={() => setModalOpen(false)}
           onSaved={loadData}
         />

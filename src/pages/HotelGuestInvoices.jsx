@@ -556,6 +556,15 @@ export default function HotelGuestInvoices() {
             )
           },
           {
+            key: 'payment_mode',
+            label: 'Mode of Payment',
+            render: r => r.payment_mode ? (
+              <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-700 whitespace-nowrap">
+                {r.payment_mode}
+              </span>
+            ) : <span className="text-slate-400">—</span>
+          },
+          {
             key: 'invoice_amount_usd',
             label: 'Amount',
             align: 'right',
@@ -718,6 +727,7 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
   const [roomRate, setRoomRate] = useState(row?.room_rate ?? '')
   const [nights, setNights] = useState(row?.nights ?? '')
   const [notes, setNotes] = useState(row?.notes || '')
+  const [paymentMode, setPaymentMode] = useState(row?.payment_mode || 'Cash')
   const [previewData, setPreviewData] = useState(null)
   
   // Ancillary items now have their own currency
@@ -967,6 +977,7 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
         checkin_date: checkinDate || null,
         checkout_date: checkoutDate || null,
         currency,
+        payment_mode: paymentMode || 'Cash',
         fx_rate_locked: primFxRate,
         secondary_currency: secCurr,
         secondary_fx_rate: secFxRate,
@@ -1052,6 +1063,7 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
       checkout_date: checkoutDate,
       nights: Number(nights) || 1,
       currency,
+      payment_mode: paymentMode || 'Cash',
       amount: finalInvoiceAmount,
       amount_usd: finalInvoiceAmountUsd,
       paid_amount: finalCollectedAmount,
@@ -1110,11 +1122,21 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
           </Field>
         </div>
 
-        <Field label="Room Night Currency">
-          <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium">
-            {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
-          </select>
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Room Night Currency">
+            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full h-[40px] border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium bg-white">
+              {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Mode of Payment">
+            <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} className="w-full h-[40px] border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium bg-white">
+              <option value="Cash">Cash</option>
+              <option value="Credit Card">Credit Card</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="QR Payment">QR Payment</option>
+            </select>
+          </Field>
+        </div>
 
         <div className="grid grid-cols-2 gap-3 border-t border-slate-200 pt-3 mt-1">
           <Field label={`Room Rate (${currency} / night)`}>
