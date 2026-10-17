@@ -841,10 +841,10 @@ export async function exportMultiSectionPDF(optionsOrCtx, sectionsArg) {
       })
       y += 6
     } else if (cols && rows) {
-      let columnStyles = {}
-      if (cols.length === 3) {
+      let columnStyles = section.columnStyles || {}
+      if (cols.length === 3 && !section.columnStyles) {
         columnStyles = { 0: { cellWidth: 72 }, 1: { cellWidth: 55, halign: 'right' }, 2: { cellWidth: 55, halign: 'right' } }
-      } else if (cols.length === 2) {
+      } else if (cols.length === 2 && !section.columnStyles) {
         columnStyles = { 0: { cellWidth: 112 }, 1: { cellWidth: 70, halign: 'right' } }
       }
       
@@ -860,13 +860,13 @@ export async function exportMultiSectionPDF(optionsOrCtx, sectionsArg) {
         return alignRight ? { content: text, styles: { halign: 'right' } } : { content: text, styles: { halign: 'left' } }
       }))
 
-      const tableFontSize = cols.length >= 8 ? 7 : (cols.length >= 6 ? 7.5 : 8)
+      const tableFontSize = cols.length >= 10 ? 6.5 : (cols.length >= 8 ? 7 : (cols.length >= 6 ? 7.5 : 8))
       autoTable(doc, {
         startY: y + 3,
         head: [safeHead],
         body: safeBody,
         headStyles: { fillColor: section.headColor || [27, 58, 107], fontSize: tableFontSize },
-        styles: { fontSize: tableFontSize, cellPadding: cols.length >= 7 ? 2 : 2.5 },
+        styles: { fontSize: tableFontSize, cellPadding: cols.length >= 10 ? 1.5 : (cols.length >= 7 ? 2 : 2.5) },
         columnStyles: columnStyles,
         margin: { left: 14, right: 14 },
       })
@@ -936,7 +936,7 @@ export function exportMultiSectionExcel(optionsOrCtx, sectionsArg) {
   rows.forEach(row => {
     if (Array.isArray(row)) {
       row.forEach((cell, i) => {
-        const len = cell != null ? String(cell).length : 0
+        const len = cell != null ? Math.max(...String(cell).split('\n').map(s => s.length)) : 0
         colWidths[i] = Math.max(colWidths[i] || 10, Math.min(len + 3, 50))
       })
     }
@@ -986,7 +986,7 @@ export function exportMultiSectionWord(optionsOrCtx, sectionsArg) {
       const body = secRows.map(r =>
         `<tr>${r.map((cell, i) => {
           const align = cols.length <= 3 ? (i > 0 ? 'right' : 'left') : (isNumericCol(cols[i]) ? 'right' : 'left')
-          return `<td style="padding:5px 8px;border:1px solid #ddd;text-align:${align};">${esc(cell)}</td>`
+          return `<td style="padding:5px 8px;border:1px solid #ddd;text-align:${align};white-space:pre-line;">${esc(cell).replace(/\n/g, '<br/>')}</td>`
         }).join('')}</tr>`
       ).join('')
       inner = `<table style="border-collapse:collapse;width:100%;margin-bottom:12px;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`

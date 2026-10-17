@@ -22,6 +22,13 @@ export default function HotelGuestInvoices() {
   const [editingRow, setEditingRow] = useState(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
   const [rows, setRows] = useState([])
+  const [accounts, setAccounts] = useState([])
+
+  const accountsMap = useMemo(() => {
+    const map = {}
+    accounts.forEach(a => { map[a.id] = a.name })
+    return map
+  }, [accounts])
 
   const today = getLocalDate()
   const mtd = getMTDRange()
@@ -36,14 +43,20 @@ export default function HotelGuestInvoices() {
     const maxTo = cp.range.to > ytd.to ? cp.range.to : (cp.range.to === '9999-12-31' ? today : ytd.to)
     // Fetch with a 60-day buffer backwards so cross-month stays (e.g. checkin Sep 30, stay in Oct) are included
     const bufferFromDate = new Date(new Date(minFrom).getTime() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    const { data } = await supabase.from('hotel_guest_invoices')
-      .select('*')
-      .eq('company_id', activeCompany.id)
-      .eq('product', activeProduct)
-      .gte('invoice_date', bufferFromDate)
-      .lte('invoice_date', maxTo)
-      .order('invoice_date', { ascending: false })
-    setRows(data || [])
+    const [{ data: invData }, { data: accData }] = await Promise.all([
+      supabase.from('hotel_guest_invoices')
+        .select('*')
+        .eq('company_id', activeCompany.id)
+        .eq('product', activeProduct)
+        .gte('invoice_date', bufferFromDate)
+        .lte('invoice_date', maxTo)
+        .order('invoice_date', { ascending: false }),
+      supabase.from('accounts')
+        .select('id, code, name')
+        .eq('company_id', activeCompany.id)
+    ])
+    setRows(invData || [])
+    setAccounts(accData || [])
   }
 
   async function handleDelete(row) {
@@ -127,49 +140,226 @@ export default function HotelGuestInvoices() {
     return invMatch || stayMatch
   })
 
+  function formatCurrencyAmount(amt, curr) {
+    const num = Number(amt) || 0
+    const isZeroDec = ['LAK', 'JPY', 'KRW', 'VND', 'IDR', 'CLP'].includes(curr)
+    const formatted = Math.abs(num).toLocaleString('en-US', {
+      minimumFractionDigits: isZeroDec ? 0 : 2,
+      maximumFractionDigits: isZeroDec ? 0 : 2
+    })
+    const prefix = num < -0.0001 ? '-' : ''
+    return `${curr} ${prefix}${formatted}`
+  }
+
   async function generateInvoicesReport(selections, format) {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const f = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const totInv = cpRows.reduce((s, r) => s + Number(r.invoice_amount_usd || 0), 0)
     const totCol = cpRows.reduce((s, r) => s + Number(r.collected_amount_usd || 0), 0)
-    const totPend = totInv - totCol
+    const totBal = Math.round((totInv - totCol) * 100) / 100
 
-    const invoiceRows = cpRows.map(r => [
-      r.invoice_date,
-      r.room_number || '—',
-      r.guest_name,
-      r.checkin_date || '—',
-      r.checkout_date || '—',
-      f(r.invoice_amount_usd),
-      f(r.collected_amount_usd),
-      f(Math.max(0, (Number(r.invoice_amount_usd) || 0) - (Number(r.collected_amount_usd) || 0))),
-      r.notes || '—'
-    ])
+    const periodCurrTotals = {}
+
+    const invoiceRows = cpRows.map(r => {
+      const cb = (r.currency_breakdown && typeof r.currency_breakdown === 'object') ? r.currency_breakdown : {}
+      const primCurr = r.currency || 'USD'
+      const roomRev = Number(r.room_revenue) || ((Number(r.room_rate) || 0) * (Number(r.nights) || 1)) || 0
+
+      // 1. Gather all line items and room revenue
+      const revItems = []
+      if (roomRev > 0) {
+        revItems.push({
+          name: 'Room',
+          currency: primCurr,
+          amount: roomRev
+        })
+      }
+
+      if (Array.isArray(r.line_items) && r.line_items.length > 0) {
+        r.line_items.forEach(li => {
+          const c = li.currency || r.secondary_currency || primCurr
+          const amt = Number(li.amount) || 0
+          const desc = li.description || accountsMap[li.account_id] || li.account_name || 'Extra Service'
+          revItems.push({
+            name: desc,
+            currency: c,
+            amount: amt
+          })
+        })
+      } else if (revItems.length === 0) {
+        const invAmt = Number(r.invoice_amount) || Number(r.invoice_amount_usd) || 0
+        revItems.push({
+          name: 'Room',
+          currency: primCurr,
+          amount: invAmt
+        })
+      }
+
+      // 2. Determine all distinct currencies for this invoice
+      const currencySet = new Set()
+      if (primCurr) currencySet.add(primCurr)
+      if (r.secondary_currency) currencySet.add(r.secondary_currency)
+      Object.keys(cb).forEach(c => currencySet.add(c))
+      revItems.forEach(i => currencySet.add(i.currency))
+
+      const distinctCurrs = Array.from(currencySet).filter(Boolean)
+
+      // 3. Totals per currency for this invoice
+      const invCurrTotals = {}
+      distinctCurrs.forEach(c => {
+        invCurrTotals[c] = { revenue: 0, collected: 0, balance: 0 }
+      })
+
+      if (Object.keys(cb).length > 0) {
+        Object.entries(cb).forEach(([c, val]) => {
+          if (invCurrTotals[c]) {
+            invCurrTotals[c].revenue = Number(val.revenue) || 0
+            invCurrTotals[c].collected = Number(val.collected) || 0
+          }
+        })
+      } else {
+        revItems.forEach(i => {
+          if (invCurrTotals[i.currency]) {
+            invCurrTotals[i.currency].revenue += i.amount
+          }
+        })
+        if (invCurrTotals[primCurr]) {
+          invCurrTotals[primCurr].collected = Number(r.collected_amount) || 0
+        }
+      }
+
+      // Compute per-currency balance: Revenue - Collected
+      distinctCurrs.forEach(c => {
+        invCurrTotals[c].balance = invCurrTotals[c].revenue - invCurrTotals[c].collected
+
+        // Add to period totals
+        if (!periodCurrTotals[c]) periodCurrTotals[c] = { revenue: 0, collected: 0, balance: 0 }
+        periodCurrTotals[c].revenue += invCurrTotals[c].revenue
+        periodCurrTotals[c].collected += invCurrTotals[c].collected
+        periodCurrTotals[c].balance += invCurrTotals[c].balance
+      })
+
+      // 4. Form Revenue Posted text: e.g. Room in USD 50, Breakfast in LAK 100,000, Spa Revenue in THB 300
+      const revLines = []
+      if (revItems.length > 0) {
+        revItems.forEach(item => {
+          revLines.push(`${item.name}: ${formatCurrencyAmount(item.amount, item.currency)}`)
+        })
+      } else {
+        distinctCurrs.forEach(c => {
+          revLines.push(formatCurrencyAmount(invCurrTotals[c].revenue, c))
+        })
+      }
+
+      // 5. Form Payment Collected text: e.g. Room $60, Breakfast LAK 95,000, Spa Revenue - THB 320
+      const collLines = []
+      distinctCurrs.forEach(c => {
+        const collAmt = invCurrTotals[c].collected
+        const matchingItems = revItems.filter(i => i.currency === c)
+        if (matchingItems.length === 1 && matchingItems[0].name) {
+          collLines.push(`${matchingItems[0].name}: ${formatCurrencyAmount(collAmt, c)}`)
+        } else {
+          collLines.push(formatCurrencyAmount(collAmt, c))
+        }
+      })
+
+      // 6. Form Balance by Currency text: e.g. USD -10, LAK 5,000, THB -20
+      const balLines = []
+      distinctCurrs.forEach(c => {
+        balLines.push(formatCurrencyAmount(invCurrTotals[c].balance, c))
+      })
+
+      // 7. Converted USD Totals
+      const invFinalUsd = Number(r.invoice_amount_usd) || 0
+      const invCollUsd = Number(r.collected_amount_usd) || 0
+      const invBalUsd = Math.round((invFinalUsd - invCollUsd) * 100) / 100
+
+      return [
+        r.invoice_date,
+        r.room_number || '—',
+        r.guest_name,
+        r.checkin_date || '—',
+        r.checkout_date || '—',
+        revLines.join('\n'),
+        collLines.join('\n'),
+        balLines.join('\n'),
+        f(invFinalUsd),
+        f(invCollUsd),
+        f(invBalUsd),
+        r.notes || '—'
+      ]
+    })
+
     if (invoiceRows.length > 0) {
-      invoiceRows.push(['Total', '', '', '', '', f(totInv), f(totCol), f(totPend), ''])
+      const totRevLines = Object.keys(periodCurrTotals).map(c => formatCurrencyAmount(periodCurrTotals[c].revenue, c)).join('\n')
+      const totCollLines = Object.keys(periodCurrTotals).map(c => formatCurrencyAmount(periodCurrTotals[c].collected, c)).join('\n')
+      const totBalLines = Object.keys(periodCurrTotals).map(c => formatCurrencyAmount(periodCurrTotals[c].balance, c)).join('\n')
+
+      invoiceRows.push([
+        'Total',
+        '',
+        `${cpRows.length} Invoices`,
+        '',
+        '',
+        totRevLines,
+        totCollLines,
+        totBalLines,
+        f(totInv),
+        f(totCol),
+        f(totBal),
+        ''
+      ])
     }
+
+    const currencyLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} & USD`
+
+    const summaryKv = [
+      ['Total Invoices', String(cpRows.length)],
+      ['Invoice Final Amount (USD)', f(totInv)],
+      ['Total Amount Collected (USD)', f(totCol)],
+      ['Total Balance (USD)', f(totBal)],
+    ]
+    Object.keys(periodCurrTotals).forEach(c => {
+      summaryKv.push([`${c} Total Balance`, formatCurrencyAmount(periodCurrTotals[c].balance, c)])
+    })
 
     const sections = [
       {
         heading: 'Summary',
-        keyValuePairs: [
-          ['Total Invoices', String(cpRows.length)],
-          ['Total Invoice Amount', f(totInv)],
-          ['Total Collected', f(totCol)],
-          ['Total Pending', f(totPend)],
-        ]
+        keyValuePairs: summaryKv
       },
       {
         heading: 'Guest Invoices',
         columns: [
-          'Date', 'Room #', 'Guest Name', 'Check-in', 'Check-out',
-          selections.currency === 'USD' ? 'Invoice Amount (USD)' : `Invoice Amount (${selections.currency} & USD)`,
-          selections.currency === 'USD' ? 'Collected (USD)' : `Collected (${selections.currency} & USD)`,
-          selections.currency === 'USD' ? 'Pending (USD)' : `Pending (${selections.currency} & USD)`,
+          'Date',
+          'Room #',
+          'Guest Name',
+          'Check-in',
+          'Check-out',
+          'Revenue Posted',
+          'Payment Collected',
+          'Balance by Currency',
+          `Invoice Final Amount (${currencyLabel})`,
+          `Total Amount Collected (${currencyLabel})`,
+          `Total Balance (${currencyLabel})`,
           'Remarks / Notes'
         ],
         rows: invoiceRows,
+        columnStyles: {
+          0: { cellWidth: 18 },
+          1: { cellWidth: 13 },
+          2: { cellWidth: 28 },
+          3: { cellWidth: 17 },
+          4: { cellWidth: 17 },
+          5: { cellWidth: 35 },
+          6: { cellWidth: 32 },
+          7: { cellWidth: 28 },
+          8: { cellWidth: 23, halign: 'right' },
+          9: { cellWidth: 23, halign: 'right' },
+          10: { cellWidth: 22, halign: 'right' },
+          11: { cellWidth: 18 }
+        }
       }
     ]
     const title = 'Guest Invoices'
@@ -635,8 +825,12 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
         const itemFx = getRateFor(itemCurr)
         const amt = Number(li.amount) || 0
         const amtUsd = Math.round((amt / itemFx) * 100) / 100
+        const acc = revenueAccounts.find(a => a.id === li.account_id)
         return {
           ...li,
+          account_id: li.account_id,
+          account_name: acc?.name || li.account_name || '',
+          description: acc?.name || li.description || 'Extra Service',
           amount: amt,
           currency: itemCurr,
           fx_rate: itemFx,
