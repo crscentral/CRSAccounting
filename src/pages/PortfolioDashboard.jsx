@@ -41,86 +41,113 @@ export default function PortfolioDashboard() {
   useEffect(() => { if (companies.length > 0) loadPortfolio(cp.range) }, [companies.length, cp.range.from, cp.range.to])
 
   async function computeCompanyProductMetrics(company, product, range) {
-    const [{ data: hotelSettings }, { data: hotelStats }, { data: accounts }, { data: entries }, { data: salesInv }, { data: receipts }, { data: guestInv }, { data: roomStatsExt }] = await Promise.all([
-      supabase.from('hotel_settings').select('total_rooms').eq('company_id', company.id).eq('product', product).maybeSingle(),
-      product === 'hotel' ? supabase.from('hotel_room_stats').select('rooms_occupied, room_revenue_usd').eq('company_id', company.id).eq('product', product).gte('stat_date', range.from).lte('stat_date', range.to) : Promise.resolve({ data: null }),
+    const isHotelOrRest = ['hotel', 'restaurant'].includes(product)
+    const fyStart = company.fiscal_year_start_month || 1
+
+    const [
+      { data: accounts },
+      { data: entries },
+      { data: salesInv },
+      { data: receipts },
+      { data: hrs },
+      { data: hre },
+      { data: rdr },
+      { data: hee },
+      { data: amc },
+      { data: hgi },
+      { data: pur }
+    ] = await Promise.all([
       supabase.from('accounts').select('id, type, subtype, name').eq('company_id', company.id).eq('product', product),
       supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, source_type').eq('company_id', company.id).eq('product', product).gte('entry_date', range.from).lte('entry_date', range.to),
       supabase.from('sales_invoices').select('id, amount_usd').eq('company_id', company.id).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to),
       supabase.from('payment_receipts').select('amount_usd').eq('company_id', company.id).eq('product', product).gte('receipt_date', range.from).lte('receipt_date', range.to),
-      product === 'hotel' ? supabase.from('hotel_guest_invoices').select('invoice_amount_usd, collected_amount_usd').eq('company_id', company.id).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to) : Promise.resolve({ data: null }),
-      product === 'hotel' ? supabase.from('hotel_room_stats').select('room_revenue_collected_usd').eq('company_id', company.id).eq('product', product).gte('stat_date', range.from).lte('stat_date', range.to) : Promise.resolve({ data: null }),
+      isHotelOrRest ? supabase.from('hotel_room_stats').select('*').eq('company_id', company.id).eq('product', product).gte('stat_date', range.from).lte('stat_date', range.to) : Promise.resolve({ data: [] }),
+      isHotelOrRest ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', company.id).eq('product', product).gte('entry_date', range.from).lte('entry_date', range.to) : Promise.resolve({ data: [] }),
+      isHotelOrRest && product === 'restaurant' ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', company.id).gte('revenue_date', range.from).lte('revenue_date', range.to) : Promise.resolve({ data: [] }),
+      isHotelOrRest ? supabase.from('hotel_expense_entries').select('*').eq('company_id', company.id).eq('product', product).gte('expense_date', range.from).lte('expense_date', range.to) : Promise.resolve({ data: [] }),
+      isHotelOrRest ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', company.id).eq('product', product) : Promise.resolve({ data: [] }),
+      isHotelOrRest ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', company.id).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to) : Promise.resolve({ data: [] }),
+      isHotelOrRest ? supabase.from('purchase_invoices').select('*').eq('company_id', company.id).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to) : Promise.resolve({ data: [] })
     ])
 
-    const balances = {}
-    const ignoredSources = ['restaurant_revenue', 'hotel_room_stats', 'hotel_revenue_entry', 'hotel_expense_entry', 'hotel_amc_contract', 'hotel_guest_invoice', 'owner_contribution', 'owner_dividend', 'loan_taken', 'loan_principal']
-    const filteredEntries = (entries || []).filter(e => {
-      if (['hotel', 'restaurant'].includes(product)) return !ignoredSources.includes(e.source_type)
-      return true
-    })
-    ;(filteredEntries || []).forEach(e => { balances[e.account_id] = (balances[e.account_id] || 0) + Number(e.debit_usd) - Number(e.credit_usd) })
-    
-    const byType = (type) => (accounts || []).filter(a => a.type === type)
-    const sumAccs = (list) => list.reduce((s, a) => s + (balances[a.id] || 0), 0)
+    let revenue = 0
+    let totalExpenses = 0
+    let operatingExpenses = 0
+    let otherBelowLine = 0
+    let invoicesRaised = 0
+    let collected = 0
 
-    let revenue = -sumAccs(byType('Revenue'))
-    let totalExpenses = sumAccs(byType('Expenses'))
-    
-    let operatingExpenses = sumAccs(byType('Expenses').filter(a => !['Below GOP', 'Below EBITDA'].includes(a.subtype)))
-    let otherBelowLine = sumAccs(byType('Expenses').filter(a => ['Below GOP', 'Below EBITDA'].includes(a.subtype) && !DA_INTEREST_NAMES.includes(a.name)))
-    
-    let invoicesRaised = (salesInv || []).length
-    let collected = (receipts || []).reduce((s, r) => s + Number(r.amount_usd), 0)
-
-    if (['hotel', 'restaurant'].includes(product)) {
-      const [{ data: hrs }, { data: hre }, { data: rdr }, { data: hee }, { data: amc }, { data: hgi }, { data: pur }] = await Promise.all([
-        supabase.from('hotel_room_stats').select('*').eq('company_id', company.id).eq('product', product).gte('stat_date', range.from).lte('stat_date', range.to),
-        supabase.from('hotel_revenue_entries').select('*').eq('company_id', company.id).eq('product', product).gte('entry_date', range.from).lte('entry_date', range.to),
-        supabase.from('restaurant_daily_revenue').select('*').eq('company_id', company.id).eq('product', product).gte('revenue_date', range.from).lte('revenue_date', range.to),
-        supabase.from('hotel_expense_entries').select('*').eq('company_id', company.id).eq('product', product).gte('expense_date', range.from).lte('expense_date', range.to),
-        supabase.from('hotel_amc_contracts').select('*').eq('company_id', company.id).eq('product', product),
-        supabase.from('hotel_guest_invoices').select('*').eq('company_id', company.id).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to),
-        supabase.from('purchase_invoices').select('*').eq('company_id', company.id).eq('product', product).gte('invoice_date', range.from).lte('invoice_date', range.to)
-      ])
-      
+    if (isHotelOrRest) {
       const r_hrs = (hrs || []).reduce((s, r) => s + Number(r.room_revenue_usd || 0), 0)
       const r_hre = (hre || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
-      const r_rdr = (rdr || []).reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd||0) + Number(r.beverage_amount_usd||0) + Number(r.other_amount_usd||0))), 0)
+      const r_rdr = (rdr || []).reduce((s, r) => s + (Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0))), 0)
+      const r_sales = (salesInv || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
       
-      revenue += r_hrs + r_hre + r_rdr
-      
+      revenue = r_hrs + r_hre + r_rdr + r_sales
+
       // Expenses
-      // For AMC, we need monthsInView
-      const start = new Date(range.from)
-      const end = new Date(range.to)
-      const monthsInView = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
-      const fyStart = company.fiscal_year_start_month || 1;
       const e_amc = (amc || []).reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, range.from, range.to), 0)
-      const e_hee = (hee || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
       const e_pur = (pur || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+
+      const accountMap = {}
+      ;(accounts || []).forEach(a => { accountMap[a.id] = a })
+
+      let operatingHee = 0
+      let belowGopHee = 0
+
+      ;(hee || []).forEach(e => {
+        const amt = Number(e.amount_usd || 0)
+        const acc = accountMap[e.account_id]
+        if (acc && ['Below GOP', 'Below EBITDA'].includes(acc.subtype)) {
+          belowGopHee += amt
+        } else {
+          operatingHee += amt
+        }
+      })
       
-      totalExpenses += e_amc + e_hee + e_pur
-      operatingExpenses += e_amc + e_hee + e_pur // Just putting them all in operating for simplicity in portfolio view
-      
+      const e_hee = operatingHee + belowGopHee
+      totalExpenses = e_amc + e_hee + e_pur
+      operatingExpenses = e_amc + e_pur + operatingHee
+      otherBelowLine = belowGopHee
+
       // Invoices
-      invoicesRaised += (hgi || []).length
-      
+      invoicesRaised = (hgi || []).length + (salesInv || []).length
+
       // Collected
-      const c_hrs = (hrs || []).reduce((s, r) => s + Number(r.room_revenue_collected_usd || 0), 0)
+      const c_hrs = (hrs || []).reduce((s, r) => s + (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0) || Number(r.room_revenue_collected_usd || 0)), 0)
       const c_hre = (hre || []).reduce((s, r) => s + Number(r.collected_usd || 0), 0)
-      const c_rdr = (rdr || []).reduce((s, r) => s + Number(r.collected_usd || 0), 0)
-      const c_hgi = (hgi || []).reduce((s, r) => s + Number(r.collected_amount_usd || 0), 0)
+      const c_rdr = (rdr || []).reduce((s, r) => s + Number(r.collected_usd !== null && r.collected_usd !== undefined ? r.collected_usd : (r.total_amount_usd || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0)))), 0)
+      const c_sales = (receipts || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+
+      collected = c_hrs + c_hre + c_rdr + c_sales
+    } else {
+      const balances = {}
+      ;(entries || []).forEach(e => {
+        balances[e.account_id] = (balances[e.account_id] || 0) + Number(e.debit_usd) - Number(e.credit_usd)
+      })
       
-      collected += c_hrs + c_hre + c_rdr + c_hgi
+      const byType = (type) => (accounts || []).filter(a => a.type === type)
+      const sumAccs = (list) => list.reduce((s, a) => s + (balances[a.id] || 0), 0)
+
+      revenue = -sumAccs(byType('Revenue')) || (salesInv || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
+      totalExpenses = sumAccs(byType('Expenses'))
+      operatingExpenses = sumAccs(byType('Expenses').filter(a => !['Below GOP', 'Below EBITDA'].includes(a.subtype)))
+      otherBelowLine = sumAccs(byType('Expenses').filter(a => ['Below GOP', 'Below EBITDA'].includes(a.subtype) && !DA_INTEREST_NAMES.includes(a.name)))
+
+      invoicesRaised = (salesInv || []).length
+      collected = (receipts || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0)
     }
 
     const gop = revenue - operatingExpenses
     const ebitda = gop - otherBelowLine
 
     return {
-      revenue, expenses: totalExpenses, gop, ebitda,
-      invoicesRaised: (salesInv || []).length,
-      collected: (receipts || []).reduce((s, r) => s + Number(r.amount_usd), 0),
+      revenue,
+      expenses: totalExpenses,
+      gop,
+      ebitda,
+      invoicesRaised,
+      collected,
     }
   }
 
@@ -216,7 +243,10 @@ export default function PortfolioDashboard() {
         currencyProps={cp.currencyProps}
         periodProps={cp.periodProps}
         actions={
-          <button onClick={() => setReportModalOpen(true)} className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:border-navy-400">
+          <button
+            onClick={() => setReportModalOpen(true)}
+            className="h-[38px] flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 text-sm font-medium px-4 rounded-lg hover:border-navy-400 hover:bg-slate-50 transition-colors shadow-sm"
+          >
             Download Report
           </button>
         }
@@ -310,7 +340,7 @@ export default function PortfolioDashboard() {
           fields={[
             { type: 'checkboxGroup', key: 'charts', label: 'Include Charts', options: ['Revenue by Company (Bar Chart)'], default: ['Revenue by Company (Bar Chart)'] },
             { type: 'currency', key: 'currency', default: cp.displayCurrency },
-            { type: 'period', key: 'period', default: 'ALL_TIME' },
+            { type: 'period', key: 'period', default: cp.period || 'YTD' },
           ]}
           onGenerate={generatePortfolioReport}
           onClose={() => setReportModalOpen(false)}
