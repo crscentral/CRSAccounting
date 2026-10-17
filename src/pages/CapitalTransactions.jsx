@@ -1033,11 +1033,13 @@ function ManageOwnersModal({ companyId, product, owners = [], onClose, onRefresh
 }
 
 function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAccounts, initialData, owners, onOwnerAdded, onClose, onSaved }) {
+  const { activeCompany } = useAuth()
+  const defaultCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
   const [ownerName, setOwnerName] = useState(initialData?.owner_name || '')
   const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
   const [loanAccountId, setLoanAccountId] = useState(initialData?.loan_account_id || liabilityAccounts[0]?.id || '')
   const [cashAccountId, setCashAccountId] = useState(initialData?.cash_account_id || cashAccounts[0]?.id || '')
-  const [currency, setCurrency] = useState(initialData?.currency || 'USD')
+  const [currency, setCurrency] = useState(initialData?.currency || defaultCurr)
   const [amount, setAmount] = useState(initialData?.amount ?? '')
   const [notes, setNotes] = useState(initialData?.notes || '')
   const [saving, setSaving] = useState(false)
@@ -1125,9 +1127,11 @@ function LoanRepaymentFormModal({ companyId, product, liabilityAccounts, cashAcc
 }
 
 function DividendFormModal({ companyId, product, initialData, owners, onOwnerAdded, onClose, onSaved }) {
+  const { activeCompany } = useAuth()
+  const defaultCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
   const [ownerName, setOwnerName] = useState(initialData?.owner_name || '')
   const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
-  const [currency, setCurrency] = useState(initialData?.currency || 'USD')
+  const [currency, setCurrency] = useState(initialData?.currency || defaultCurr)
   const [amount, setAmount] = useState(initialData?.amount ?? '')
   const [notes, setNotes] = useState(initialData?.notes || '')
   const [saving, setSaving] = useState(false)
@@ -1201,9 +1205,11 @@ function DividendFormModal({ companyId, product, initialData, owners, onOwnerAdd
 }
 
 function OwnerEquityFormModal({ companyId, product, cashAccounts, initialData, owners, onOwnerAdded, onClose, onSaved }) {
+  const { activeCompany } = useAuth()
+  const defaultCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
   const [ownerName, setOwnerName] = useState(initialData?.owner_name || '')
   const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
-  const [currency, setCurrency] = useState(initialData?.currency || 'USD')
+  const [currency, setCurrency] = useState(initialData?.currency || defaultCurr)
   const [amount, setAmount] = useState(initialData?.amount ?? '')
   const [notes, setNotes] = useState(initialData?.notes || '')
   const [saving, setSaving] = useState(false)
@@ -1279,11 +1285,13 @@ function OwnerEquityFormModal({ companyId, product, cashAccounts, initialData, o
 }
 
 function LoanTakenFormModal({ companyId, product, liabilityAccounts, cashAccounts, initialData, owners, onOwnerAdded, onClose, onSaved }) {
+  const { activeCompany } = useAuth()
+  const defaultCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
   const [ownerName, setOwnerName] = useState(initialData?.owner_name || '')
   const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
   const [loanAccountId, setLoanAccountId] = useState(initialData?.loan_account_id || liabilityAccounts[0]?.id || '')
   const [cashAccountId, setCashAccountId] = useState(initialData?.cash_account_id || cashAccounts[0]?.id || '')
-  const [currency, setCurrency] = useState(initialData?.currency || 'USD')
+  const [currency, setCurrency] = useState(initialData?.currency || defaultCurr)
   const [amount, setAmount] = useState(initialData?.amount ?? '')
   const [notes, setNotes] = useState(initialData?.notes || '')
   const [saving, setSaving] = useState(false)
@@ -1668,10 +1676,12 @@ function ManageStaffModal({ companyId, product, staffList = [], onClose, onRefre
 }
 
 function StaffLoanGivenFormModal({ companyId, product, initialData, cashAccounts, staffList, onStaffAdded, onClose, onSaved }) {
+  const { activeCompany } = useAuth()
+  const defaultCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
   const [staffName, setStaffName] = useState(initialData?.staff_name || '')
   const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
   const [cashAccountId, setCashAccountId] = useState(initialData?.cash_account_id || cashAccounts[0]?.id || '')
-  const [currency, setCurrency] = useState(initialData?.currency || 'USD')
+  const [currency, setCurrency] = useState(initialData?.currency || defaultCurr)
   const [amount, setAmount] = useState(initialData?.amount ?? '')
   const [notes, setNotes] = useState(initialData?.notes || '')
   const [saving, setSaving] = useState(false)
@@ -1762,10 +1772,12 @@ function StaffLoanGivenFormModal({ companyId, product, initialData, cashAccounts
 }
 
 function StaffLoanRepaymentFormModal({ companyId, product, initialData, cashAccounts, staffList, onStaffAdded, onClose, onSaved }) {
+  const { activeCompany } = useAuth()
+  const defaultCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
   const [staffName, setStaffName] = useState(initialData?.staff_name || '')
   const [paymentDate, setPaymentDate] = useState(initialData?.payment_date || getLocalDate())
   const [cashAccountId, setCashAccountId] = useState(initialData?.cash_account_id || cashAccounts[0]?.id || '')
-  const [currency, setCurrency] = useState(initialData?.currency || 'USD')
+  const [currency, setCurrency] = useState(initialData?.currency || defaultCurr)
   const [amount, setAmount] = useState(initialData?.amount ?? '')
   const [notes, setNotes] = useState(initialData?.notes || '')
   const [saving, setSaving] = useState(false)

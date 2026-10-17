@@ -19,10 +19,14 @@ export default function HotelExpenseBudget() {
   const [budgets, setBudgets] = useState({}) // key: "accountCode-month" -> { amount, currency, amount_usd }
   const [actuals, setActuals] = useState({}) // key: "accountCode-month" -> amount_usd
   const [saving, setSaving] = useState({})
-  
-  const [displayCurrency, setDisplayCurrency] = useState('USD')
+  const [displayCurrency, setDisplayCurrency] = useState(activeCompany?.default_currency || activeCompany?.base_currency || 'USD')
   const [rate, setRate] = useState(1)
   const [rates, setRates] = useState({})
+  
+  useEffect(() => {
+    const nextCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
+    setDisplayCurrency(nextCurr)
+  }, [activeCompany?.id, activeCompany?.default_currency, activeCompany?.base_currency])
   
   const [reportModalOpen, setReportModalOpen] = useState(false)
 

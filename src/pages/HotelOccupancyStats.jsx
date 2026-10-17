@@ -30,7 +30,7 @@ export default function HotelOccupancyStats() {
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
   const [selectedMonthYear, setSelectedMonthYear] = useState(now.getFullYear())
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
-  const [displayCurrency, setDisplayCurrency] = useState('USD')
+  const [displayCurrency, setDisplayCurrency] = useState(activeCompany?.default_currency || activeCompany?.base_currency || 'USD')
   const [rate, setRate] = useState(1)
   const [totalRooms, setTotalRooms] = useState(0)
   const [stats, setStats] = useState([])
@@ -42,6 +42,11 @@ export default function HotelOccupancyStats() {
   const [gop, setGop] = useState(0)
   const [loading, setLoading] = useState(true)
   const [reportModalOpen, setReportModalOpen] = useState(false)
+
+  useEffect(() => {
+    const nextCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
+    setDisplayCurrency(nextCurr)
+  }, [activeCompany?.id, activeCompany?.default_currency, activeCompany?.base_currency])
 
   useEffect(() => { if (activeCompany) loadAll() }, [activeCompany, activeProduct, view, selectedMonth, selectedMonthYear, selectedYear])
   useEffect(() => { if (displayCurrency === 'USD') { setRate(1); return } getLatestRate(displayCurrency).then(r => setRate(r || 1)) }, [displayCurrency])

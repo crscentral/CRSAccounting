@@ -17,6 +17,8 @@ export default function Settings() {
   const [tab, setTab] = useState('profile')
   const [fullName, setFullName] = useState('')
   const [fyMonth, setFyMonth] = useState(1)
+  const [companyDefaultCurrency, setCompanyDefaultCurrency] = useState('USD')
+  const [companyBaseCurrency, setCompanyBaseCurrency] = useState('USD')
   const [favorites, setFavorites] = useState(['USD', 'THB', 'INR'])
   const [members, setMembers] = useState([])
   const [inviteEmail, setInviteEmail] = useState('')
@@ -72,6 +74,8 @@ export default function Settings() {
   useEffect(() => {
     if (activeCompany) {
       setFyMonth(activeCompany.fiscal_year_start_month)
+      setCompanyDefaultCurrency(activeCompany.default_currency || activeCompany.base_currency || 'USD')
+      setCompanyBaseCurrency(activeCompany.base_currency || 'USD')
       loadMembers()
       loadSettings()
     }
@@ -204,7 +208,11 @@ export default function Settings() {
   }
 
   async function saveCompanySettings() {
-    await supabase.from('companies').update({ fiscal_year_start_month: fyMonth }).eq('id', activeCompany.id)
+    await supabase.from('companies').update({
+      fiscal_year_start_month: fyMonth,
+      default_currency: companyDefaultCurrency,
+      base_currency: companyBaseCurrency,
+    }).eq('id', activeCompany.id)
     await supabase.from('company_settings').upsert({ company_id: activeCompany.id, favorite_currencies: favorites }, { onConflict: 'company_id' })
     refreshCompanies()
   }
@@ -302,9 +310,25 @@ export default function Settings() {
         <div className="space-y-6">
           <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 max-w-2xl">
             <h3 className="font-semibold text-slate-700 mb-4">Fiscal Year & Currency Defaults</h3>
-            <div className="grid sm:grid-cols-2 gap-4 mb-4">
+            <div className="grid sm:grid-cols-3 gap-4 mb-4">
               <div>
-                <label className="text-xs font-medium text-slate-500">Fiscal Year Start Month (default YTD)</label>
+                <label className="text-xs font-medium text-slate-500">Company Default Currency *</label>
+                <select value={companyDefaultCurrency} onChange={e => setCompanyDefaultCurrency(e.target.value)}
+                  className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold text-navy-800">
+                  {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">Default operational currency for all daily entries, pages, displays, and reports.</p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500">Base Currency *</label>
+                <select value={companyBaseCurrency} onChange={e => setCompanyBaseCurrency(e.target.value)}
+                  className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                  {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">Statutory legal currency & Base Currency pie chart on Dashboard.</p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500">Fiscal Year Start Month</label>
                 <select value={fyMonth} onChange={e => setFyMonth(Number(e.target.value))}
                   className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
                   {MONTH_NAMES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}

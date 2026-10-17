@@ -22,7 +22,7 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
   const [customerEmail, setCustomerEmail] = useState(invoice?.customer_email || '')
   const [customerPhone, setCustomerPhone] = useState(invoice?.customer_phone || '')
   const [customerAddress, setCustomerAddress] = useState(invoice?.customer_address || '')
-  const [currency, setCurrency] = useState(invoice?.currency || 'USD')
+  const [currency, setCurrency] = useState(invoice?.currency || company?.default_currency || company?.base_currency || 'USD')
   const [fxRate, setFxRate] = useState(invoice?.fx_rate_locked || '')
   const [invoiceDate, setInvoiceDate] = useState(invoice?.invoice_date || getLocalDate())
   const [dueDate, setDueDate] = useState(invoice?.due_date || '')

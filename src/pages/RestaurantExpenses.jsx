@@ -372,9 +372,11 @@ export default function RestaurantExpenses() {
 }
 
 function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClose, onSaved }) {
+  const { activeCompany } = useAuth()
+  const defaultCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
   const [expenseDate, setExpenseDate] = useState(editingRow?.expense_date || getLocalDate())
   const [accountId, setAccountId] = useState(editingRow?.account_id || '')
-  const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
+  const [currency, setCurrency] = useState(editingRow?.currency || defaultCurr)
   const [amount, setAmount] = useState(editingRow?.amount ?? '')
   const [paidAmount, setPaidAmount] = useState(editingRow?.paid_amount || '')
   const [notes, setNotes] = useState(editingRow?.notes || '')
@@ -462,10 +464,12 @@ function ExpenseEntryFormModal({ companyId, product, accounts, editingRow, onClo
 }
 
 function AmcContractFormModal({ companyId, product, editingRow, onClose, onSaved }) {
+  const { activeCompany } = useAuth()
+  const defaultCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
   const [contractName, setContractName] = useState(editingRow?.contract_name || '')
   const [annualAmount, setAnnualAmount] = useState(editingRow?.annual_amount || '')
   const [paidAmount, setPaidAmount] = useState(editingRow?.paid_amount || '')
-  const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
+  const [currency, setCurrency] = useState(editingRow?.currency || defaultCurr)
   const [startMonth, setStartMonth] = useState(editingRow?.start_month || new Date().getMonth() + 1)
   const [startYear, setStartYear] = useState(editingRow?.start_year || new Date().getFullYear())
   const [notes, setNotes] = useState(editingRow?.notes || '')

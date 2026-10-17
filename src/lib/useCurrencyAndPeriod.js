@@ -6,7 +6,8 @@ import { CURRENCY_LIST } from './currencies'
 
 export function useCurrencyAndPeriod(defaultPeriod = 'YTD') {
   const { activeCompany } = useAuth()
-  const [displayCurrency, setDisplayCurrency] = useState('USD')
+  const initialCurrency = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
+  const [displayCurrency, setDisplayCurrency] = useState(initialCurrency)
   const [ratesMap, setRatesMap] = useState({ USD: 1 })
   const [periodType, setPeriodType] = useState(defaultPeriod)
   const [n, setN] = useState(1)
@@ -18,6 +19,11 @@ export function useCurrencyAndPeriod(defaultPeriod = 'YTD') {
   useEffect(() => {
     if (activeCompany?.fiscal_year_start_month) setFyStartMonth(activeCompany.fiscal_year_start_month)
   }, [activeCompany])
+
+  useEffect(() => {
+    const nextCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
+    setDisplayCurrency(nextCurr)
+  }, [activeCompany?.id, activeCompany?.default_currency, activeCompany?.base_currency])
 
   useEffect(() => {
     ensureTodayRatesCached().then(refreshRates)

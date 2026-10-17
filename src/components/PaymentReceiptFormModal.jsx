@@ -5,10 +5,13 @@ import { supabase } from '../lib/supabaseClient'
 import Modal, { Field } from './Modal'
 import { getLatestRate } from '../lib/fx'
 import { CURRENCY_LIST } from '../lib/currencies'
+import { useAuth } from '../lib/AuthContext'
 
 const PAYMENT_METHODS = ['Bank Transfer', 'Cash', 'Card', 'Cheque', 'Other']
 
 export default function PaymentReceiptFormModal({ open, onClose, companyId, product, initialData, onSuccess, invoices, contacts = [] }) {
+  const { activeCompany } = useAuth()
+  const defaultCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
   const [saving, setSaving] = useState(false)
 
   const [receiptNumber, setReceiptNumber] = useState('')
@@ -17,7 +20,7 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
   const [customerName, setCustomerName] = useState('')
   const [contactId, setContactId] = useState('')
   const [amount, setAmount] = useState('')
-  const [currency, setCurrency] = useState('USD')
+  const [currency, setCurrency] = useState(defaultCurr)
   const [fxRate, setFxRate] = useState('')
   const [method, setMethod] = useState('Bank Transfer')
   const [notes, setNotes] = useState('')
@@ -31,7 +34,7 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
         setContactId(initialData.contact_id || '')
         setCustomerName(initialData.customer_name_freeform || initialData.contact?.name || '')
         setAmount(initialData.amount || '')
-        setCurrency(initialData.currency || 'USD')
+        setCurrency(initialData.currency || defaultCurr)
         setFxRate(initialData.fx_rate_locked || '')
         setMethod(initialData.method || 'Bank Transfer')
         setNotes(initialData.notes || '')
@@ -42,7 +45,7 @@ export default function PaymentReceiptFormModal({ open, onClose, companyId, prod
         setContactId('')
         setCustomerName('')
         setAmount('')
-        setCurrency('USD')
+        setCurrency(defaultCurr)
         setMethod('Bank Transfer')
         setNotes('')
       }

@@ -335,9 +335,11 @@ columns={ancillaryCols}
 }
 
 function RoomRevenueFormModal({ companyId, product, totalRooms, editingRow, onClose, onSaved }) {
+  const { activeCompany } = useAuth()
+  const defaultCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
   const [statDate, setStatDate] = useState(editingRow?.stat_date || getLocalDate())
   const [roomsOccupied, setRoomsOccupied] = useState(editingRow?.manual_rooms_occupied ?? '')
-  const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
+  const [currency, setCurrency] = useState(editingRow?.currency || defaultCurr)
   const [roomRevenue, setRoomRevenue] = useState(editingRow?.manual_room_revenue ?? '')
   const [collected, setCollected] = useState(editingRow?.manual_room_revenue_collected ?? '')
   const [notes, setNotes] = useState(editingRow?.notes || '')
@@ -421,9 +423,11 @@ function RoomRevenueFormModal({ companyId, product, totalRooms, editingRow, onCl
 
 
 function AncillaryRevenueFormModal({ companyId, product, accounts, totalRooms, editingRow, roomStats, onClose, onSaved }) {
+  const { activeCompany } = useAuth()
+  const defaultCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
   const [entryDate, setEntryDate] = useState(editingRow?.entry_date || getLocalDate())
   const [accountId, setAccountId] = useState(editingRow?.account_id || accounts[0]?.id || '')
-  const [currency, setCurrency] = useState(editingRow?.currency || 'USD')
+  const [currency, setCurrency] = useState(editingRow?.currency || defaultCurr)
   const [amount, setAmount] = useState(editingRow?.amount ?? '')
   const [collected, setCollected] = useState(editingRow?.collected ?? '')
   const [notes, setNotes] = useState(editingRow?.notes || '')

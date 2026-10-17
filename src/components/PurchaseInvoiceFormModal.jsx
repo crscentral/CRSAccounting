@@ -22,7 +22,7 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
   const [supplierAddress, setSupplierAddress] = useState(invoice?.supplier_address || '')
   const [invoiceDate, setInvoiceDate] = useState(invoice?.invoice_date || getLocalDate())
   const [dueDate, setDueDate] = useState(invoice?.due_date || '')
-  const [currency, setCurrency] = useState(invoice?.currency || 'USD')
+  const [currency, setCurrency] = useState(invoice?.currency || company?.default_currency || company?.base_currency || 'USD')
   const [fxRate, setFxRate] = useState(invoice?.fx_rate_locked || '')
   const [accountId, setAccountId] = useState(invoice?.account_id || '')
   const [items, setItems] = useState([emptyItem()])

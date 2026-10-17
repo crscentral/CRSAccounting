@@ -27,11 +27,16 @@ export default function Comparison() {
   const [aMonth, setAMonth] = useState(now.getMonth() === 0 ? 12 : now.getMonth())
   const [bYear, setBYear] = useState(now.getFullYear())
   const [bMonth, setBMonth] = useState(now.getMonth() + 1)
-  const [currency, setCurrency] = useState('USD')
+  const [currency, setCurrency] = useState(activeCompany?.default_currency || activeCompany?.base_currency || 'USD')
   const [dataA, setDataA] = useState(null)
   const [dataB, setDataB] = useState(null)
   const [loading, setLoading] = useState(false)
   const [reportModalOpen, setReportModalOpen] = useState(false)
+
+  useEffect(() => {
+    const nextCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
+    setCurrency(nextCurr)
+  }, [activeCompany?.id, activeCompany?.default_currency, activeCompany?.base_currency])
 
   const rangeA = mode === 'month' ? getMonthRange(aYear, aMonth) : getYearRange(aYear)
   const rangeB = mode === 'month' ? getMonthRange(bYear, bMonth) : getYearRange(bYear)

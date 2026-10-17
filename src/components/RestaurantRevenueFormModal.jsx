@@ -12,7 +12,7 @@ export default function RestaurantRevenueFormModal({ companyId, product, company
   const [mealPeriod, setMealPeriod] = useState(entry?.meal_period || 'Dinner')
   const [tableOrSection, setTableOrSection] = useState(entry?.table_or_section || '')
   const [covers, setCovers] = useState(entry?.covers ?? 1)
-  const [currency, setCurrency] = useState(entry?.currency || company?.base_currency || 'USD')
+  const [currency, setCurrency] = useState(entry?.currency || company?.default_currency || company?.base_currency || 'USD')
   const [foodAmount, setFoodAmount] = useState(entry?.food_amount ?? 0)
   const [beverageAmount, setBeverageAmount] = useState(entry?.beverage_amount ?? 0)
   const [otherAmount, setOtherAmount] = useState(entry?.other_amount ?? 0)

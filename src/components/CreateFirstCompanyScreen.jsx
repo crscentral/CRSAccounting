@@ -17,7 +17,7 @@ import logo from '../assets/crs-logo.png'
 export default function CreateFirstCompanyScreen() {
   const { user, signOut, refreshCompanies, switchCompany } = useAuth()
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState({ name: '', base_currency: 'USD', fiscal_year_start_month: 1 })
+  const [form, setForm] = useState({ name: '', base_currency: 'USD', default_currency: 'USD', fiscal_year_start_month: 1 })
   const [error, setError] = useState('')
 
   function update(field, value) { setForm(f => ({ ...f, [field]: value })) }
@@ -34,6 +34,10 @@ export default function CreateFirstCompanyScreen() {
         p_fiscal_year_start_month: form.fiscal_year_start_month,
       })
       if (rpcError) throw rpcError
+
+      await supabase.from('companies').update({
+        default_currency: form.default_currency || form.base_currency || 'USD'
+      }).eq('id', newCompanyId)
 
       // Notify the platform admins that a new company is waiting for approval.
       // Best-effort only -- never blocks the signup if the email fails to send.
@@ -82,19 +86,28 @@ export default function CreateFirstCompanyScreen() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-slate-500">Base Currency</label>
+                <label className="text-xs font-medium text-slate-500">Company Default Currency *</label>
+                <select value={form.default_currency || form.base_currency || 'USD'} onChange={e => update('default_currency', e.target.value)}
+                  className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold text-navy-800">
+                  {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-0.5">Used for all operational entries & displays</p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500">Base Currency *</label>
                 <select value={form.base_currency} onChange={e => update('base_currency', e.target.value)}
                   className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
                   {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
                 </select>
+                <p className="text-[10px] text-slate-400 mt-0.5">Statutory legal books & Base Currency pie</p>
               </div>
-              <div>
-                <label className="text-xs font-medium text-slate-500">Fiscal Year Start</label>
-                <select value={form.fiscal_year_start_month} onChange={e => update('fiscal_year_start_month', Number(e.target.value))}
-                  className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                  {MONTH_NAMES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-                </select>
-              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500">Fiscal Year Start Month</label>
+              <select value={form.fiscal_year_start_month} onChange={e => update('fiscal_year_start_month', Number(e.target.value))}
+                className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                {MONTH_NAMES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </select>
             </div>
 
             {error && <p className="text-xs text-red-600">{error}</p>}

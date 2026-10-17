@@ -706,14 +706,15 @@ export default function HotelGuestInvoices() {
 }
 
 function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSaved }) {
-  const { activeRole } = useAuth()
+  const { activeRole, activeCompany } = useAuth()
+  const defaultCurr = company?.default_currency || company?.base_currency || activeCompany?.default_currency || 'USD'
   const [invoiceDate, setInvoiceDate] = useState(row?.invoice_date || getLocalDate())
   const [invoiceNumber, setInvoiceNumber] = useState(row?.invoice_number || '')
   const [roomNumber, setRoomNumber] = useState(row?.room_number || '')
   const [guestName, setGuestName] = useState(row?.guest_name || '')
   const [checkinDate, setCheckinDate] = useState(row?.checkin_date || '')
   const [checkoutDate, setCheckoutDate] = useState(row?.checkout_date || '')
-  const [currency, setCurrency] = useState(row?.currency || 'USD')
+  const [currency, setCurrency] = useState(row?.currency || defaultCurr)
   const [roomRate, setRoomRate] = useState(row?.room_rate ?? '')
   const [nights, setNights] = useState(row?.nights ?? '')
   const [notes, setNotes] = useState(row?.notes || '')
@@ -723,7 +724,7 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
   const [lineItems, setLineItems] = useState(
     (row?.line_items || []).map(li => ({
       ...li,
-      currency: li.currency || (row?.secondary_currency) || row?.currency || 'LAK'
+      currency: li.currency || (row?.secondary_currency) || row?.currency || defaultCurr
     }))
   )
   
@@ -1138,7 +1139,7 @@ function GuestInvoiceFormModal({ companyId, product, company, row, onClose, onSa
             </div>
             <button
               type="button"
-              onClick={() => setLineItems([...lineItems, { account_id: '', amount: '', currency: secondaryCurrency || 'LAK' }])}
+              onClick={() => setLineItems([...lineItems, { account_id: '', amount: '', currency: secondaryCurrency || defaultCurr }])}
               className="text-xs text-navy-600 font-semibold hover:text-navy-800 flex items-center gap-1 bg-white border border-navy-200 px-2 py-1 rounded shadow-sm"
             >
               <Plus size={13} /> Add Item

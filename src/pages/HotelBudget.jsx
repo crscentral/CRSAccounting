@@ -19,10 +19,14 @@ export default function HotelBudget() {
   const [startMonth, setStartMonth] = useState('all')
   const [rows, setRows] = useState({}) // key: "year-month" -> { occ, adr, revenue, currency }
   const [actuals, setActuals] = useState({}) // key: "year-month" -> revenue_usd actual
-  const [saving, setSaving] = useState({})
-  const [displayCurrency, setDisplayCurrency] = useState('USD')
+  const [displayCurrency, setDisplayCurrency] = useState(activeCompany?.default_currency || activeCompany?.base_currency || 'USD')
   const [rate, setRate] = useState(1)
   const [rates, setRates] = useState({})
+
+  useEffect(() => {
+    const nextCurr = activeCompany?.default_currency || activeCompany?.base_currency || 'USD'
+    setDisplayCurrency(nextCurr)
+  }, [activeCompany?.id, activeCompany?.default_currency, activeCompany?.base_currency])
 
 
   // --- Ancillary Revenue State ---

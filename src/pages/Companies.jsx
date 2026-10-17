@@ -12,7 +12,7 @@ const ALL_PRODUCTS = ['basic', 'hotel', 'restaurant']
 const emptyForm = {
   name: '', legal_name: '', industry: 'Revenue Management', address: '', city: '', country: '',
   email: '', website: '', phone: '', tax_id: '', logo_url: '',
-  base_currency: 'USD', fiscal_year_start_month: 1,
+  base_currency: 'USD', default_currency: 'USD', fiscal_year_start_month: 1,
   bank_name: '', bank_account_holder: '', bank_account_number: '', bank_branch: '', bank_swift_code: '', bank_ifsc_code: '',
   bank2_name: '', bank2_account_holder: '', bank2_account_number: '', bank2_branch: '', bank2_swift_code: '', bank2_ifsc_code: '',
   default_payment_terms: '', default_notes: '', default_thank_you_note: '',
@@ -55,6 +55,7 @@ export default function Companies() {
     setForm(Object.fromEntries(Object.keys(emptyForm).map(k => {
       if (k === 'products') return [k, company.company_products?.map(p => p.product) || []]
       if (k === 'fiscal_year_start_month') return [k, company[k] || 1]
+      if (k === 'default_currency') return [k, company.default_currency || company.base_currency || 'USD']
       return [k, company[k] ?? emptyForm[k]]
     })))
     setTab('General')
@@ -151,7 +152,14 @@ export default function Companies() {
                   <p className="text-xs text-slate-400">{company.legal_name}</p>
                 </div>
               </div>
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gold-100 text-gold-700 shrink-0">{company.base_currency}</span>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200" title="Company Default Operational Currency">
+                  Default: {company.default_currency || company.base_currency || 'USD'}
+                </span>
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gold-100 text-gold-700" title="Statutory Base Currency">
+                  Base: {company.base_currency}
+                </span>
+              </div>
             </div>
             <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 mb-3">{company.industry || 'Revenue Management'}</span>
             <div className="space-y-1 text-xs text-slate-500 mb-4">
@@ -214,25 +222,34 @@ export default function Companies() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Industry"><input value={form.industry} onChange={e => update('industry', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
-                    <Field label="Base Currency *">
-                      <select value={form.base_currency} onChange={e => update('base_currency', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                    <Field label="Tax ID / GSTIN"><input value={form.tax_id} onChange={e => update('tax_id', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Company Default Currency *">
+                      <select value={form.default_currency || form.base_currency || 'USD'} onChange={e => update('default_currency', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold text-navy-800 bg-white">
                         {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
                       </select>
+                      <p className="text-[11px] text-slate-500 mt-1">Default operational currency for all daily entries, pages, displays, and reports.</p>
+                    </Field>
+                    <Field label="Base Currency *">
+                      <select value={form.base_currency} onChange={e => update('base_currency', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                        {CURRENCY_LIST.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+                      </select>
+                      <p className="text-[11px] text-slate-500 mt-1">Used for statutory legal currency & Base Currency pie chart on Dashboard.</p>
                     </Field>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Tax ID / GSTIN"><input value={form.tax_id} onChange={e => update('tax_id', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
                     <Field label="Fiscal Year Start Month">
                       <select value={form.fiscal_year_start_month} onChange={e => update('fiscal_year_start_month', Number(e.target.value))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
                         {MONTH_NAMES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
                       </select>
                     </Field>
+                    <Field label="Website"><input value={form.website} onChange={e => update('website', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Phone"><input value={form.phone} onChange={e => update('phone', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
                     <Field label="Email"><input type="email" value={form.email} onChange={e => update('email', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
                   </div>
-                  <Field label="Website"><input value={form.website} onChange={e => update('website', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
 
                   <div className="pt-2 border-t border-slate-100 mt-4">
                     <p className="text-sm font-medium text-slate-700 mb-2">Accounting Modules</p>
