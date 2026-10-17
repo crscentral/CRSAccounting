@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { User, Shield, Bell, Users, Plus, Trash2, ShieldCheck, Check, X, Layers, Download, AlertTriangle, History } from 'lucide-react'
+import { User, Shield, Bell, Users, Plus, Trash2, ShieldCheck, Check, X, Layers, Download, AlertTriangle, History, Search } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { MONTH_NAMES } from '../lib/fiscalYear'
@@ -20,7 +20,17 @@ export default function Settings() {
   const [companyDefaultCurrency, setCompanyDefaultCurrency] = useState('USD')
   const [companyBaseCurrency, setCompanyBaseCurrency] = useState('USD')
   const [favorites, setFavorites] = useState(['USD', 'THB', 'INR'])
+  const [currencySearch, setCurrencySearch] = useState('')
+  const [settingsSaved, setSettingsSaved] = useState(false)
   const [members, setMembers] = useState([])
+
+  const filteredCurrencies = useMemo(() => {
+    const q = currencySearch.trim().toLowerCase()
+    if (!q) return CURRENCY_LIST
+    return CURRENCY_LIST.filter(c =>
+      c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+    )
+  }, [currencySearch])
   const [inviteEmail, setInviteEmail] = useState('')
   const [githubBackupStatus, setGithubBackupStatus] = useState('success')
   const [githubBackupDate, setGithubBackupDate] = useState('')
@@ -215,6 +225,8 @@ export default function Settings() {
     }).eq('id', activeCompany.id)
     await supabase.from('company_settings').upsert({ company_id: activeCompany.id, favorite_currencies: favorites }, { onConflict: 'company_id' })
     refreshCompanies()
+    setSettingsSaved(true)
+    setTimeout(() => setSettingsSaved(false), 2500)
   }
 
   async function inviteMember() {
@@ -308,9 +320,9 @@ export default function Settings() {
 
       {tab === 'access' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 max-w-2xl">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 w-full">
             <h3 className="font-semibold text-slate-700 mb-4">Fiscal Year & Currency Defaults</h3>
-            <div className="grid sm:grid-cols-3 gap-4 mb-4">
+            <div className="grid sm:grid-cols-3 gap-4 mb-5">
               <div>
                 <label className="text-xs font-medium text-slate-500">Company Default Currency *</label>
                 <select value={companyDefaultCurrency} onChange={e => setCompanyDefaultCurrency(e.target.value)}
@@ -335,17 +347,102 @@ export default function Settings() {
                 </select>
               </div>
             </div>
-            <label className="text-xs font-medium text-slate-500">Favorite Currencies (shown at top of every switcher)</label>
-            <div className="flex flex-wrap gap-2 mt-2 mb-4">
-              {CURRENCY_LIST.slice(0, 20).map(c => (
-                <button key={c.code} onClick={() => toggleFavorite(c.code)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium border ${favorites.includes(c.code) ? 'bg-navy-600 text-white border-navy-600' : 'bg-white border-slate-200 text-slate-600'}`}>
-                  {c.code}
-                </button>
-              ))}
+
+            <div className="border-t border-slate-100 pt-4 mt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold text-slate-700">Favorite Currencies</label>
+                    <span className="text-[11px] bg-navy-50 text-navy-700 font-medium px-2 py-0.5 rounded-full border border-navy-100">
+                      {favorites.length} selected
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Pinned at the top of currency switchers across all pages for quick selection.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={currencySearch}
+                      onChange={e => setCurrencySearch(e.target.value)}
+                      placeholder="Search currency (e.g. USD, EUR, THB)..."
+                      className="pl-8 pr-7 py-1.5 text-xs border border-slate-200 rounded-lg w-56 sm:w-64 focus:outline-none focus:ring-1 focus:ring-navy-600 focus:border-navy-600 bg-white"
+                    />
+                    {currencySearch && (
+                      <button
+                        type="button"
+                        onClick={() => setCurrencySearch('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                  {favorites.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFavorites([])}
+                      className="text-[11px] text-slate-400 hover:text-rose-600 transition-colors whitespace-nowrap px-2 py-1"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* All Currencies Grid Container */}
+              <div className="max-h-72 overflow-y-auto p-3 bg-slate-50/70 rounded-xl border border-slate-200 mb-4">
+                {filteredCurrencies.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-slate-400">
+                    No currencies match "{currencySearch}".
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {filteredCurrencies.map(c => {
+                      const isFav = favorites.includes(c.code)
+                      return (
+                        <button
+                          key={c.code}
+                          type="button"
+                          onClick={() => toggleFavorite(c.code)}
+                          title={`${c.code} — ${c.name}`}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                            isFav
+                              ? 'bg-navy-800 text-white shadow-xs border border-navy-800 font-semibold'
+                              : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-100/80'
+                          }`}
+                        >
+                          {isFav && <Check size={12} className="stroke-[3]" />}
+                          <span>{c.code}</span>
+                          <span className={`text-[10px] hidden sm:inline ${isFav ? 'text-navy-200' : 'text-slate-400'}`}>
+                            {c.name.length > 15 ? c.name.slice(0, 15) + '…' : c.name}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
+
             {can(['owner', 'admin']) && (
-              <button onClick={saveCompanySettings} className="bg-navy-800 text-white text-sm font-medium px-4 py-2 rounded-lg">Save</button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={saveCompanySettings}
+                  className="bg-navy-800 hover:bg-navy-900 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors shadow-xs"
+                >
+                  Save Settings
+                </button>
+                {settingsSaved && (
+                  <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1 animate-fade-in">
+                    <Check size={14} /> Saved successfully
+                  </span>
+                )}
+              </div>
             )}
           </div>
 
