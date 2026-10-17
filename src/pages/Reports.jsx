@@ -262,6 +262,18 @@ export default function Reports() {
     const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
     const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
 
+    let accs = accounts
+    if (!accs || accs.length === 0) {
+      const { data: fetchedAccs } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('company_id', activeCompany.id)
+        .eq('product', activeProduct)
+        .order('code')
+      accs = fetchedAccs || []
+      setAccounts(accs)
+    }
+
     const { data: entries } = await supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd, entry_date, source_type, accounts!inner(type)').eq('company_id', activeCompany.id).eq('product', activeProduct)
     
     const ignoredSources = ['restaurant_revenue', 'hotel_room_stats', 'hotel_revenue_entry', 'hotel_expense_entry', 'hotel_amc_contract', 'hotel_guest_invoice', 'owner_contribution', 'owner_dividend', 'loan_taken', 'loan_principal']
@@ -274,15 +286,17 @@ export default function Reports() {
     let combined = [...filteredEntries]
     
     // CAPITAL & LOANS
-    const eqContAcc = (accounts || []).find(a => ((a.name || '').toLowerCase().includes('contribution') || (a.name || '').toLowerCase().includes('equity')) && a.type === 'Equity')
-    const eqDivAcc = (accounts || []).find(a => ((a.name || '').toLowerCase().includes('dividend') || (a.name || '').toLowerCase().includes('draw') || (a.name || '').toLowerCase().includes('retained')) && a.type === 'Equity')
-    const capCashAcc = (accounts || []).find(a => (a.name || '').toLowerCase().includes('cash on hand') || (a.name || '').toLowerCase().includes('cash'))
+    const eqContAcc = (accs || []).find(a => ((a.name || '').toLowerCase().includes('contribution') || (a.name || '').toLowerCase().includes('equity')) && a.type === 'Equity')
+    const eqDivAcc = (accs || []).find(a => ((a.name || '').toLowerCase().includes('dividend') || (a.name || '').toLowerCase().includes('draw') || (a.name || '').toLowerCase().includes('retained')) && a.type === 'Equity')
+    const capCashAcc = (accs || []).find(a => (a.name || '').toLowerCase().includes('cash on hand') || (a.name || '').toLowerCase().includes('cash'))
     
-    const [{ data: oCont }, { data: oDiv }, { data: lTake }, { data: lRepay }] = await Promise.all([
+    const [{ data: oCont }, { data: oDiv }, { data: lTake }, { data: lRepay }, { data: sGiven }, { data: sRepay }] = await Promise.all([
       supabase.from('owner_contributions').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
       supabase.from('owner_dividends').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
       supabase.from('loans_taken').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
-      supabase.from('loan_principal_payments').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
+      supabase.from('loan_principal_payments').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+      supabase.from('staff_loans_given').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct),
+      supabase.from('staff_loan_repayments').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
     ])
     
     ;(oCont || []).forEach(r => {
@@ -301,19 +315,33 @@ export default function Reports() {
     
     ;(lTake || []).forEach(r => {
       if (Number(r.amount_usd) > 0) {
-        const liabAcc = (accounts || []).find(a => a.id === r.loan_account_id)
+        const liabAcc = (accs || []).find(a => a.id === r.loan_account_id)
         if (liabAcc) combined.push({ account_id: liabAcc.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.payment_date, accounts: { type: liabAcc.type } })
-        const cashA = (accounts || []).find(a => a.id === r.cash_account_id) || capCashAcc
+        const cashA = (accs || []).find(a => a.id === r.cash_account_id) || capCashAcc
         if (cashA) combined.push({ account_id: cashA.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.payment_date, accounts: { type: cashA.type } })
       }
     })
     
     ;(lRepay || []).forEach(r => {
       if (Number(r.amount_usd) > 0) {
-        const liabAcc = (accounts || []).find(a => a.id === r.loan_account_id)
+        const liabAcc = (accs || []).find(a => a.id === r.loan_account_id)
         if (liabAcc) combined.push({ account_id: liabAcc.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.payment_date, accounts: { type: liabAcc.type } })
-        const cashA = (accounts || []).find(a => a.id === r.cash_account_id) || capCashAcc
+        const cashA = (accs || []).find(a => a.id === r.cash_account_id) || capCashAcc
         if (cashA) combined.push({ account_id: cashA.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.payment_date, accounts: { type: cashA.type } })
+      }
+    })
+
+    ;(sGiven || []).forEach(r => {
+      if (Number(r.amount_usd) > 0) {
+        const cashA = (accs || []).find(a => a.id === r.cash_account_id) || capCashAcc
+        if (cashA) combined.push({ account_id: cashA.id, debit_usd: 0, credit_usd: r.amount_usd, entry_date: r.payment_date, accounts: { type: cashA.type } })
+      }
+    })
+
+    ;(sRepay || []).forEach(r => {
+      if (Number(r.amount_usd) > 0) {
+        const cashA = (accs || []).find(a => a.id === r.cash_account_id) || capCashAcc
+        if (cashA) combined.push({ account_id: cashA.id, debit_usd: r.amount_usd, credit_usd: 0, entry_date: r.payment_date, accounts: { type: cashA.type } })
       }
     })
     
@@ -374,7 +402,7 @@ export default function Reports() {
       if (mainAcc && amc && amc.length > 0) {
         const fyStart = activeCompany.fiscal_year_start_month || 1;
         const start = new Date(range.from < '2020-01-01' ? '2020-01-01' : range.from)
-        const end = new Date(range.to)
+        const end = new Date(Math.min(new Date(range.to).getTime(), new Date(new Date().getFullYear() + 1, 11, 31).getTime()))
         let cur = new Date(start.getFullYear(), start.getMonth(), 1)
         while (cur <= end) {
           const dStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2, '0')}-28`
@@ -414,23 +442,24 @@ export default function Reports() {
       })
     }
     
+    const isBs = selections.reportType === 'balance_sheet'
     const bal = {}
     ;(combined || []).forEach(e => {
       const isBalanceSheetAccount = ['Assets', 'Liabilities', 'Equity'].includes(e.accounts?.type)
-      const inPeriod = e.entry_date >= range.from && e.entry_date <= range.to
+      const inPeriod = isBs ? (e.entry_date <= (range.to || '2100-12-31')) : (e.entry_date >= range.from && e.entry_date <= range.to)
       if (isBalanceSheetAccount || inPeriod) {
         bal[e.account_id] = (bal[e.account_id] || 0) + Number(e.debit_usd) - Number(e.credit_usd)
       }
     })
-    const by = (type) => accounts.filter(a => a.type === type)
+    const by = (type) => accs.filter(a => a.type === type)
     const sum = (type) => by(type).reduce((s, a) => s + (bal[a.id] || 0), 0)
     const rev = -sum('Revenue'), exp = sum('Expenses'), assets = sum('Assets'), liab = -sum('Liabilities')
 
     const DA_INTEREST_NAMES = ['Depreciation & Amortization', 'Loan Interest']
-    const belowLine = accounts.filter(a => a.type === 'Expenses' && ['Below GOP', 'Below EBITDA'].includes(a.subtype))
+    const belowLine = accs.filter(a => a.type === 'Expenses' && ['Below GOP', 'Below EBITDA'].includes(a.subtype))
     const daInterestAccs = belowLine.filter(a => DA_INTEREST_NAMES.includes(a.name))
     const otherBelowLineAccs = belowLine.filter(a => !DA_INTEREST_NAMES.includes(a.name))
-    const operatingAccs = accounts.filter(a => a.type === 'Expenses' && !['Below GOP', 'Below EBITDA'].includes(a.subtype))
+    const operatingAccs = accs.filter(a => a.type === 'Expenses' && !['Below GOP', 'Below EBITDA'].includes(a.subtype))
     const sumAccs = (list) => list.reduce((s, a) => s + (bal[a.id] || 0), 0)
     const opExp = sumAccs(operatingAccs), otherBL = sumAccs(otherBelowLineAccs), daInt = sumAccs(daInterestAccs)
     const gopVal = rev - opExp
@@ -440,13 +469,13 @@ export default function Reports() {
     const reportKey = selections.reportType
     const amtCol = selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency} & USD)`
     if (reportKey === 'trial_balance') {
-      const totDeb = accounts.reduce((s, a) => s + ((bal[a.id] || 0) > 0 ? (bal[a.id] || 0) : 0), 0)
-      const totCred = accounts.reduce((s, a) => s + ((bal[a.id] || 0) < 0 ? -(bal[a.id] || 0) : 0), 0)
+      const totDeb = accs.reduce((s, a) => s + ((bal[a.id] || 0) > 0 ? (bal[a.id] || 0) : 0), 0)
+      const totCred = accs.reduce((s, a) => s + ((bal[a.id] || 0) < 0 ? -(bal[a.id] || 0) : 0), 0)
       sections = [{
         heading: 'Trial Balance',
         columns: ['Code', 'Account', selections.currency === 'USD' ? 'Debit (USD)' : `Debit (${selections.currency} & USD)`, selections.currency === 'USD' ? 'Credit (USD)' : `Credit (${selections.currency} & USD)`],
         rows: [
-          ...accounts.map(a => { const b = bal[a.id] || 0; return [a.code, a.name, b > 0 ? fmt(b) : '—', b < 0 ? fmt(-b) : '—'] }),
+          ...accs.map(a => { const b = bal[a.id] || 0; return [a.code, a.name, b > 0 ? fmt(b) : '—', b < 0 ? fmt(-b) : '—'] }),
           ['', 'Total', fmt(totDeb), fmt(totCred)]
         ],
       }]
@@ -492,7 +521,7 @@ export default function Reports() {
         }
       ]
     } else {
-      const repRetainedAcc = (accounts || []).find(a => ((a.name || '').toLowerCase().includes('retained earnings') || a.code === '3020') && a.type === 'Equity') || (accounts || []).find(a => a.type === 'Equity')
+      const repRetainedAcc = (accs || []).find(a => ((a.name || '').toLowerCase().includes('retained earnings') || a.code === '3020') && a.type === 'Equity') || (accs || []).find(a => a.type === 'Equity')
       const bsExportBal = { ...bal }
       if (repRetainedAcc) {
         bsExportBal[repRetainedAcc.id] = (bsExportBal[repRetainedAcc.id] || 0) - (rev - exp)
@@ -655,7 +684,7 @@ export default function Reports() {
           fields={[
             { type: 'radio', key: 'reportType', label: 'Report', options: [{ value: 'balance_sheet', label: 'Balance Sheet' }, { value: 'income_statement', label: 'Income Statement' }, { value: 'trial_balance', label: 'Trial Balance' }], default: report },
             { type: 'currency', key: 'currency', default: cp.displayCurrency },
-            { type: 'period', key: 'period', default: 'ALL_TIME' },
+            { type: 'period', key: 'period', default: report === 'balance_sheet' ? 'ALL_TIME' : (cp.period || 'YTD') },
           ]}
           onGenerate={generateFinancialReport}
           onClose={() => setReportModalOpen(false)}
