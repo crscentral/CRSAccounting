@@ -671,7 +671,13 @@ function HotelExpensesInner() {
           title="Expenses"
           fields={[
             { type: 'currency', key: 'currency', default: cp.displayCurrency },
-            { type: 'period', key: 'period', default: 'ALL_TIME' },
+            { 
+              type: 'period', 
+              key: 'period', 
+              default: 'CURRENT',
+              defaultFrom: cp.range.from,
+              defaultTo: cp.range.to
+            },
             {
               type: 'checkboxGroup',
               key: 'sections',

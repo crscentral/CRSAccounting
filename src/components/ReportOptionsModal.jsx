@@ -139,13 +139,49 @@ export default function ReportOptionsModal({ title, fields, onGenerate, onClose 
               )
             }
             if (field.type === 'checkboxGroup') {
+              const currentSelected = values[field.key] || []
+              const allSelected = field.options.length > 0 && field.options.every(opt => currentSelected.includes(opt))
+              const someSelected = field.options.some(opt => currentSelected.includes(opt))
+
+              function toggleSelectAll() {
+                if (allSelected) {
+                  setValues(v => ({ ...v, [field.key]: [] }))
+                } else {
+                  setValues(v => ({ ...v, [field.key]: [...field.options] }))
+                }
+              }
+
               return (
                 <div key={field.key}>
-                  <label className="text-xs font-medium text-slate-500">{field.label}</label>
-                  <div className="space-y-1.5 mt-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-slate-500">{field.label}</label>
+                    <button
+                      type="button"
+                      onClick={toggleSelectAll}
+                      className="text-xs font-semibold text-navy-600 hover:text-navy-800 transition-colors"
+                    >
+                      {allSelected ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 mt-1 max-h-56 overflow-y-auto pr-1">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 pb-1.5 border-b border-slate-100 mb-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={el => { if (el) el.indeterminate = someSelected && !allSelected }}
+                        onChange={toggleSelectAll}
+                        className="rounded border-slate-300 text-navy-600 focus:ring-navy-500"
+                      />
+                      Select All ({field.options.length})
+                    </label>
                     {field.options.map(opt => (
-                      <label key={opt} className="flex items-center gap-2 text-sm text-slate-700">
-                        <input type="checkbox" checked={(values[field.key] || []).includes(opt)} onChange={() => toggleCheckbox(field.key, opt)} />
+                      <label key={opt} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer hover:text-slate-900">
+                        <input
+                          type="checkbox"
+                          checked={(values[field.key] || []).includes(opt)}
+                          onChange={() => toggleCheckbox(field.key, opt)}
+                          className="rounded border-slate-300 text-navy-600 focus:ring-navy-500"
+                        />
                         {opt}
                       </label>
                     ))}
