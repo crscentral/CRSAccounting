@@ -1,15 +1,26 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from './supabaseClient'
 
 const AuthContext = createContext(null)
 
+function getCachedCompanies() {
+  try {
+    const raw = localStorage.getItem('crs_cached_companies')
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
-  const [companies, setCompanies] = useState([]) // [{company, role}]
+  const [companies, setCompanies] = useState(() => getCachedCompanies()) // [{company, role}]
   const [activeCompanyId, setActiveCompanyId] = useState(localStorage.getItem('crs_active_company') || null)
   const [activeProduct, setActiveProduct] = useState(localStorage.getItem('crs_active_product') || 'basic')
   const [loading, setLoading] = useState(true)
-  const [loadingCompanies, setLoadingCompanies] = useState(true)
+  const [loadingCompanies, setLoadingCompanies] = useState(() => getCachedCompanies().length === 0)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -18,32 +29,64 @@ export function AuthProvider({ children }) {
     })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess)
+      if (!sess) {
+        setCompanies([])
+        try { localStorage.removeItem('crs_cached_companies') } catch {}
+      }
     })
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  useEffect(() => {
-    if (!session) { setCompanies([]); return }
-    if (companies.length === 0) loadCompanies()
-  }, [session?.user?.id])
-
-  async function loadCompanies() {
-    setLoadingCompanies(true)
-    const { data, error } = await supabase
-      .from('company_members')
-      .select('role, products, company:companies(*, company_products(product))')
-      .eq('user_id', session.user.id)
-    if (error) { console.error(error); setLoadingCompanies(false); return }
-    setCompanies(data || [])
-    setLoadingCompanies(false)
-    if (data && data.length > 0 && !activeCompanyId) {
-      const firstValid = data.find(c => c?.company?.id)?.company
-      if (firstValid) {
-        setActiveCompanyId(firstValid.id)
-        localStorage.setItem('crs_active_company', firstValid.id)
-      }
+  const loadCompanies = useCallback(async () => {
+    if (!session?.user?.id) return
+    // Only show full-screen blocking loader if we have zero cached companies
+    if (companies.length === 0) {
+      setLoadingCompanies(true)
     }
-  }
+    try {
+      const fetchPromise = supabase
+        .from('company_members')
+        .select('role, products, company:companies(*, company_products(product))')
+        .eq('user_id', session.user.id)
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Company load timed out')), 8000)
+      )
+
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise])
+      if (error) throw error
+
+      if (data && data.length > 0) {
+        setCompanies(data)
+        try { localStorage.setItem('crs_cached_companies', JSON.stringify(data)) } catch {}
+        if (!activeCompanyId) {
+          const firstValid = data.find(c => c?.company?.id)?.company
+          if (firstValid) {
+            setActiveCompanyId(firstValid.id)
+            localStorage.setItem('crs_active_company', firstValid.id)
+          }
+        }
+      } else {
+        setCompanies(data || [])
+      }
+    } catch (err) {
+      console.warn('loadCompanies notice:', err.message || err)
+      const cached = getCachedCompanies()
+      if (cached.length > 0) {
+        setCompanies(cached)
+      }
+    } finally {
+      setLoadingCompanies(false)
+    }
+  }, [session?.user?.id, activeCompanyId, companies.length])
+
+  useEffect(() => {
+    if (!session) {
+      if (companies.length > 0) setCompanies([])
+      return
+    }
+    loadCompanies()
+  }, [session?.user?.id])
 
   function switchCompany(id) {
     setActiveCompanyId(id)
@@ -72,6 +115,7 @@ export function AuthProvider({ children }) {
   }, [activeCompany?.id, availableProducts.join(',')])
 
   async function signOut() {
+    try { localStorage.removeItem('crs_cached_companies') } catch {}
     await supabase.auth.signOut()
   }
 

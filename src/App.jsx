@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -81,20 +81,56 @@ function PageLoader() {
   )
 }
 
+function LoadingCompaniesScreen() {
+  const { refreshCompanies } = useAuth()
+  const [slow, setSlow] = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 4000)
+    return () => clearTimeout(t)
+  }, [])
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50">
+      <div className="w-8 h-8 border-2 border-slate-300 border-t-navy-600 rounded-full animate-spin mb-3" />
+      <div className="text-slate-700 font-semibold text-sm">Loading Companies…</div>
+      <div className="text-slate-400 text-xs mt-1">Connecting to your CRS workspace</div>
+      {slow && (
+        <button
+          onClick={() => refreshCompanies()}
+          className="mt-4 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-100 shadow-sm transition-all"
+        >
+          Taking longer than usual? Click to retry
+        </button>
+      )}
+    </div>
+  )
+}
+
 function Gate({ children }) {
   const { session, loading, loadingCompanies, companies, activeCompany } = useAuth()
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Loading CRS Accounting…</div>
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50">
+        <div className="w-8 h-8 border-2 border-slate-300 border-t-navy-600 rounded-full animate-spin mb-3" />
+        <div className="text-slate-700 font-semibold text-sm">Loading CRS Accounting…</div>
+      </div>
+    )
   }
   if (!session) return <Navigate to="/login" replace />
   if (loadingCompanies) {
-    return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Loading Companies…</div>
+    return <LoadingCompaniesScreen />
   }
   if (companies.length === 0) {
     return <CreateFirstCompanyScreen />
   }
   if (!activeCompany) {
-    return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Loading Company Details…</div>
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50">
+        <div className="w-8 h-8 border-2 border-slate-300 border-t-navy-600 rounded-full animate-spin mb-3" />
+        <div className="text-slate-700 font-semibold text-sm">Loading Company Details…</div>
+      </div>
+    )
   }
   if (activeCompany?.approval_status === 'pending' || activeCompany?.approval_status === 'rejected') {
     return <PendingApprovalScreen />
