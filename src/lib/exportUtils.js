@@ -825,22 +825,57 @@ export async function exportMultiSectionPDF(optionsOrCtx, sectionsArg) {
     const heading = section.heading || section.title || ''
     const cols = section.columns || section.headers || null
     const rows = section.rows || null
+    const kvPairs = (section.keyValuePairs && section.keyValuePairs.length > 0)
+      ? normalizeKeyValuePairs(section.keyValuePairs)
+      : null
 
-    if (y > pageHeight - 30) { doc.addPage(); y = 20 }
+    // Determine minimum vertical space needed for this section to prevent orphan headings and detached tables
+    let minNeededHeight = 35
+    const headingHeight = heading ? 12 : 0
+
+    if (cols && rows) {
+      const rowCount = rows.length
+      const rowHeight = cols.length >= 10 ? 5.5 : 7
+      const headerHeight = 9
+      if (rowCount <= 6) {
+        // Compact tables (e.g. Actual vs Budget, Company Overview, KPI totals):
+        // Ensure the ENTIRE table and its heading fit together on the same page
+        minNeededHeight = headingHeight + headerHeight + (rowCount * rowHeight) + 8
+      } else {
+        // Multi-row tables: ensure heading + header + at least 3 body rows fit
+        minNeededHeight = headingHeight + headerHeight + (3 * rowHeight) + 8
+      }
+    } else if (section.chart) {
+      const imgW = pageWidth - 28
+      const imgH = imgW * (400 / 800)
+      minNeededHeight = headingHeight + imgH + 10
+    } else if (kvPairs) {
+      if (kvPairs.length <= 6) {
+        minNeededHeight = headingHeight + (kvPairs.length * 6) + 8
+      } else {
+        minNeededHeight = headingHeight + (3 * 6) + 8
+      }
+    }
+
+    // If remaining space on the current page is insufficient, break to a new page BEFORE writing the heading
+    if (y + minNeededHeight > pageHeight - 15) {
+      doc.addPage()
+      y = 20
+    }
 
     if (heading) {
       doc.setFontSize(12)
       doc.setTextColor(20)
       doc.setFont(undefined, 'bold')
       doc.text(heading, 14, y)
-      y += 3
+      y += 5
       doc.setFont(undefined, 'normal')
     }
 
-    if (section.keyValuePairs && section.keyValuePairs.length > 0) {
-      y += 4
+    if (kvPairs) {
+      y += 2
       doc.setFontSize(9)
-      normalizeKeyValuePairs(section.keyValuePairs).forEach(([label, val]) => {
+      kvPairs.forEach(([label, val]) => {
         if (y > pageHeight - 15) { doc.addPage(); y = 20 }
         doc.setTextColor(90)
         doc.text(String(label), 16, y)
@@ -873,21 +908,22 @@ export async function exportMultiSectionPDF(optionsOrCtx, sectionsArg) {
 
       const tableFontSize = cols.length >= 10 ? 6.5 : (cols.length >= 8 ? 7 : (cols.length >= 6 ? 7.5 : 8))
       autoTable(doc, {
-        startY: y + 3,
+        startY: y + 2,
         head: [safeHead],
         body: safeBody,
         headStyles: { fillColor: section.headColor || [27, 58, 107], fontSize: tableFontSize },
         styles: { fontSize: tableFontSize, cellPadding: cols.length >= 10 ? 1.5 : (cols.length >= 7 ? 2 : 2.5) },
         columnStyles: columnStyles,
         margin: { top: 20, left: 14, right: 14, bottom: 15 },
+        rowPageBreak: 'avoid',
+        pageBreak: rows.length <= 6 ? 'avoid' : 'auto',
       })
       y = doc.lastAutoTable.finalY + 10
     } else if (section.chart) {
       const imgW = pageWidth - 28
       const imgH = imgW * (400 / 800)
-      if (y + imgH > pageHeight - 15) { doc.addPage(); y = 20 }
       const dataUrl = renderGroupedBarChartDataUrl({ ...section.chart, valueFormatter: section.chart.valueFormatter })
-      doc.addImage(dataUrl, 'PNG', 14, y + 3, imgW, imgH)
+      doc.addImage(dataUrl, 'PNG', 14, y + 2, imgW, imgH)
       y += imgH + 12
     }
   })
@@ -1008,7 +1044,8 @@ export function exportMultiSectionWord(optionsOrCtx, sectionsArg) {
       const dataUrl = renderGroupedBarChartDataUrl(section.chart)
       inner = `<img src="${dataUrl}" style="max-width:100%;margin-bottom:12px;" />`
     }
-    return `${heading ? `<h3 style="color:#1B3A6B;margin-top:20px;">${esc(heading)}</h3>` : ''}${inner}`
+    const avoidBreak = (secRows && secRows.length <= 6) || Boolean(section.chart)
+    return `<div style="${avoidBreak ? 'page-break-inside:avoid;' : ''}">${heading ? `<h3 style="color:#1B3A6B;margin-top:20px;page-break-after:avoid;">${esc(heading)}</h3>` : ''}${inner}</div>`
   }).join('')
 
   const html = `
