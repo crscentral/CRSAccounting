@@ -245,212 +245,6 @@ export default function Dashboard() {
     }
   }
 
-  async function generateDashboardReport(selections, format) {
-    const prodFilter = activeProduct === 'hotel' ? ['hotel', 'restaurant'] : [activeProduct]
-    const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
-    const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const conv = (usd) => convertFromUsd(usd, selections.currency, { [selections.currency]: rate })
-    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
-
-        const [{ data: s }, { data: p }, { data: r }, { data: allS }, { data: allP }, { data: accs }, { data: led }, { data: hrs }, { data: hgi }, { data: hee }, { data: hamc }, { data: hre }, { data: rdr }, { data: hPi }] = await Promise.all([
-      supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
-      supabase.from('purchase_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }),
-      supabase.from('payment_receipts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('receipt_date', cp.range.from).lte('receipt_date', cp.range.to),
-      supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter),
-      supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter),
-      supabase.from('payment_receipts').select('amount_usd, receipt_date').eq('company_id', activeCompany.id).in('product', prodFilter),
-      supabase.from('accounts').select('id, type, name').eq('company_id', activeCompany.id).in('product', prodFilter),
-      supabase.from('ledger_entries').select('account_id, debit_usd, credit_usd').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_room_stats').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('stat_date', cp.range.from).lte('stat_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_guest_invoices').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_expense_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('expense_date', cp.range.from).lte('expense_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_amc_contracts').select('*').eq('company_id', activeCompany.id).in('product', prodFilter) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('hotel_revenue_entries').select('*').eq('company_id', activeCompany.id).in('product', prodFilter).gte('entry_date', cp.range.from).lte('entry_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('restaurant_daily_revenue').select('*').eq('company_id', activeCompany.id).gte('revenue_date', cp.range.from).lte('revenue_date', cp.range.to) : Promise.resolve({ data: [] }),
-      ['hotel', 'restaurant'].includes(activeProduct) ? supabase.from('purchase_invoices').select('invoice_date, amount_usd, currency, status, supplier_name_freeform, contact:contacts(name)').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', cp.range.from).lte('invoice_date', cp.range.to).order('invoice_date', { ascending: false }).limit(10) : Promise.resolve({ data: [] })
-    ])
-
-    let allHrs = [], allHgi = [], allHee = [], allHre = [], allRdr = [], allHPi = [];
-    if (['hotel', 'restaurant'].includes(activeProduct)) {
-      const [{ data: aHrs }, { data: aHgi }, { data: aHee }, { data: aHre }, { data: aRdr }, { data: aHotelPi }] = await Promise.all([
-        supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd, manual_room_revenue_collected_usd, invoiced_room_revenue_collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('hotel_guest_invoices').select('invoice_date, invoice_amount_usd, collected_amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('hotel_expense_entries').select('expense_date, amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('hotel_revenue_entries').select('entry_date, amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('restaurant_daily_revenue').select('revenue_date, amount_usd, total_amount_usd, food_amount_usd, beverage_amount_usd, other_amount_usd, collected_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('purchase_invoices').select('invoice_date, amount_usd, status').eq('company_id', activeCompany.id).in('product', prodFilter)
-      ])
-      allHrs = aHrs || []
-      allHgi = aHgi || []
-      allHee = aHee || []
-      allHPi = aHotelPi || []
-      allHre = aHre || []
-      allRdr = aRdr || []
-    }
-    setAllHotelRoomStats(allHrs)
-    setAllHotelGuestInvoices(allHgi)
-    setAllHotelExpenseEntries(allHee)
-    setAllHotelPurchaseInvoices(allHPi)
-    setAllHotelRevenueEntries(allHre)
-    setAllRestaurantRevenue(allRdr)
-    const sSel = s || [], pSel = p || [], rSel = r || []
-    const sections = []
-
-    if (selections.sections.includes('Revenue, Expenses & Profit/Loss (Chart)')) {
-      const monthlyMap = {}
-      sSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0 }; monthlyMap[k].rev += Number(i.amount_usd) })
-      pSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0 }; monthlyMap[k].exp += Number(i.amount_usd) })
-      const monthly = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
-      sections.push({
-        heading: 'Revenue, Expenses & Profit/Loss',
-        chart: {
-          categories: monthly.map(m => m.month),
-          valueFormatter: v => formatMoney(v, selections.currency),
-          series: [
-            { name: 'Revenue', color: '#10b981', values: monthly.map(m => conv(m.rev)) },
-            { name: 'Expenses', color: '#f97316', values: monthly.map(m => conv(m.exp)) },
-            { name: 'Profit/Loss', color: '#3b82f6', values: monthly.map(m => conv(m.rev - m.exp)) },
-          ],
-        },
-      })
-    }
-
-    if (selections.sections.includes('Billing & Outstanding Overview (Chart)')) {
-      const monthlyMap = {}
-      sSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, out: 0 }; monthlyMap[k].rev += Number(i.amount_usd); monthlyMap[k].out += (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)) })
-      pSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, rev: 0, exp: 0, out: 0 }; monthlyMap[k].exp += Number(i.amount_usd) })
-      const monthly = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
-      sections.push({
-        heading: 'Billing & Outstanding Overview',
-        chart: {
-          categories: monthly.map(m => m.month),
-          valueFormatter: v => formatMoney(v, selections.currency),
-          series: [
-            { name: 'Revenue Billed', color: '#10b981', values: monthly.map(m => conv(m.rev)) },
-            { name: 'Outstanding Payment', color: '#f59e0b', values: monthly.map(m => conv(m.out)) },
-            { name: 'Expenses Billed', color: '#f97316', values: monthly.map(m => conv(m.exp)) },
-            { name: 'Profit Expected', color: '#3b82f6', values: monthly.map(m => conv(m.rev - m.exp)) },
-          ],
-        },
-      })
-    }
-
-    if (selections.sections.includes('Company Overview - YTD')) {
-      const ytd = getYTDRange(activeCompany.fiscal_year_start_month || 1)
-      const [{ data: allS }, { data: allP }] = await Promise.all([
-        supabase.from('sales_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', ytd.from).lte('invoice_date', ytd.to),
-        supabase.from('purchase_invoices').select('amount_usd, invoice_date').eq('company_id', activeCompany.id).in('product', prodFilter).gte('invoice_date', ytd.from).lte('invoice_date', ytd.to),
-      ])
-      const rev = (allS || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
-      const exp = (allP || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
-      sections.push({ heading: 'Company Overview - YTD', keyValuePairs: [['YTD Revenue', fmt(rev)], ['YTD Expenses', fmt(exp)], ['YTD Net Profit', fmt(rev - exp)]] })
-    }
-
-    if (selections.sections.includes('Company Overview - All Time')) {
-      const [{ data: allS }, { data: allP }] = await Promise.all([
-        supabase.from('sales_invoices').select('amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
-        supabase.from('purchase_invoices').select('amount_usd').eq('company_id', activeCompany.id).in('product', prodFilter),
-      ])
-      const rev = (allS || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
-      const exp = (allP || []).reduce((s2, i) => s2 + Number(i.amount_usd), 0)
-      sections.push({ heading: 'Company Overview - All Time', keyValuePairs: [['All Time Revenue', fmt(rev)], ['All Time Expenses', fmt(exp)], ['All Time Net Profit', fmt(rev - exp)]] })
-    }
-
-    if (selections.sections.includes('Recent Transactions')) {
-      const combined = [
-        ...sSel.map(i => ({ date: i.invoice_date, label: i.contact?.name || i.invoice_number, amount: fmt(i.amount_usd) })),
-        ...pSel.map(i => ({ date: i.invoice_date, label: i.invoice_number, amount: fmt(i.amount_usd) })),
-        ...rSel.map(i => ({ date: i.receipt_date, label: 'Payment Received', amount: fmt(i.amount_usd) })),
-      ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 3)
-      sections.push({ heading: 'Recent Transactions', columns: ['Date', 'Description', selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency} & USD)`], rows: combined.map(t => [t.date, t.label, t.amount]) })
-    }
-
-    if (selections.sections.includes('Outstanding Invoices')) {
-      let rptDraftInvoices = []
-      if (['hotel', 'restaurant'].includes(activeProduct)) {
-        const guestInvoices = (hgi || []).filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)).map(i => ({
-          invoice_number: i.invoice_number ? String(i.invoice_number) : (i.id ? i.id.slice(0, 8).toUpperCase() : '—'),
-          contact: { name: i.guest_name || 'Guest' },
-          due_date: i.invoice_date,
-          balance_due: Number(i.invoice_amount_usd) - Number(i.collected_amount_usd),
-          amount: Number(i.invoice_amount_usd),
-          amount_usd: Number(i.invoice_amount_usd),
-          status: Number(i.collected_amount_usd || 0) > 0 ? 'Partially Paid' : 'Pending'
-        }))
-        const unpaidSales = (s || []).filter(i => i.status !== 'Paid' && (Number(i.balance_due) > 0 || Number(i.amount_usd) > 0)).map(i => ({
-          invoice_number: i.invoice_number || '—',
-          contact: { name: i.contact?.name || 'Customer' },
-          due_date: i.due_date || i.invoice_date,
-          balance_due: Number(i.balance_due ?? i.amount),
-          amount: Number(i.amount),
-          amount_usd: Number(i.amount_usd),
-          status: i.status || 'Pending'
-        }))
-        const uncollectedRooms = (hrs || []).filter(r => Number(r.room_revenue_usd || 0) > (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0))).map(r => {
-          const bal = Number(r.room_revenue_usd || 0) - (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0))
-          return {
-            invoice_number: 'ROOM REV',
-            contact: { name: 'Daily Room Revenue' },
-            due_date: r.stat_date,
-            balance_due: bal,
-            amount: bal,
-            amount_usd: bal,
-            status: 'Uncollected'
-          }
-        })
-        const uncollectedAncillary = (hre || []).filter(r => Number(r.amount_usd || 0) > Number(r.collected_usd || 0)).map(r => {
-          const bal = Number(r.amount_usd || 0) - Number(r.collected_usd || 0)
-          return {
-            invoice_number: 'ANC REV',
-            contact: { name: r.account?.name || 'Ancillary Revenue' },
-            due_date: r.entry_date,
-            balance_due: bal,
-            amount: bal,
-            amount_usd: bal,
-            status: 'Uncollected'
-          }
-        })
-        const uncollectedRestaurant = (rdr || []).filter(r => {
-          const tot = Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0))
-          return tot > Number(r.collected_usd || 0)
-        }).map(r => {
-          const tot = Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0))
-          const bal = tot - Number(r.collected_usd || 0)
-          return {
-            invoice_number: 'F&B REV',
-            contact: { name: r.meal_period ? `${r.meal_period} F&B Revenue` : 'Restaurant Revenue' },
-            due_date: r.revenue_date,
-            balance_due: bal,
-            amount: bal,
-            amount_usd: bal,
-            status: 'Uncollected'
-          }
-        })
-        rptDraftInvoices = [...guestInvoices, ...unpaidSales, ...uncollectedRooms, ...uncollectedAncillary, ...uncollectedRestaurant]
-      } else {
-        rptDraftInvoices = (s || []).filter(i => i.status !== 'Paid')
-      }
-
-      sections.push({
-        heading: 'Outstanding Invoices',
-        columns: ['Invoice #', 'Customer', 'Due Date', selections.currency === 'USD' ? 'Balance Due (USD)' : `Balance Due (${selections.currency} & USD)`, 'Status'],
-        rows: rptDraftInvoices.map(i => [
-          i.invoice_number,
-          i.contact?.name || '—',
-          i.due_date || '—',
-          fmt((Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)),
-          i.status
-        ])
-      })
-    }
-
-    const title = 'Financial Dashboard'
-    const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
-    if (format === 'pdf' || format === 'preview') await exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'dashboard_report' , logoUrl: activeCompany?.logo_url})
-    if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'dashboard_report' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'dashboard_report' , logoUrl: activeCompany?.logo_url})
-  }
-
   if (!activeCompany) return null
 
   // Compute ledger-based revenue and expenses (Universal)
@@ -823,6 +617,447 @@ export default function Dashboard() {
     };
   }
 
+  async function generateDashboardReport(selections, format) {
+    const isHotel = ['hotel', 'restaurant'].includes(activeProduct)
+    const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
+    const rate = selections.currency === 'USD' ? 1 : ((await getLatestRate(selections.currency)) || 1)
+    const conv = (usd) => convertFromUsd(usd, selections.currency, { [selections.currency]: rate })
+    const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
+
+    const isSameRange = (range.from === cp.range.from && range.to === cp.range.to)
+
+    let repTotalBilled = 0
+    let repTotalExpenses = 0
+    let repCollected = 0
+    let repExpensesMade = 0
+    let repTotalRoomRevenue = 0
+    let repTotalFbRevenue = 0
+    let repTotalOtherRevenue = 0
+    let repOutstanding = 0
+    let repDraftInvoices = []
+    let repHotelStats = hotelStats
+    let repActualVsBudgetBase = actualVsBudgetBase
+    let repActualVsBudgetUsd = actualVsBudgetUsd
+    let repChartData = chartData
+    let repBillingChartData = billingChartData
+    let repRecentTx = recentTx
+
+    if (isSameRange) {
+      repTotalBilled = totalBilled
+      repTotalExpenses = totalExpenses
+      repCollected = collected
+      repExpensesMade = expensesMade
+      repTotalRoomRevenue = totalRoomRevenue
+      repTotalFbRevenue = totalFbRevenue
+      repTotalOtherRevenue = totalOtherRevenue
+      repOutstanding = outstanding
+      repDraftInvoices = draftInvoices
+      repHotelStats = hotelStats
+      repActualVsBudgetBase = actualVsBudgetBase
+      repActualVsBudgetUsd = actualVsBudgetUsd
+      repChartData = chartData
+      repBillingChartData = billingChartData
+      repRecentTx = recentTx
+    } else {
+      const hrs = allHotelRoomStats.filter(r => r.stat_date >= range.from && r.stat_date <= range.to)
+      const hre = allHotelRevenueEntries.filter(r => r.entry_date >= range.from && r.entry_date <= range.to)
+      const rdr = allRestaurantRevenue.filter(r => r.revenue_date >= range.from && r.revenue_date <= range.to)
+      const s = allSales.filter(i => i.invoice_date >= range.from && i.invoice_date <= range.to)
+      const hee = allHotelExpenseEntries.filter(e => e.expense_date >= range.from && e.expense_date <= range.to)
+      const p = allPurchases.filter(i => i.invoice_date >= range.from && i.invoice_date <= range.to)
+      const hpi = allHotelPurchaseInvoices.filter(i => i.invoice_date >= range.from && i.invoice_date <= range.to)
+      const hgi = allHotelGuestInvoices.filter(i => i.invoice_date >= range.from && i.invoice_date <= range.to)
+
+      if (isHotel) {
+        const statsRoomRev = hrs.reduce((sum, r) => sum + Number(r.room_revenue_usd || 0), 0)
+        const statsRestRev = rdr.reduce((sum, r) => sum + (Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0))), 0)
+
+        let ancRoomRev = 0, ancFbRev = 0, ancOtherRev = 0
+        hre.forEach(r => {
+          const acc = r.account || accounts.find(a => a.id === r.account_id)
+          const cat = categorizeRevenueAccount(acc)
+          const amt = Number(r.amount_usd || 0)
+          if (cat === 'room') ancRoomRev += amt
+          else if (cat === 'fb') ancFbRev += amt
+          else ancOtherRev += amt
+        })
+
+        let salesRoomRev = 0, salesFbRev = 0, salesOtherRev = 0
+        s.forEach(i => {
+          const acc = accounts.find(a => a.id === i.account_id)
+          const cat = categorizeRevenueAccount(acc)
+          const amt = Number(i.amount_usd || 0)
+          if (cat === 'room') salesRoomRev += amt
+          else if (cat === 'fb') salesFbRev += amt
+          else salesOtherRev += amt
+        })
+
+        repTotalRoomRevenue = statsRoomRev + ancRoomRev + salesRoomRev
+        repTotalFbRevenue = statsRestRev + ancFbRev + salesFbRev
+        repTotalOtherRevenue = ancOtherRev + salesOtherRev
+        repTotalBilled = repTotalRoomRevenue + repTotalFbRevenue + repTotalOtherRevenue
+
+        const fyStart = activeCompany.fiscal_year_start_month || 1
+        const amcTotal = hotelAmc.reduce((sum, r) => sum + getAmcOverlapUsd(r, fyStart, range.from, range.to), 0)
+        const directExpenses = hee.reduce((sum, e) => sum + Number(e.amount_usd || 0), 0)
+        const piExpenses = hpi.reduce((sum, e) => sum + Number(e.amount_usd || 0), 0)
+        repTotalExpenses = directExpenses + amcTotal + piExpenses
+
+        const roomCollected = hrs.reduce((sum, r) => sum + Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0), 0)
+        const ancillaryCollected = hre.reduce((sum, r) => sum + Number(r.collected_usd || 0), 0)
+        const restRevCollected = rdr.reduce((sum, r) => sum + Number(r.collected_usd || 0), 0)
+        repCollected = roomCollected + ancillaryCollected + restRevCollected
+
+        const piExpensesPaid = hpi.reduce((sum, e) => sum + (e.status === 'Paid' ? Number(e.amount_usd || 0) : 0), 0)
+        repExpensesMade = directExpenses + amcTotal + piExpensesPaid
+
+        const guestInvoices = hgi.filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)).map(i => {
+          const bal = Number(i.invoice_amount_usd) - Number(i.collected_amount_usd)
+          return {
+            ...i,
+            contact: { name: i.guest_name || 'Guest' },
+            due_date: i.invoice_date,
+            balance_due: bal,
+            amount: Number(i.invoice_amount_usd),
+            amount_usd: Number(i.invoice_amount_usd),
+            currency: i.currency || 'USD',
+            status: Number(i.collected_amount_usd || 0) > 0 ? 'Partially Paid' : 'Pending',
+            invoice_number: i.invoice_number ? String(i.invoice_number) : (i.id ? i.id.slice(0, 8).toUpperCase() : '—')
+          }
+        })
+
+        const unpaidSales = s.filter(i => i.status !== 'Paid' && (Number(i.balance_due) > 0 || Number(i.amount_usd) > 0)).map(i => ({
+          ...i,
+          contact: { name: i.contact?.name || 'Customer' },
+          due_date: i.due_date || i.invoice_date,
+          balance_due: Number(i.balance_due ?? i.amount),
+          amount: Number(i.amount),
+          amount_usd: Number(i.amount_usd),
+          currency: i.currency || 'USD',
+          status: i.status || 'Pending',
+          invoice_number: i.invoice_number || '—'
+        }))
+
+        const uncollectedRooms = hrs.filter(r => Number(r.room_revenue_usd || 0) > (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0))).map(r => {
+          const bal = Number(r.room_revenue_usd || 0) - (Number(r.manual_room_revenue_collected_usd || 0) + Number(r.invoiced_room_revenue_collected_usd || 0))
+          return {
+            invoice_number: 'ROOM REV',
+            contact: { name: 'Daily Room Revenue' },
+            due_date: r.stat_date,
+            balance_due: bal,
+            amount: bal,
+            amount_usd: bal,
+            currency: selections.currency,
+            status: 'Uncollected'
+          }
+        })
+
+        const uncollectedAncillary = hre.filter(r => Number(r.amount_usd || 0) > Number(r.collected_usd || 0)).map(r => {
+          const bal = Number(r.amount_usd || 0) - Number(r.collected_usd || 0)
+          return {
+            invoice_number: 'ANC REV',
+            contact: { name: r.account?.name || 'Ancillary Revenue' },
+            due_date: r.entry_date,
+            balance_due: bal,
+            amount: bal,
+            amount_usd: bal,
+            currency: selections.currency,
+            status: 'Uncollected'
+          }
+        })
+
+        const uncollectedRestaurant = rdr.filter(r => {
+          const tot = Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0))
+          return tot > Number(r.collected_usd || 0)
+        }).map(r => {
+          const tot = Number(r.amount_usd) || Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0))
+          const bal = tot - Number(r.collected_usd || 0)
+          return {
+            invoice_number: 'F&B REV',
+            contact: { name: r.meal_period ? `${r.meal_period} F&B Revenue` : 'Restaurant Revenue' },
+            due_date: r.revenue_date,
+            balance_due: bal,
+            amount: bal,
+            amount_usd: bal,
+            currency: selections.currency,
+            status: 'Uncollected'
+          }
+        })
+
+        repDraftInvoices = [...guestInvoices, ...unpaidSales, ...uncollectedRooms, ...uncollectedAncillary, ...uncollectedRestaurant]
+
+        const customMonthlyMap = {}
+        hrs.forEach(r => {
+          const key = (r.stat_date || '').slice(0, 7)
+          if (!key) return
+          customMonthlyMap[key] = customMonthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+          customMonthlyMap[key].Revenue += Number(r.room_revenue_usd || 0)
+        })
+        hre.forEach(r => {
+          const key = (r.entry_date || '').slice(0, 7)
+          if (!key) return
+          customMonthlyMap[key] = customMonthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+          customMonthlyMap[key].Revenue += Number(r.amount_usd || 0)
+        })
+        rdr.forEach(r => {
+          const key = (r.revenue_date || '').slice(0, 7)
+          if (!key) return
+          customMonthlyMap[key] = customMonthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+          const tot = Number(r.total_amount_usd) || (Number(r.food_amount_usd || 0) + Number(r.beverage_amount_usd || 0) + Number(r.other_amount_usd || 0))
+          customMonthlyMap[key].Revenue += tot
+        })
+        hee.forEach(r => {
+          const key = (r.expense_date || '').slice(0, 7)
+          if (!key) return
+          customMonthlyMap[key] = customMonthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+          customMonthlyMap[key].Expenses += Number(r.amount_usd || 0)
+        })
+        hpi.forEach(r => {
+          const key = (r.invoice_date || '').slice(0, 7)
+          if (!key) return
+          customMonthlyMap[key] = customMonthlyMap[key] || { month: key, Revenue: 0, Expenses: 0, Collected: 0, Outstanding: 0 }
+          customMonthlyMap[key].Expenses += Number(r.amount_usd || 0)
+        })
+        hotelAmc.forEach(r => {
+          Object.keys(customMonthlyMap).forEach(k => {
+            const monthStart = `${k}-01`
+            const [y, m] = k.split('-')
+            const lastDay = new Date(Number(y), Number(m), 0).getDate()
+            const monthEnd = `${k}-${lastDay}`
+            const overlap = getAmcOverlapUsd(r, fyStart, monthStart, monthEnd)
+            customMonthlyMap[k].Expenses += overlap
+          })
+        })
+        repDraftInvoices.forEach(i => {
+          const key = (i.due_date || i.invoice_date || '').slice(0, 7)
+          if (key && customMonthlyMap[key]) {
+            const balUsd = (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd || 0)
+            customMonthlyMap[key].Outstanding += (isNaN(balUsd) ? 0 : balUsd)
+          }
+        })
+        repChartData = Object.values(customMonthlyMap).sort((a, b) => a.month.localeCompare(b.month)).map(m => ({ ...m, Profit: m.Revenue - m.Expenses }))
+        repBillingChartData = repChartData.map(m => ({
+          month: m.month,
+          'Revenue Billed': m.Revenue,
+          'Outstanding Payment': m.Outstanding,
+          'Expenses Billed': m.Expenses,
+          'Profit Expected': m.Revenue - m.Expenses
+        }))
+      } else {
+        repTotalBilled = s.reduce((sum, i) => sum + Number(i.amount_usd || 0), 0)
+        repTotalExpenses = p.reduce((sum, i) => sum + Number(i.amount_usd || 0), 0)
+        repDraftInvoices = s.filter(i => i.status !== 'Paid')
+        repCollected = repTotalBilled - repDraftInvoices.reduce((sum, i) => sum + (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd || 0), 0)
+        repExpensesMade = p.reduce((sum, i) => sum + (i.status === 'Paid' ? Number(i.amount_usd || 0) : 0), 0)
+      }
+
+      repOutstanding = repDraftInvoices.reduce((sum, i) => {
+        const balUsd = (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd || 0)
+        return sum + (isNaN(balUsd) ? 0 : balUsd)
+      }, 0)
+    }
+
+    const repNetProfit = repTotalBilled - repTotalExpenses
+    const repActualProfit = repCollected - repExpensesMade
+    const repYtdRevenue = ytdRevenue
+    const repYtdExpenses = ytdExpenses
+    const repAllTimeRevenue = allTimeRevenue
+    const repAllTimeExpenses = allTimeExpenses
+
+    const sections = []
+
+    // 1. Financial Summary (KPIs)
+    if (selections.sections.includes('Financial Summary (KPIs)') || selections.sections.includes('Financial Summary')) {
+      sections.push({
+        heading: 'Financial Summary (Top KPIs)',
+        columns: ['Metric', `Amount (${selections.currency})`, 'Description'],
+        columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: 45, halign: 'right' }, 2: { cellWidth: 82 } },
+        rows: [
+          ['Total Revenue', fmt(repTotalBilled), isHotel ? 'Total accrued revenue' : 'Sales invoices'],
+          ['Total Expenses', fmt(repTotalExpenses), isHotel ? 'Total accrued expenses (Direct + AMC + Bills)' : 'Purchase invoices'],
+          [isHotel ? 'Accrued Net Profit' : 'Expected Net Profit', fmt(repNetProfit), 'Revenue minus expenses'],
+          ['Outstanding Receivables', fmt(repOutstanding), isHotel ? 'Pending guest invoices + uncollected revenue' : 'Pending + overdue invoices'],
+        ]
+      })
+    }
+
+    // 2. Revenue Breakdown (Subtypes)
+    if (selections.sections.includes('Revenue Breakdown (Subtypes)') || selections.sections.includes('Revenue Breakdown')) {
+      const pct = (val) => repTotalBilled > 0 ? `${((val / repTotalBilled) * 100).toFixed(1)}%` : '0.0%'
+      sections.push({
+        heading: 'Revenue Breakdown by Head',
+        columns: ['Revenue Head / Subtype', `Amount (${selections.currency})`, '% of Total', 'Description'],
+        columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: 42, halign: 'right' }, 2: { cellWidth: 26, halign: 'right' }, 3: { cellWidth: 59 } },
+        rows: [
+          ['Total Room Revenue', fmt(repTotalRoomRevenue), pct(repTotalRoomRevenue), 'Subtype: Room Revenue (stats + ancillary)'],
+          ['Total F&B Revenue (F&B Service)', fmt(repTotalFbRevenue), pct(repTotalFbRevenue), 'Subtype: F&B Service (restaurant + services)'],
+          ['Total Other Revenue', fmt(repTotalOtherRevenue), pct(repTotalOtherRevenue), 'Subtype: Other Revenue (ancillary + others)'],
+          ['Total Accrued Revenue', fmt(repTotalBilled), '100.0%', 'Sum of all revenue heads'],
+        ]
+      })
+    }
+
+    // 3. Cash Flow (Collections & Payments)
+    if (selections.sections.includes('Cash Flow (Collections & Payments)') || selections.sections.includes('Cash Flow')) {
+      sections.push({
+        heading: 'Cash Flow (Collections & Payments)',
+        columns: ['Cash Flow Head', `Amount (${selections.currency})`, 'Description'],
+        columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: 45, halign: 'right' }, 2: { cellWidth: 82 } },
+        rows: [
+          ['Total Revenue Collected', fmt(repCollected), 'Actual paid revenue received'],
+          ['Total Expenses Paid', fmt(repExpensesMade), 'Actual paid expenses disbursed'],
+          [isHotel ? 'Cash Net Profit' : 'Actual Profit', fmt(repActualProfit), 'Collected minus paid (Net cash flow)'],
+        ]
+      })
+    }
+
+    // 4. Hotel Performance
+    if (isHotel && selections.sections.includes('Hotel Performance') && repHotelStats) {
+      sections.push({
+        heading: 'Hotel Performance Metrics',
+        columns: ['Performance Metric', 'Value', 'Calculation / Basis'],
+        columnStyles: { 0: { cellWidth: 58 }, 1: { cellWidth: 42, halign: 'right' }, 2: { cellWidth: 82 } },
+        rows: [
+          ['Occupancy %', `${repHotelStats.occupancyPct != null ? repHotelStats.occupancyPct.toFixed(1) : '0.0'}%`, 'Occupied rooms ÷ total available room nights'],
+          ['ADR (Average Daily Rate)', fmt(repHotelStats.adr || 0), 'Room revenue ÷ occupied rooms'],
+          ['RevPAR (Revenue Per Available Room)', fmt(repHotelStats.revpar || 0), 'Room revenue ÷ total available room nights'],
+          ['Guest Invoices Pending', fmt(repHotelStats.invoicesPending || 0), 'Total pending guest invoice balance'],
+        ]
+      })
+    }
+
+    // 5. Actual vs Budget
+    if (isHotel && selections.sections.includes('Actual vs Budget') && repActualVsBudgetBase && repActualVsBudgetUsd) {
+      const baseCur = repHotelStats?.budgetCurrency || activeCompany.base_currency || 'THB'
+      const baseFormatter = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: baseCur }).format(v)
+      sections.push({
+        heading: 'Actual vs Budget Analysis',
+        columns: ['Currency / Denomination', 'Actual Revenue', 'Budgeted Revenue', 'Variance', 'Status'],
+        columnStyles: { 0: { cellWidth: 46 }, 1: { cellWidth: 34, halign: 'right' }, 2: { cellWidth: 34, halign: 'right' }, 3: { cellWidth: 34, halign: 'right' }, 4: { cellWidth: 34 } },
+        rows: [
+          [
+            `Base Currency (${baseCur})`,
+            baseFormatter(repActualVsBudgetBase.actual),
+            baseFormatter(repActualVsBudgetBase.budget),
+            baseFormatter(repActualVsBudgetBase.variance),
+            repActualVsBudgetBase.variance >= 0 ? 'Surplus (+)' : 'Deficit (-)'
+          ],
+          [
+            'USD ($)',
+            new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(repActualVsBudgetUsd.actual),
+            new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(repActualVsBudgetUsd.budget),
+            new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(repActualVsBudgetUsd.variance),
+            repActualVsBudgetUsd.variance >= 0 ? 'Surplus (+)' : 'Deficit (-)'
+          ],
+          ...(selections.currency !== 'USD' && selections.currency !== baseCur ? [
+            [
+              `Reporting (${selections.currency})`,
+              fmt(repActualVsBudgetUsd.actual),
+              fmt(repActualVsBudgetUsd.budget),
+              fmt(repActualVsBudgetUsd.variance),
+              repActualVsBudgetUsd.variance >= 0 ? 'Surplus (+)' : 'Deficit (-)'
+            ]
+          ] : [])
+        ]
+      })
+    }
+
+    // 6. Revenue, Expenses & Profit/Loss (Chart)
+    if (selections.sections.includes('Revenue, Expenses & Profit/Loss (Chart)') && repChartData.length > 0) {
+      sections.push({
+        heading: 'Revenue, Expenses & Profit/Loss Trend',
+        chart: {
+          categories: repChartData.map(m => m.month),
+          valueFormatter: v => formatReportMoney(v, selections.currency, rate),
+          series: [
+            { name: 'Revenue', color: '#10b981', values: repChartData.map(m => conv(m.Revenue)) },
+            { name: 'Expenses', color: '#f97316', values: repChartData.map(m => conv(m.Expenses)) },
+            { name: 'Profit/Loss', color: '#3b82f6', values: repChartData.map(m => conv(m.Profit)) },
+          ],
+        },
+      })
+    }
+
+    // 7. Billing & Outstanding Overview (Chart)
+    if (selections.sections.includes('Billing & Outstanding Overview (Chart)') && repBillingChartData.length > 0) {
+      sections.push({
+        heading: 'Billing & Outstanding Overview',
+        chart: {
+          categories: repBillingChartData.map(m => m.month),
+          valueFormatter: v => formatReportMoney(v, selections.currency, rate),
+          series: [
+            { name: 'Revenue Billed', color: '#10b981', values: repBillingChartData.map(m => conv(m['Revenue Billed'])) },
+            { name: 'Outstanding Payment', color: '#f59e0b', values: repBillingChartData.map(m => conv(m['Outstanding Payment'])) },
+            { name: 'Expenses Billed', color: '#f97316', values: repBillingChartData.map(m => conv(m['Expenses Billed'])) },
+            { name: 'Profit Expected', color: '#3b82f6', values: repBillingChartData.map(m => conv(m['Profit Expected'])) },
+          ],
+        },
+      })
+    }
+
+    // 8. Company Overview - YTD & All Time
+    if (selections.sections.includes('Company Overview - YTD & All Time') || selections.sections.includes('Company Overview - YTD') || selections.sections.includes('Company Overview - All Time')) {
+      const ytdProf = repYtdRevenue - repYtdExpenses
+      const allProf = repAllTimeRevenue - repAllTimeExpenses
+      sections.push({
+        heading: 'Company Overview (YTD & All Time)',
+        columns: ['Period', `Revenue (${selections.currency})`, `Expenses (${selections.currency})`, `Net Profit (${selections.currency})`, 'Status'],
+        columnStyles: { 0: { cellWidth: 46 }, 1: { cellWidth: 36, halign: 'right' }, 2: { cellWidth: 36, halign: 'right' }, 3: { cellWidth: 36, halign: 'right' }, 4: { cellWidth: 28 } },
+        rows: [
+          ['Year to Date (YTD)', fmt(repYtdRevenue), fmt(repYtdExpenses), fmt(ytdProf), ytdProf >= 0 ? 'Surplus' : 'Deficit'],
+          ['All Time', fmt(repAllTimeRevenue), fmt(repAllTimeExpenses), fmt(allProf), allProf >= 0 ? 'Surplus' : 'Deficit'],
+        ]
+      })
+    }
+
+    // 9. Recent Transactions
+    if (selections.sections.includes('Recent Transactions') && repRecentTx.length > 0) {
+      sections.push({
+        heading: 'Recent Transactions',
+        columns: ['Date', 'Description / Source', selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency})`],
+        columnStyles: { 0: { cellWidth: 32 }, 1: { cellWidth: 95 }, 2: { cellWidth: 55, halign: 'right' } },
+        rows: repRecentTx.map(t => [t.date || '—', t.label || '—', fmt(t.amount_usd || t.amount || 0)])
+      })
+    }
+
+    // 10. Outstanding Invoices
+    if (selections.sections.includes('Outstanding Invoices')) {
+      sections.push({
+        heading: `Outstanding Invoices & Receivables (${repDraftInvoices.length})`,
+        columns: ['Invoice #', 'Customer / Guest', 'Due Date', selections.currency === 'USD' ? 'Balance Due (USD)' : `Balance Due (${selections.currency})`, 'Status'],
+        columnStyles: { 0: { cellWidth: 32 }, 1: { cellWidth: 56 }, 2: { cellWidth: 28 }, 3: { cellWidth: 38, halign: 'right' }, 4: { cellWidth: 28 } },
+        rows: repDraftInvoices.map(i => [
+          i.invoice_number || '—',
+          i.contact?.name || '—',
+          i.due_date || '—',
+          fmt((Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd || i.amount || 0)),
+          i.status || 'Pending'
+        ])
+      })
+    }
+
+    // 11. Draft Expenses (non-hotel)
+    if (!isHotel && selections.sections.includes('Draft Expenses')) {
+      sections.push({
+        heading: `Draft Expenses (${draftExpenses.length})`,
+        columns: ['Invoice #', 'Supplier', 'Date', selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency})`],
+        columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 70 }, 2: { cellWidth: 35 }, 3: { cellWidth: 42, halign: 'right' } },
+        rows: draftExpenses.map(i => [
+          i.invoice_number || '—',
+          i.contact?.name || i.supplier_name_freeform || '—',
+          i.invoice_date || '—',
+          fmt(i.amount_usd || i.amount || 0)
+        ])
+      })
+    }
+
+    const title = 'Financial Dashboard'
+    const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
+    if (format === 'pdf' || format === 'preview') await exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'dashboard_report', logoUrl: activeCompany?.logo_url })
+    if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'dashboard_report' })
+    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'dashboard_report', logoUrl: activeCompany?.logo_url })
+  }
+
   const reportColumns = [
     { label: 'Invoice #', key: 'invoice_number' }, { label: 'Customer', key: 'customerName' },
     { label: 'Due Date', key: 'due_date' }, { label: 'Balance Due (USD)', key: 'balanceLabel' }, { label: 'Status', key: 'status' },
@@ -1165,8 +1400,42 @@ export default function Dashboard() {
           title="Dashboard"
           fields={[
             { type: 'currency', key: 'currency', default: cp.displayCurrency },
-            { type: 'period', key: 'period', default: 'MTD' },
-            { type: 'checkboxGroup', key: 'sections', label: 'Include Sections', options: ['Revenue, Expenses & Profit/Loss (Chart)', 'Billing & Outstanding Overview (Chart)', 'Company Overview - YTD', 'Company Overview - All Time', 'Recent Transactions', 'Outstanding Invoices'], default: ['Revenue, Expenses & Profit/Loss (Chart)', 'Billing & Outstanding Overview (Chart)', 'Company Overview - YTD', 'Company Overview - All Time', 'Recent Transactions', 'Outstanding Invoices'] },
+            { 
+              type: 'period', 
+              key: 'period', 
+              default: 'CURRENT',
+              defaultFrom: cp.range.from,
+              defaultTo: cp.range.to
+            },
+            { 
+              type: 'checkboxGroup', 
+              key: 'sections', 
+              label: 'Include Sections', 
+              options: [
+                'Financial Summary (KPIs)',
+                ...(activeProduct === 'hotel' ? ['Revenue Breakdown (Subtypes)'] : []),
+                'Cash Flow (Collections & Payments)',
+                ...(activeProduct === 'hotel' ? ['Hotel Performance', 'Actual vs Budget'] : []),
+                'Revenue, Expenses & Profit/Loss (Chart)',
+                'Billing & Outstanding Overview (Chart)',
+                'Company Overview - YTD & All Time',
+                'Recent Transactions',
+                'Outstanding Invoices',
+                ...(activeProduct !== 'hotel' ? ['Draft Expenses'] : [])
+              ], 
+              default: [
+                'Financial Summary (KPIs)',
+                ...(activeProduct === 'hotel' ? ['Revenue Breakdown (Subtypes)'] : []),
+                'Cash Flow (Collections & Payments)',
+                ...(activeProduct === 'hotel' ? ['Hotel Performance', 'Actual vs Budget'] : []),
+                'Revenue, Expenses & Profit/Loss (Chart)',
+                'Billing & Outstanding Overview (Chart)',
+                'Company Overview - YTD & All Time',
+                'Recent Transactions',
+                'Outstanding Invoices',
+                ...(activeProduct !== 'hotel' ? ['Draft Expenses'] : [])
+              ] 
+            },
           ]}
           onGenerate={generateDashboardReport}
           onClose={() => setReportModalOpen(false)}

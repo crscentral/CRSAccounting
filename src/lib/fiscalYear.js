@@ -121,6 +121,9 @@ export function resolvePeriodRange(periodType, opts = {}) {
  */
 export function resolveReportPeriod(periodValue, fiscalYearStartMonth = 1, customFrom, customTo) {
   switch (periodValue) {
+    case 'CURRENT':
+      if (customFrom && customTo) return { from: customFrom, to: customTo }
+      return resolvePeriodRange('MTD')
     case 'MTD': return resolvePeriodRange('MTD')
     case 'YTD': return resolvePeriodRange('YTD', { fiscalYearStartMonth })
     case 'LAST_1_YEAR': return resolvePeriodRange('LAST_N_YEARS', { n: 1, fiscalYearStartMonth })

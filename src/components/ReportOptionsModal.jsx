@@ -34,6 +34,9 @@ export default function ReportOptionsModal({ title, fields, onGenerate, onClose 
     if (f.type === 'period') {
       defFrom = f.defaultFrom || ''
       defTo = f.defaultTo || ''
+      if (!initial[f.key]) {
+        initial[f.key] = (defFrom && defTo) ? 'CURRENT' : 'MTD'
+      }
     }
   })
   const [values, setValues] = useState(initial)
@@ -55,9 +58,9 @@ export default function ReportOptionsModal({ title, fields, onGenerate, onClose 
     setGenerating(true)
     try {
       const resolved = { ...values }
-      if (resolved.period === 'CUSTOM') {
-        resolved.customFrom = customFrom
-        resolved.customTo = customTo
+      if (resolved.period === 'CUSTOM' || resolved.period === 'CURRENT') {
+        resolved.customFrom = (resolved.period === 'CURRENT' && defFrom) ? defFrom : customFrom
+        resolved.customTo = (resolved.period === 'CURRENT' && defTo) ? defTo : customTo
       }
       const targetCurrency = resolved.currency || 'USD'
       const rate = targetCurrency === 'USD' ? 1 : ((await getLatestRate(targetCurrency)) || 1)
@@ -96,12 +99,16 @@ export default function ReportOptionsModal({ title, fields, onGenerate, onClose 
               )
             }
             if (field.type === 'period') {
+              const opts = field.options || [
+                ...((field.defaultFrom && field.defaultTo) ? [{ value: 'CURRENT', label: `Current View (${field.defaultFrom} to ${field.defaultTo})` }] : []),
+                ...PERIOD_OPTIONS
+              ]
               return (
                 <div key={field.key}>
                   <label className="text-xs font-medium text-slate-500">Period</label>
                   <select value={values[field.key]} onChange={e => update(field.key, e.target.value)}
                     className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                    {PERIOD_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                    {opts.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                   </select>
                   {values[field.key] === 'CUSTOM' && (
                     <div className="grid grid-cols-2 gap-2 mt-2">
