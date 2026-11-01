@@ -116,23 +116,49 @@ export function resolvePeriodRange(periodType, opts = {}) {
 }
 
 /**
- * Adapter for the ReportOptionsModal's simplified period values (MTD/YTD/LAST_1_YEAR/
- * LAST_3_YEARS/CUSTOM/ALL_TIME) -> an actual { from, to } date range.
+ * Adapter for the ReportOptionsModal's period values (MTD/YTD/LAST_1_YEAR/
+ * LAST_3_YEARS/CUSTOM/ALL_TIME/CURRENT or display labels) -> an actual { from, to } date range.
  */
 export function resolveReportPeriod(periodValue, fiscalYearStartMonth = 1, customFrom, customTo) {
-  switch (periodValue) {
-    case 'CURRENT':
-      if (customFrom && customTo) return { from: customFrom, to: customTo }
-      return resolvePeriodRange('MTD')
-    case 'MTD': return resolvePeriodRange('MTD')
-    case 'YTD': return resolvePeriodRange('YTD', { fiscalYearStartMonth })
-    case 'LAST_1_YEAR': return resolvePeriodRange('LAST_N_YEARS', { n: 1, fiscalYearStartMonth })
-    case 'LAST_3_YEARS': return resolvePeriodRange('LAST_N_YEARS', { n: 3, fiscalYearStartMonth })
-    case 'CUSTOM': return { from: customFrom, to: customTo }
-    case 'ALL_TIME':
-    default:
-      return resolvePeriodRange('ALL_TIME')
+  const norm = String(periodValue || '').trim().toUpperCase()
+
+  if (norm === 'CURRENT' || norm.startsWith('CURRENT')) {
+    if (customFrom && customTo) return { from: customFrom, to: customTo }
+    return resolvePeriodRange('MTD')
   }
+
+  if (norm === 'MTD' || norm.includes('MONTH')) {
+    return resolvePeriodRange('MTD')
+  }
+
+  if (norm === 'YTD' || norm.includes('YEAR TO DATE')) {
+    return resolvePeriodRange('YTD', { fiscalYearStartMonth })
+  }
+
+  if (norm === 'LAST_1_YEAR' || norm === 'LAST 1 YEAR' || norm.includes('LAST 1')) {
+    return resolvePeriodRange('LAST_N_YEARS', { n: 1, fiscalYearStartMonth })
+  }
+
+  if (norm === 'LAST_3_YEARS' || norm === 'LAST 3 YEARS' || norm.includes('LAST 3')) {
+    return resolvePeriodRange('LAST_N_YEARS', { n: 3, fiscalYearStartMonth })
+  }
+
+  if (norm === 'CUSTOM' || norm.includes('CUSTOM')) {
+    if (customFrom && customTo) return { from: customFrom, to: customTo }
+    return resolvePeriodRange('MTD')
+  }
+
+  if (norm === 'ALL_TIME' || norm.includes('ALL TIME')) {
+    return resolvePeriodRange('ALL_TIME')
+  }
+
+  // If customFrom and customTo were passed (e.g. from current view or fallback), use them
+  if (customFrom && customTo) {
+    return { from: customFrom, to: customTo }
+  }
+
+  // Safe fallback to MTD (current month) rather than dumping 130 years of all-time data
+  return resolvePeriodRange('MTD')
 }
 
 export function formatDate(d) {

@@ -276,8 +276,10 @@ export default function Ledger() {
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
-    const account = (accounts || []).find(a => a.id === selections.account)
-    const combined = await fetchAndProcessEntries(selections.account, range.from, range.to, activeCompany.id, activeProduct, accounts, activeCompany.fiscal_year_start_month || 1)
+    const targetAccount = selections.account || accountId || 'all'
+    const isAll = targetAccount === 'all'
+    const account = (accounts || []).find(a => a.id === targetAccount)
+    const combined = await fetchAndProcessEntries(targetAccount, range.from, range.to, activeCompany.id, activeProduct, accounts, activeCompany.fiscal_year_start_month || 1)
 
     let repRun = 0;
     const rows = combined.slice().reverse().map(e => {
@@ -285,15 +287,32 @@ export default function Ledger() {
       return { ...e, balance: repRun }
     }).reverse().map(e => {
       const balStr = e.balance < 0 ? `-${fmt(Math.abs(e.balance))}` : fmt(e.balance); 
-      return [e.entry_date, e.description, e.currency, Number(e.debit_usd) ? fmt(e.debit_usd) : '—', Number(e.credit_usd) ? fmt(e.credit_usd) : '—', balStr]
+      const accName = isAll ? ((accounts.find(a => a.id === e.account_id)?.name) || '—') : null;
+      return [
+        e.entry_date,
+        ...(isAll ? [accName] : []),
+        e.description,
+        e.currency,
+        Number(e.debit_usd) ? fmt(e.debit_usd) : '—',
+        Number(e.credit_usd) ? fmt(e.credit_usd) : '—',
+        balStr
+      ]
     })
     const totalDebit = combined.reduce((s, e) => s + Number(e.debit_usd), 0)
     const totalCredit = combined.reduce((s, e) => s + Number(e.credit_usd), 0)
 
     const curLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} & USD`
     const sections = [{
-      heading: account ? `${account.code} - ${account.name}` : (selections.account === 'all' ? 'All Accounts Ledger' : 'Account Ledger'),
-      columns: ['Date', 'Description', 'Orig. Currency', `Debit (${curLabel})`, `Credit (${curLabel})`, `Balance (${curLabel})`],
+      heading: account ? `${account.code} - ${account.name}` : (isAll ? 'All Accounts Ledger' : 'Account Ledger'),
+      columns: [
+        'Date',
+        ...(isAll ? ['Account'] : []),
+        'Description',
+        'Orig. Currency',
+        `Debit (${curLabel})`,
+        `Credit (${curLabel})`,
+        `Balance (${curLabel})`
+      ],
       rows,
     }, {
       heading: 'Totals',
@@ -391,7 +410,7 @@ export default function Ledger() {
           fields={[
             { type: 'select', key: 'account', label: 'Account', options: [{value: 'all', label: 'All Accounts'}, ...accounts.map(a => ({ value: a.id, label: `${a.code} - ${a.name}` }))], default: accountId },
             { type: 'currency', key: 'currency', default: cp.displayCurrency },
-            { type: 'period', key: 'period', default: cp.period, defaultFrom: cp.range.from, defaultTo: cp.range.to },
+            { type: 'period', key: 'period', default: 'MTD', defaultFrom: cp.range.from, defaultTo: cp.range.to },
           ]}
           onGenerate={generateLedgerReport}
           onClose={() => setReportModalOpen(false)}

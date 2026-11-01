@@ -38,6 +38,12 @@ export default function ReportOptionsModal({ title, fields, onGenerate, onClose 
         initial[f.key] = (defFrom && defTo) ? 'CURRENT' : 'MTD'
       }
     }
+    if (f.type === 'currency' && !initial[f.key]) {
+      initial[f.key] = 'USD'
+    }
+    if (f.type === 'select' && !initial[f.key] && f.options && f.options.length > 0) {
+      initial[f.key] = typeof f.options[0] === 'object' ? f.options[0].value : f.options[0]
+    }
   })
   const [values, setValues] = useState(initial)
   const [customFrom, setCustomFrom] = useState(defFrom)
@@ -58,6 +64,9 @@ export default function ReportOptionsModal({ title, fields, onGenerate, onClose 
     setGenerating(true)
     try {
       const resolved = { ...values }
+      if (!resolved.period) {
+        resolved.period = (defFrom && defTo) ? 'CURRENT' : 'MTD'
+      }
       if (resolved.period === 'CUSTOM' || resolved.period === 'CURRENT') {
         resolved.customFrom = (resolved.period === 'CURRENT' && defFrom) ? defFrom : customFrom
         resolved.customTo = (resolved.period === 'CURRENT' && defTo) ? defTo : customTo
@@ -103,14 +112,15 @@ export default function ReportOptionsModal({ title, fields, onGenerate, onClose 
                 ...((field.defaultFrom && field.defaultTo) ? [{ value: 'CURRENT', label: `Current View (${field.defaultFrom} to ${field.defaultTo})` }] : []),
                 ...PERIOD_OPTIONS
               ]
+              const currentPeriodVal = values[field.key] || (field.default || (opts[0]?.value || 'MTD'))
               return (
                 <div key={field.key}>
                   <label className="text-xs font-medium text-slate-500">Period</label>
-                  <select value={values[field.key]} onChange={e => update(field.key, e.target.value)}
+                  <select value={currentPeriodVal} onChange={e => update(field.key, e.target.value)}
                     className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
                     {opts.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                   </select>
-                  {values[field.key] === 'CUSTOM' && (
+                  {currentPeriodVal === 'CUSTOM' && (
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm" placeholder="From" />
                       <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm" placeholder="To" />
