@@ -73,9 +73,10 @@ export default function FinancialPerformance() {
       ;(hre || []).forEach(r => {
         const amt = Number(r.amount_usd) || 0
         if (!amt) return
-        const accId = r.account_id || r.account?.id || 'anc-other'
-        const code = r.account?.code || '4200'
-        const name = r.account?.name || 'Other Revenue'
+        const acc = accountsList.find(a => a.id === r.account_id) || r.account
+        const accId = r.account_id || acc?.id || 'anc-other'
+        const code = acc?.code || '4200'
+        const name = acc?.name || 'Other Revenue'
         revMap[accId] = revMap[accId] || { code, name, amount: 0 }
         revMap[accId].amount += amt
       })
@@ -118,9 +119,10 @@ export default function FinancialPerformance() {
       ;(hee || []).forEach(e => {
         const amt = Number(e.amount_usd) || 0
         if (!amt) return
-        const accId = e.account_id || e.account?.id || 'exp-other'
-        const code = e.account?.code || '5000'
-        const name = e.account?.name || 'General Expense'
+        const acc = accountsList.find(a => a.id === e.account_id) || e.account
+        const accId = e.account_id || acc?.id || 'exp-other'
+        const code = acc?.code || '5000'
+        const name = acc?.name || 'General Expense'
         expMap[accId] = expMap[accId] || { code, name, amount: 0 }
         expMap[accId].amount += amt
       })
@@ -137,9 +139,10 @@ export default function FinancialPerformance() {
       ;(p || []).forEach(pi => {
         const amt = Number(pi.amount_usd) || 0
         if (!amt) return
-        const accId = pi.account_id || pi.account?.id || 'pi-expense'
-        const code = pi.account?.code || '5100'
-        const name = pi.account?.name || 'Purchase Invoices'
+        const acc = accountsList.find(a => a.id === pi.account_id) || pi.account
+        const accId = pi.account_id || acc?.id || 'pi-expense'
+        const code = acc?.code || '5100'
+        const name = acc?.name || 'Purchase Invoices'
         expMap[accId] = expMap[accId] || { code, name, amount: 0 }
         expMap[accId].amount += amt
       })
@@ -235,13 +238,13 @@ export default function FinancialPerformance() {
   }
 
   async function generatePerformanceReport(selections, format) {
-    const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
+    const fyStart = activeCompany.fiscal_year_start_month || 1
+    const range = resolveReportPeriod(selections.period, fyStart, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
     const isHotel = ['hotel', 'restaurant'].includes(activeProduct)
     const prodFilter = activeProduct === 'hotel' ? ['hotel', 'restaurant'] : [activeProduct]
-    const fyStart = activeCompany.fiscal_year_start_month || 1
 
     let rev = 0, exp = 0
     const revMap = {}, expMap = {}
@@ -263,25 +266,26 @@ export default function FinancialPerformance() {
 
       const accountsList = accs || []
 
-      // Room revenue
+      // 1. Room revenue
       const roomRevTotal = (hrs || []).reduce((sum, r) => sum + (Number(r.room_revenue_usd) || 0), 0)
       if (roomRevTotal > 0) {
         const roomAcc = accountsList.find(a => a.code === '4100' || a.name?.toLowerCase().includes('room revenue')) || { id: 'room-rev', code: '4100', name: 'Room Revenue' }
         revMap[roomAcc.id] = { code: roomAcc.code, name: roomAcc.name, amount: (revMap[roomAcc.id]?.amount || 0) + roomRevTotal }
       }
 
-      // Ancillary revenue
+      // 2. Ancillary revenue
       ;(hre || []).forEach(r => {
         const amt = Number(r.amount_usd) || 0
         if (!amt) return
-        const accId = r.account_id || r.account?.id || 'anc-other'
-        const code = r.account?.code || '4200'
-        const name = r.account?.name || 'Other Revenue'
+        const acc = accountsList.find(a => a.id === r.account_id) || r.account
+        const accId = r.account_id || acc?.id || 'anc-other'
+        const code = acc?.code || '4200'
+        const name = acc?.name || 'Other Revenue'
         revMap[accId] = revMap[accId] || { code, name, amount: 0 }
         revMap[accId].amount += amt
       })
 
-      // Restaurant revenue
+      // 3. Restaurant revenue
       ;(rdr || []).forEach(r => {
         const f = Number(r.food_amount_usd) || 0
         const b = Number(r.beverage_amount_usd) || 0
@@ -315,18 +319,19 @@ export default function FinancialPerformance() {
         }
       })
 
-      // Hotel Direct Expenses
+      // 4. Hotel Direct Expenses
       ;(hee || []).forEach(e => {
         const amt = Number(e.amount_usd) || 0
         if (!amt) return
-        const accId = e.account_id || e.account?.id || 'exp-other'
-        const code = e.account?.code || '5000'
-        const name = e.account?.name || 'General Expense'
+        const acc = accountsList.find(a => a.id === e.account_id) || e.account
+        const accId = e.account_id || acc?.id || 'exp-other'
+        const code = acc?.code || '5000'
+        const name = acc?.name || 'General Expense'
         expMap[accId] = expMap[accId] || { code, name, amount: 0 }
         expMap[accId].amount += amt
       })
 
-      // AMC Amortized Overlap Expenses
+      // 5. AMC Amortized Overlap Expenses
       const amcTotal = (hamc || []).reduce((s, r) => s + getAmcOverlapUsd(r, fyStart, range.from, range.to), 0)
       if (amcTotal > 0) {
         const amcAcc = accountsList.find(a => a.name?.toLowerCase().includes('amc') || a.name?.toLowerCase().includes('maintenance')) || { id: 'amc-amortized', code: '5500', name: 'AMC Contracts (Amortized)' }
@@ -334,13 +339,14 @@ export default function FinancialPerformance() {
         expMap[amcAcc.id].amount += amcTotal
       }
 
-      // Purchase Invoices Expenses
+      // 6. Purchase Invoices Expenses
       ;(p || []).forEach(pi => {
         const amt = Number(pi.amount_usd) || 0
         if (!amt) return
-        const accId = pi.account_id || pi.account?.id || 'pi-expense'
-        const code = pi.account?.code || '5100'
-        const name = pi.account?.name || 'Purchase Invoices'
+        const acc = accountsList.find(a => a.id === pi.account_id) || pi.account
+        const accId = pi.account_id || acc?.id || 'pi-expense'
+        const code = acc?.code || '5100'
+        const name = acc?.name || 'Purchase Invoices'
         expMap[accId] = expMap[accId] || { code, name, amount: 0 }
         expMap[accId].amount += amt
       })
@@ -368,24 +374,205 @@ export default function FinancialPerformance() {
 
     const gop = rev - exp
     const marginPct = rev ? (gop / rev) * 100 : 0
-
     const curLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} & USD`
-    const sections = [
-      {
-        heading: 'Profit & Loss Summary',
-        columns: ['Item', `Amount (${curLabel})`, 'Amount %'],
-        rows: [
-          ['Total Revenue', fmt(rev), '100.0%'],
-          ['Total Expenses', `-${fmt(exp)}`, rev ? `${((exp / rev) * 100).toFixed(1)}%` : '0%'],
-          ['Gross Operating Profit (GOP)', fmt(gop), `${marginPct.toFixed(1)}%`],
-        ],
-      },
-      { heading: 'Revenue by Account', columns: ['Code', 'Account', `Amount (${curLabel})`], rows: Object.values(revMap).map(a => [a.code, a.name, fmt(a.amount)]) },
-      { heading: 'Expenses by Account', columns: ['Code', 'Account', `Amount (${curLabel})`], rows: Object.values(expMap).map(a => [a.code, a.name, fmt(a.amount)]) },
+
+    const requestedSections = selections.sections || [
+      'Executive Summary (KPIs)',
+      'Profit & Loss Statement (P&L)',
+      'Financial Performance Chart',
+      'Revenue Breakdown by Account',
+      'Expenses Breakdown by Account',
+      'Monthly Forecast & Projections',
     ]
 
+    const sortedRev = Object.values(revMap).filter(a => Math.abs(a.amount) > 0.001).sort((a, b) => b.amount - a.amount)
+    const sortedExp = Object.values(expMap).filter(a => Math.abs(a.amount) > 0.001).sort((a, b) => b.amount - a.amount)
+
+    const revRows = sortedRev.length > 0
+      ? sortedRev.map(a => [
+          a.code || '—',
+          a.name || 'Revenue Account',
+          fmt(a.amount),
+          rev ? `${((a.amount / rev) * 100).toFixed(1)}%` : '0.0%'
+        ])
+      : [['—', 'No revenue activity recorded for this period', fmt(0), '0.0%']]
+
+    if (sortedRev.length > 0) {
+      revRows.push(['Total Revenue', 'All Active Accounts', fmt(rev), '100.0%'])
+    }
+
+    const expRows = sortedExp.length > 0
+      ? sortedExp.map(a => [
+          a.code || '—',
+          a.name || 'Expense Head',
+          fmt(a.amount),
+          exp ? `${((a.amount / exp) * 100).toFixed(1)}%` : '0.0%'
+        ])
+      : [['—', 'No expense activity recorded for this period', fmt(0), '0.0%']]
+
+    if (sortedExp.length > 0) {
+      expRows.push(['Total Expenses', 'All Operating Expenses', fmt(exp), '100.0%'])
+    }
+
+    const sections = []
+
+    if (requestedSections.some(s => s.toLowerCase().includes('executive') || s.toLowerCase().includes('kpi'))) {
+      sections.push({
+        heading: 'Executive Summary & Key Metrics',
+        keyValuePairs: [
+          ['Total Revenue', fmt(rev)],
+          ['Total Operating Expenses', fmt(exp)],
+          ['Gross Operating Profit (GOP)', fmt(gop)],
+          ['GOP Margin %', `${marginPct.toFixed(1)}%`],
+          ['Reporting Period', `${range.from} to ${range.to}`],
+          ['Reporting Currency', `${selections.currency}${rate !== 1 ? ` (FX Rate: 1 USD = ${rate.toLocaleString()})` : ''}`],
+          ['Calculation Basis', isHotel ? 'Room Stats, Ancillary Revenue, Restaurant & Hotel Expenses' : 'Sales & Purchase Invoices'],
+        ],
+        columns: ['Key Performance Indicator', `Amount (${curLabel})`, '% of Revenue', 'Operating Status'],
+        rows: [
+          ['Total Revenue', fmt(rev), '100.0%', 'Gross Operating Inflow'],
+          ['Total Operating Expenses', fmt(exp), rev ? `${((exp / rev) * 100).toFixed(1)}%` : '0.0%', exp > rev ? 'Exceeds Revenue (Operating Deficit)' : 'Within Operating Budget'],
+          ['Gross Operating Profit (GOP)', fmt(gop), `${marginPct.toFixed(1)}%`, gop >= 0 ? 'Profitable (Operating Surplus)' : 'Operating Deficit'],
+          ['GOP Margin %', `${marginPct.toFixed(1)}%`, '—', marginPct >= 30 ? 'Strong Operating Margin' : (marginPct > 0 ? 'Positive Margin' : 'Negative Margin')],
+        ],
+      })
+    }
+
+    if (requestedSections.some(s => s.toLowerCase().includes('profit & loss') || s.toLowerCase().includes('p&l'))) {
+      sections.push({
+        heading: 'Profit & Loss Statement (P&L)',
+        columns: ['Financial Item', `Current Period (${curLabel})`, 'Amount %', 'Classification'],
+        rows: [
+          ['Total Revenue', fmt(rev), '100.0%', 'Operating Inflow'],
+          ['Total Expenses', `-${fmt(exp)}`, rev ? `${((exp / rev) * 100).toFixed(1)}%` : '0.0%', 'Operating Outflow'],
+          ['Gross Operating Profit (GOP)', fmt(gop), `${marginPct.toFixed(1)}%`, gop >= 0 ? 'Operating Surplus' : 'Operating Deficit'],
+        ],
+      })
+    }
+
+    if (requestedSections.some(s => s.toLowerCase().includes('chart') || s.toLowerCase().includes('visual'))) {
+      sections.push({
+        heading: 'Financial Overview (Visual Chart)',
+        chart: {
+          categories: ['Financial Performance Summary'],
+          series: [
+            { name: 'Total Revenue', color: '#10b981', values: [Math.round(rev * rate)] },
+            { name: 'Total Operating Expenses', color: '#ef4444', values: [Math.round(exp * rate)] },
+            { name: 'Gross Operating Profit (GOP)', color: '#1B3A6B', values: [Math.round(gop * rate)] },
+          ],
+          valueFormatter: (v) => fmt(v / rate),
+        },
+      })
+    }
+
+    if (requestedSections.some(s => s.toLowerCase().includes('revenue breakdown') || s.toLowerCase().includes('revenue by account'))) {
+      sections.push({
+        heading: 'Revenue Breakdown by Account',
+        columns: ['Code', 'Account', `Amount (${curLabel})`, '% of Total'],
+        rows: revRows,
+      })
+    }
+
+    if (requestedSections.some(s => s.toLowerCase().includes('expenses breakdown') || s.toLowerCase().includes('expenses by account'))) {
+      sections.push({
+        heading: 'Expenses Breakdown by Account',
+        columns: ['Code', 'Account', `Amount (${curLabel})`, '% of Total'],
+        rows: expRows,
+      })
+    }
+
+    if (requestedSections.some(s => s.toLowerCase().includes('forecast') || s.toLowerCase().includes('projection'))) {
+      try {
+        const targetYear = (range.from && !isNaN(new Date(range.from).getFullYear()))
+          ? new Date(range.from).getFullYear()
+          : (forecastYear || new Date().getFullYear())
+
+        const [{ data: fData }, { data: fBudget }, { data: fExpBudget }, { data: fAccs }] = await Promise.all([
+          supabase.from('forecast_entries').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('forecast_year', targetYear).order('forecast_month'),
+          supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', targetYear),
+          supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('budget_year', targetYear),
+          supabase.from('accounts').select('code, type').eq('company_id', activeCompany.id).eq('product', activeProduct)
+        ])
+
+        const combined = fData ? [...fData] : []
+        if (['hotel', 'restaurant'].includes(activeProduct)) {
+          const fRevMap = {}
+          if (fBudget) {
+            fBudget.forEach(b => {
+              if (activeProduct === 'hotel') {
+                const days = new Date(targetYear, b.budget_month, 0).getDate()
+                fRevMap[b.budget_month] = (fRevMap[b.budget_month] || 0) + ((b.budgeted_room_revenue_usd || 0) * days)
+              }
+            })
+          }
+
+          const fExpMap = {}
+          if (fExpBudget && fAccs) {
+            const accountTypeMap = {}
+            fAccs.forEach(a => { accountTypeMap[a.code] = a.type })
+            fExpBudget.forEach(b => {
+              const type = accountTypeMap[b.account_code]
+              if (type === 'Revenue') {
+                fRevMap[b.budget_month] = (fRevMap[b.budget_month] || 0) + (Number(b.amount_usd) || 0)
+              } else {
+                fExpMap[b.budget_month] = (fExpMap[b.budget_month] || 0) + (Number(b.amount_usd) || 0)
+              }
+            })
+          }
+
+          for (let i = 1; i <= 12; i++) {
+            if (fRevMap[i] || fExpMap[i]) {
+              let f = combined.find(x => x.forecast_month === i)
+              if (!f) {
+                f = { forecast_month: i, revenue_usd: 0, expenses_usd: 0 }
+                combined.push(f)
+              }
+              if (fRevMap[i] !== undefined) f.revenue_usd = Math.round(fRevMap[i])
+              if (fExpMap[i] !== undefined) f.expenses_usd = Math.round(fExpMap[i])
+            }
+          }
+        }
+        combined.sort((a, b) => a.forecast_month - b.forecast_month)
+
+        const fMonthMap = {}
+        combined.forEach(f => { fMonthMap[f.forecast_month] = f })
+
+        let sumFRev = 0, sumFExp = 0
+        const forecastRows = MONTHS.map((m, idx) => {
+          const monthNum = idx + 1
+          const row = fMonthMap[monthNum] || { revenue_usd: 0, expenses_usd: 0 }
+          const rUsd = Number(row.revenue_usd) || 0
+          const eUsd = Number(row.expenses_usd) || 0
+          const pUsd = rUsd - eUsd
+          const mPct = rUsd ? (pUsd / rUsd) * 100 : 0
+          sumFRev += rUsd
+          sumFExp += eUsd
+          return [`${m} ${targetYear}`, fmt(rUsd), fmt(eUsd), fmt(pUsd), `${mPct.toFixed(1)}%`]
+        })
+
+        const totalFProfit = sumFRev - sumFExp
+        const totalFMargin = sumFRev ? (totalFProfit / sumFRev) * 100 : 0
+
+        forecastRows.push([
+          `Total Forecast (${targetYear})`,
+          fmt(sumFRev),
+          fmt(sumFExp),
+          fmt(totalFProfit),
+          `${totalFMargin.toFixed(1)}%`
+        ])
+
+        sections.push({
+          heading: `Monthly Projections & Budget Forecast (${targetYear})`,
+          columns: ['Month', `Forecast Revenue (${curLabel})`, `Forecast Expenses (${curLabel})`, `Projected Profit (${curLabel})`, 'Profit Margin %'],
+          rows: forecastRows,
+        })
+      } catch (err) {
+        console.warn('Could not generate forecast section for report:', err)
+      }
+    }
+
     const title = 'Financial Performance'
-    const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
+    const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}${rate !== 1 ? ` (FX Rate: 1 USD = ${rate.toLocaleString()})` : ''}`
     const logoUrl = activeCompany.logo_url
     if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'financial_performance_report', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'financial_performance_report' })
@@ -567,8 +754,36 @@ export default function FinancialPerformance() {
         <ReportOptionsModal
           title="Financial Performance"
           fields={[
+            {
+              type: 'checkboxGroup',
+              key: 'sections',
+              label: 'Include Sections',
+              options: [
+                'Executive Summary (KPIs)',
+                'Profit & Loss Statement (P&L)',
+                'Financial Performance Chart',
+                'Revenue Breakdown by Account',
+                'Expenses Breakdown by Account',
+                'Monthly Forecast & Projections',
+              ],
+              default: [
+                'Executive Summary (KPIs)',
+                'Profit & Loss Statement (P&L)',
+                'Financial Performance Chart',
+                'Revenue Breakdown by Account',
+                'Expenses Breakdown by Account',
+                'Monthly Forecast & Projections',
+              ],
+            },
             { type: 'currency', key: 'currency', default: cp.displayCurrency },
-            { type: 'period', key: 'period', default: 'MTD' },
+            {
+              type: 'period',
+              key: 'period',
+              default: 'CURRENT',
+              defaultFrom: cp.range.from,
+              defaultTo: cp.range.to,
+              fiscalYearStartMonth: activeCompany?.fiscal_year_start_month || 1,
+            },
           ]}
           onGenerate={generatePerformanceReport}
           onClose={() => setReportModalOpen(false)}

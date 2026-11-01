@@ -894,17 +894,27 @@ export async function exportMultiSectionPDF(optionsOrCtx, sectionsArg) {
         columnStyles = { 0: { cellWidth: 112 }, 1: { cellWidth: 70, halign: 'right' } }
       }
       
-      const isNumericCol = (header) => /amount|total|collected|pending|price|rate|balance|qty|rev|debit|credit|budget|actual|variance/i.test(String(header))
+      const isNumericCol = (header) => /amount|total|collected|pending|price|rate|balance|qty|rev|debit|credit|budget|actual|variance|margin|pct|%/i.test(String(header))
       const safeHead = cols.map((c, i) => {
         const text = sanitizeText(c)
         const alignRight = cols.length <= 3 ? (i > 0) : isNumericCol(c)
         return alignRight ? { content: text, styles: { halign: 'right' } } : { content: text, styles: { halign: 'left' } }
       })
-      const safeBody = rows.map(row => row.map((cell, i) => {
-        const text = sanitizeText(cell)
-        const alignRight = cols.length <= 3 ? (i > 0) : isNumericCol(cols[i])
-        return alignRight ? { content: text, styles: { halign: 'right' } } : { content: text, styles: { halign: 'left' } }
-      }))
+      const safeBody = rows.map(row => {
+        const isTotalRow = String(row[0]).toLowerCase().startsWith('total')
+        return row.map((cell, i) => {
+          const text = sanitizeText(cell)
+          const alignRight = cols.length <= 3 ? (i > 0) : isNumericCol(cols[i])
+          return {
+            content: text,
+            styles: {
+              halign: alignRight ? 'right' : 'left',
+              fontStyle: isTotalRow ? 'bold' : 'normal',
+              ...(isTotalRow ? { fillColor: [248, 250, 252] } : {})
+            }
+          }
+        })
+      })
 
       const tableFontSize = cols.length >= 10 ? 6.5 : (cols.length >= 8 ? 7 : (cols.length >= 6 ? 7.5 : 8))
       autoTable(doc, {
@@ -1011,7 +1021,7 @@ export function exportMultiSectionWord(optionsOrCtx, sectionsArg) {
 
   sections = sections || []
   const esc = escapeHtml
-  const isNumericCol = (header) => /amount|total|collected|pending|price|rate|balance|qty|rev|debit|credit|budget|actual|variance/i.test(String(header))
+  const isNumericCol = (header) => /amount|total|collected|pending|price|rate|balance|qty|rev|debit|credit|budget|actual|variance|margin|pct|%/i.test(String(header))
   const sectionsHtml = sections.map(section => {
     const heading = section.heading || section.title || ''
     const cols = section.columns || section.headers || null
@@ -1033,12 +1043,13 @@ export function exportMultiSectionWord(optionsOrCtx, sectionsArg) {
         return `<th style="background:${bgColor};color:#fff;padding:5px 8px;text-align:${align};${width}">${esc(c)}</th>`
       }).join('')
       
-      const body = secRows.map(r =>
-        `<tr>${r.map((cell, i) => {
+      const body = secRows.map(r => {
+        const isTotalRow = String(r[0]).toLowerCase().startsWith('total')
+        return `<tr style="${isTotalRow ? 'font-weight:bold;background:#f8fafc;' : ''}">${r.map((cell, i) => {
           const align = cols.length <= 3 ? (i > 0 ? 'right' : 'left') : (isNumericCol(cols[i]) ? 'right' : 'left')
           return `<td style="padding:5px 8px;border:1px solid #ddd;text-align:${align};white-space:pre-line;">${esc(cell).replace(/\n/g, '<br/>')}</td>`
         }).join('')}</tr>`
-      ).join('')
+      }).join('')
       inner = `<table style="border-collapse:collapse;width:100%;margin-bottom:12px;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
     } else if (section.chart) {
       const dataUrl = renderGroupedBarChartDataUrl(section.chart)
