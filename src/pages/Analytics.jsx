@@ -69,7 +69,8 @@ function AnalyticsInner() {
 
   async function generateAnalyticsReport(selections, format) {
     const prodFilter = activeProduct === 'hotel' ? ['hotel', 'restaurant'] : [activeProduct]
-    const range = resolveReportPeriod(selections.period, activeCompany.fiscal_year_start_month || 1, selections.customFrom, selections.customTo)
+    const fyStart = activeCompany.fiscal_year_start_month || 1
+    const range = resolveReportPeriod(selections.period, fyStart, selections.customFrom, selections.customTo)
     const rate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
     const fmt = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rate))
 
@@ -91,6 +92,7 @@ function AnalyticsInner() {
     let outstanding = 0
     let collected = 0
     let expenses = 0
+    let overdueCount = 0
     const monthlyMap = {}
 
     if (['hotel', 'restaurant'].includes(activeProduct)) {
@@ -106,11 +108,12 @@ function AnalyticsInner() {
 
       outstanding = totalInvoiced - collected
 
-      const fyStart = activeCompany.fiscal_year_start_month || 1
       const amcTotal = hamcSel.reduce((s2, r) => s2 + getAmcOverlapUsd(r, fyStart, range.from, range.to), 0)
       const directExpenses = heeSel.reduce((s2, e) => s2 + Number(e.amount_usd || 0), 0)
       const piExpenses = hpiSel.reduce((s2, e) => s2 + Number(e.amount_usd || 0), 0)
       expenses = directExpenses + amcTotal + piExpenses
+
+      overdueCount = hgiSel.filter(i => Number(i.invoice_amount_usd) > Number(i.collected_amount_usd)).length
 
       hrsSel.forEach(r => {
         const k = (r.stat_date || '').slice(0, 7)
@@ -145,21 +148,164 @@ function AnalyticsInner() {
       outstanding = sSel.reduce((s2, i) => s2 + (i.status === 'Paid' ? 0 : (Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)), 0)
       collected = totalInvoiced - outstanding
       expenses = pSel.reduce((s2, i) => s2 + Number(i.amount_usd), 0)
+      overdueCount = sSel.filter(i => i.status === 'Overdue').length
 
       sSel.forEach(i => { const k = (i.invoice_date || '').slice(0, 7) || 'Unknown'; monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].invoices += 1; monthlyMap[k].revenue += Number(i.amount_usd) })
       rSel.forEach(i => { const k = i.receipt_date.slice(0, 7); monthlyMap[k] = monthlyMap[k] || { month: k, invoices: 0, revenue: 0, collected: 0 }; monthlyMap[k].collected += Number(i.amount_usd) })
     }
 
     const monthlySel = Object.values(monthlyMap).sort((a, b) => (a.month || '').localeCompare(b.month || ''))
-
+    const collectionRate = totalInvoiced > 0 ? (collected / totalInvoiced) * 100 : 0
     const curLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} & USD`
-    const sections = [
-      { heading: 'Summary', keyValuePairs: [['Total Invoiced', fmt(totalInvoiced)], ['Collected', fmt(collected)], ['Outstanding', fmt(outstanding)], ['Expenses', fmt(expenses)]] },
-      { heading: 'Monthly Summary', columns: ['Month', 'Invoices', `Revenue (${curLabel})`, `Collected (${curLabel})`], rows: monthlySel.map(m => [m.month, m.invoices, fmt(m.revenue), fmt(m.collected)]) },
+
+    const requestedSections = selections.sections || [
+      'Executive Summary & KPIs',
+      'Monthly Activity & Collection Summary',
+      'Revenue vs Collected Trend (Chart)',
+      'Invoice Status Breakdown',
+      'Transaction Volume & Types',
     ]
 
-    const title = 'Analytics'
-    const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}`
+    const sections = []
+
+    // 1. Executive Summary & KPIs
+    if (requestedSections.some(s => s.toLowerCase().includes('executive') || s.toLowerCase().includes('kpi'))) {
+      sections.push({
+        heading: 'Executive Summary & Key Metrics',
+        keyValuePairs: [
+          ['Total Invoiced / Revenue', fmt(totalInvoiced)],
+          ['Total Collected', fmt(collected)],
+          ['Outstanding Balance', fmt(outstanding)],
+          ['Total Operating Expenses', fmt(expenses)],
+          ['Overdue Invoices', `${overdueCount}`],
+          ['Collection Efficiency Rate', `${collectionRate.toFixed(1)}%`],
+          ['Reporting Period', `${range.from} to ${range.to}`],
+          ['Reporting Currency', `${selections.currency}${rate !== 1 ? ` (FX Rate: 1 USD = ${rate.toLocaleString()})` : ''}`],
+        ],
+        columns: ['Key Performance Indicator', `Amount / Value (${curLabel})`, '% of Invoiced', 'Status / Operational Note'],
+        rows: [
+          ['Total Invoiced', fmt(totalInvoiced), '100.0%', 'Gross Billed Activity'],
+          ['Total Collected', fmt(collected), totalInvoiced ? `${((collected / totalInvoiced) * 100).toFixed(1)}%` : '0.0%', 'Realized Cash Inflow'],
+          ['Outstanding Balance', fmt(outstanding), totalInvoiced ? `${((outstanding / totalInvoiced) * 100).toFixed(1)}%` : '0.0%', outstanding > 0 ? 'Pending Collection' : 'Fully Settled'],
+          ['Total Operating Expenses', fmt(expenses), totalInvoiced ? `${((expenses / totalInvoiced) * 100).toFixed(1)}%` : '0.0%', 'Operating Outflows'],
+          ['Overdue Invoices Count', `${overdueCount}`, '—', overdueCount > 0 ? 'Requires Follow-up' : 'All Accounts Current'],
+          ['Collection Efficiency Rate', `${collectionRate.toFixed(1)}%`, '—', collectionRate >= 90 ? 'Optimal Collection Rate' : (collectionRate >= 70 ? 'Moderate Collection Rate' : 'Follow-up Recommended')],
+        ],
+      })
+    }
+
+    // 2. Revenue vs Collected Trend (Chart)
+    if (requestedSections.some(s => s.toLowerCase().includes('chart') || s.toLowerCase().includes('trend')) && monthlySel.length > 0) {
+      sections.push({
+        heading: 'Revenue vs Collected Trend (Chart)',
+        chart: {
+          categories: monthlySel.map(m => m.month),
+          series: [
+            { name: 'Revenue', color: '#10b981', values: monthlySel.map(m => Math.round(m.revenue * rate)) },
+            { name: 'Collected', color: '#3b82f6', values: monthlySel.map(m => Math.round(m.collected * rate)) },
+          ],
+          valueFormatter: (v) => fmt(v / rate),
+        },
+      })
+    }
+
+    // 3. Monthly Activity & Collection Summary
+    if (requestedSections.some(s => s.toLowerCase().includes('monthly'))) {
+      const sumInvoices = monthlySel.reduce((s2, m) => s2 + (m.invoices || 0), 0)
+      const monthlyRows = monthlySel.map(m => {
+        const mOut = m.revenue - m.collected
+        const mRate = m.revenue > 0 ? Math.round((m.collected / m.revenue) * 100) : 0
+        return [
+          m.month,
+          m.invoices,
+          fmt(m.revenue),
+          fmt(m.collected),
+          fmt(mOut),
+          `${mRate}%`
+        ]
+      })
+
+      if (monthlySel.length > 0) {
+        monthlyRows.push([
+          `Total (${monthlySel.length} Months)`,
+          sumInvoices,
+          fmt(totalInvoiced),
+          fmt(collected),
+          fmt(outstanding),
+          `${Math.round(collectionRate)}%`
+        ])
+      } else {
+        monthlyRows.push(['—', 0, fmt(0), fmt(0), fmt(0), '0%'])
+      }
+
+      sections.push({
+        heading: 'Monthly Activity & Collection Summary',
+        columns: ['Month', 'Invoices', `Revenue (${curLabel})`, `Collected (${curLabel})`, `Outstanding (${curLabel})`, 'Collection Rate %'],
+        rows: monthlyRows,
+      })
+    }
+
+    // 4. Invoice Status Breakdown
+    if (requestedSections.some(s => s.toLowerCase().includes('status'))) {
+      let statusRows = []
+      if (['hotel', 'restaurant'].includes(activeProduct)) {
+        const fullyPaidCount = hgiSel.filter(i => Number(i.collected_amount_usd) >= Number(i.invoice_amount_usd)).length
+        const pendingCount = hgiSel.length - fullyPaidCount
+        statusRows = [
+          ['Fully Paid Invoices', fullyPaidCount, hgiSel.length ? `${((fullyPaidCount / hgiSel.length) * 100).toFixed(1)}%` : '0.0%', 'Fully settled invoices'],
+          ['Pending / Partial Invoices', pendingCount, hgiSel.length ? `${((pendingCount / hgiSel.length) * 100).toFixed(1)}%` : '0.0%', 'Balance due remaining'],
+          ['Overdue Invoices', overdueCount, hgiSel.length ? `${((overdueCount / hgiSel.length) * 100).toFixed(1)}%` : '0.0%', 'Requires immediate collection follow-up'],
+        ]
+      } else {
+        const statusCounts = sSel.reduce((acc, i) => { acc[i.status] = (acc[i.status] || 0) + 1; return acc }, {})
+        const totalCount = sSel.length
+        statusRows = Object.entries(statusCounts).map(([status, count]) => [
+          status,
+          count,
+          totalCount ? `${((count / totalCount) * 100).toFixed(1)}%` : '0.0%',
+          status === 'Paid' ? 'Fully settled' : (status === 'Overdue' ? 'Payment overdue' : 'Active invoice')
+        ])
+      }
+
+      sections.push({
+        heading: 'Invoice Status Breakdown',
+        columns: ['Status Category', 'Invoices Count', '% Share', 'Description'],
+        rows: statusRows.length > 0 ? statusRows : [['All Invoices', '0', '0.0%', 'No invoices recorded']],
+      })
+    }
+
+    // 5. Transaction Volume & Types Distribution
+    if (requestedSections.some(s => s.toLowerCase().includes('transaction') || s.toLowerCase().includes('type'))) {
+      let txRows = []
+      if (['hotel', 'restaurant'].includes(activeProduct)) {
+        txRows = [
+          ['Guest Invoices', hgiSel.length, 'Hotel guest billing records'],
+          ['Daily Room Revenue Entries', hrsSel.length, 'Night audit and daily occupancy revenue'],
+          ['Ancillary Revenue Entries', hreSel.length, 'Extra bed, laundry, minibar, beverage & other'],
+          ['Hotel Expense Entries', heeSel.length, 'Daily operating and departmental expenses'],
+          ['AMC Contracts Active', hamcSel.length, 'Annual maintenance contracts amortized'],
+          ['Purchase Invoices', (hpiSel.length || pSel.length), 'Vendor bills and supplier invoices'],
+        ]
+        if (activeProduct === 'restaurant' || rdrSel.length > 0) {
+          txRows.push(['Daily Restaurant Revenue Days', rdrSel.length, 'F&B meal periods and dining revenue'])
+        }
+      } else {
+        txRows = [
+          ['Sales Invoices', sSel.length, 'Customer billing invoices'],
+          ['Purchase Invoices', pSel.length, 'Vendor bills and supplier expenses'],
+          ['Payment Receipts', rSel.length, 'Customer collections and receipts'],
+        ]
+      }
+
+      sections.push({
+        heading: 'Transaction Volume & Types Distribution',
+        columns: ['Transaction Type', 'Total Records', 'Activity Scope'],
+        rows: txRows,
+      })
+    }
+
+    const title = 'Analytics Report'
+    const subtitle = `${activeCompany.name} • ${range.from} to ${range.to} • ${selections.currency}${rate !== 1 ? ` (FX Rate: 1 USD = ${rate.toLocaleString()})` : ''}`
     const logoUrl = activeCompany.logo_url
     if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'analytics_report', logoUrl })
     if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'analytics_report' })
@@ -394,8 +540,34 @@ function AnalyticsInner() {
         <ReportOptionsModal
           title="Analytics"
           fields={[
+            {
+              type: 'checkboxGroup',
+              key: 'sections',
+              label: 'Include Sections',
+              options: [
+                'Executive Summary & KPIs',
+                'Monthly Activity & Collection Summary',
+                'Revenue vs Collected Trend (Chart)',
+                'Invoice Status Breakdown',
+                'Transaction Volume & Types',
+              ],
+              default: [
+                'Executive Summary & KPIs',
+                'Monthly Activity & Collection Summary',
+                'Revenue vs Collected Trend (Chart)',
+                'Invoice Status Breakdown',
+                'Transaction Volume & Types',
+              ],
+            },
             { type: 'currency', key: 'currency', default: cp.displayCurrency },
-            { type: 'period', key: 'period', default: 'ALL_TIME' },
+            {
+              type: 'period',
+              key: 'period',
+              default: 'CURRENT',
+              defaultFrom: cp.range.from,
+              defaultTo: cp.range.to,
+              fiscalYearStartMonth: activeCompany?.fiscal_year_start_month || 1,
+            },
           ]}
           onGenerate={generateAnalyticsReport}
           onClose={() => setReportModalOpen(false)}
