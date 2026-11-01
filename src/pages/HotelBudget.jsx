@@ -3,7 +3,7 @@ import { Save, TrendingUp, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { MONTH_NAMES } from '../lib/fiscalYear'
-import { getLatestRate, convertFromUsd, formatMoney, formatMoneyRounded, formatReportMoney } from '../lib/fx'
+import { getLatestRate, convertFromUsd, formatMoney, formatMoneyRounded, formatReportMoney, formatReportMoneyRounded } from '../lib/fx'
 import { CURRENCY_LIST, CURRENCIES } from '../lib/currencies'
 import PageHeader from '../components/PageHeader'
 import CurrencySwitcher from '../components/CurrencySwitcher'
@@ -328,52 +328,468 @@ export default function HotelBudget() {
   }
 
   async function generateBudgetReport(selections, format) {
-    const rrate = selections.currency === 'USD' ? 1 : (await getLatestRate(selections.currency)) || 1
-    const f = selections.f || ((usd) => formatReportMoney(usd, selections.currency, rrate))
-    
+    const targetCurrency = selections.currency || displayCurrency || 'USD'
+    const rrate = targetCurrency === 'USD' ? 1 : ((await getLatestRate(targetCurrency)) || 1)
+    const f = (usd) => formatReportMoney(usd, targetCurrency, rrate)
+    const fRound = (usd) => formatReportMoneyRounded(usd, targetCurrency, rrate)
+    const conv = (usd) => Math.round((Number(usd) || 0) * rrate * 100) / 100
+
     const pYear = selections.reportYear || String(startYear)
     const pMonth = selections.reportMonth || 'all'
-    let periodKeys = []
-    
-    if (pYear === 'all') {
-      const allYears = Array.from({ length: 8 }, (_, i) => new Date().getFullYear() - 2 + i)
-      allYears.forEach(y => MONTH_NAMES.forEach((_, i) => periodKeys.push(`${y}-${i + 1}`)))
-    } else if (pMonth !== 'all') {
-      periodKeys.push(`${pYear}-${pMonth}`)
-    } else {
-      MONTH_NAMES.forEach((_, i) => periodKeys.push(`${pYear}-${i + 1}`))
+    const isHotel = activeProduct === 'hotel'
+    const yearFilter = pYear !== 'all' ? Number(pYear) : null
+
+    const roomRevSectionName = isHotel ? 'Room Revenue Budget vs Actuals' : 'Revenue Budget vs Actuals'
+    const otherRevSectionName = isHotel ? 'Other Revenue vs Actuals' : 'F&B Revenue & Actuals'
+    const defaultSections = [
+      'Budget Performance Summary (KPIs)',
+      roomRevSectionName,
+      otherRevSectionName,
+      'Revenue Account Breakdown',
+      'Budget vs Actual Comparison (Chart)'
+    ]
+    const userSections = selections.sections || defaultSections
+
+    // 1. Fetch all relevant data directly from Supabase for complete reliability
+    let budgetQuery = supabase.from('hotel_room_revenue_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
+    if (yearFilter) budgetQuery = budgetQuery.eq('budget_year', yearFilter)
+
+    let roomStatsQuery = isHotel
+      ? supabase.from('hotel_room_stats').select('stat_date, room_revenue_usd, occupied_rooms, rooms_available').eq('company_id', activeCompany.id).eq('product', activeProduct)
+      : Promise.resolve({ data: [] })
+    if (yearFilter && isHotel) {
+      roomStatsQuery = roomStatsQuery.gte('stat_date', `${yearFilter}-01-01`).lte('stat_date', `${yearFilter}-12-31`)
     }
 
-    const tableRows = []
-    periodKeys.forEach(key => {
-      const [y, mStr] = key.split('-')
-      const mIdx = Number(mStr) - 1
-      const mName = MONTH_NAMES[mIdx]
-      const row = rows[key]
-      const actualUsd = actuals[key] || 0
-      if (row) {
-        const days = daysInMonth(Number(y), mIdx + 1)
-        const monthlyRevUsd = (row.revenue_usd || 0) * days
-        const roomsOcc = Math.round(totalRooms * (Number(row.occ) || 0) / 100)
-        const adrUsd = roomsOcc > 0 ? (row.revenue_usd / roomsOcc) : 0
-        tableRows.push([
-          `${mName} ${y}`, 
-          `${row.occ}%`, 
-          f(adrUsd), 
-          f(monthlyRevUsd), 
-          f(actualUsd), 
-          f(monthlyRevUsd - actualUsd)
-        ])
+    let restRevQuery = supabase.from('restaurant_daily_revenue').select('revenue_date, meal_period, food_amount_usd, beverage_amount_usd, other_amount_usd').eq('company_id', activeCompany.id)
+    if (yearFilter) {
+      restRevQuery = restRevQuery.gte('revenue_date', `${yearFilter}-01-01`).lte('revenue_date', `${yearFilter}-12-31`)
+    }
+
+    let ancBudgetQuery = supabase.from('hotel_expense_budget').select('*').eq('company_id', activeCompany.id).eq('product', activeProduct)
+    if (yearFilter) ancBudgetQuery = ancBudgetQuery.eq('budget_year', yearFilter)
+
+    let ancLedgerQuery = supabase.from('hotel_revenue_entries').select('amount_usd, entry_date, account:accounts(code, type, subtype, name)').eq('company_id', activeCompany.id).eq('product', activeProduct)
+    if (yearFilter) ancLedgerQuery = ancLedgerQuery.gte('entry_date', `${yearFilter}-01-01`).lte('entry_date', `${yearFilter}-12-31`)
+
+    let accountsQuery = supabase.from('accounts').select('code, name, subtype').eq('company_id', activeCompany.id).eq('product', activeProduct).eq('type', 'Revenue').order('subtype', { ascending: true }).order('code', { ascending: true })
+    if (isHotel) accountsQuery = accountsQuery.neq('code', '4010')
+
+    const [
+      { data: settingsData },
+      { data: repBudgetRows },
+      { data: repStatRows },
+      { data: repRestRevRows },
+      { data: repAncBudgetRows },
+      { data: repAncLedgerRows },
+      { data: repAccounts }
+    ] = await Promise.all([
+      supabase.from('hotel_settings').select('total_rooms').eq('company_id', activeCompany.id).eq('product', activeProduct).maybeSingle(),
+      budgetQuery,
+      roomStatsQuery,
+      restRevQuery,
+      ancBudgetQuery,
+      ancLedgerQuery,
+      accountsQuery
+    ])
+
+    const repTotalRooms = settingsData?.total_rooms || totalRooms || 0
+
+    // Map room revenue budget: key `${budget_year}-${budget_month}`
+    const repBudgetMap = {}
+    ;(repBudgetRows || []).forEach(b => {
+      repBudgetMap[`${b.budget_year}-${b.budget_month}`] = {
+        occ: Number(b.budgeted_occupancy_pct) || 0,
+        adr: Number(b.budgeted_adr) || 0,
+        revenue: Number(b.budgeted_room_revenue) || 0,
+        currency: b.currency,
+        revenue_usd: Number(b.budgeted_room_revenue_usd) || 0
       }
     })
-    const curLabel = selections.currency === 'USD' ? 'USD' : `${selections.currency} & USD`
-    const sections = [{ heading: 'Room Revenue Budget', columns: ['Month', 'Budgeted Occ %', `Budgeted ADR (${curLabel})`, `Budgeted Monthly Revenue (${curLabel})`, `Actual Revenue (${curLabel})`, `Variance (${curLabel})`], rows: tableRows }]
-    const title = 'Room Revenue Budget'
-    const subtitle = `${activeCompany.name} • ${pYear === 'all' ? 'All Years' : pYear + (pMonth !== 'all' ? ' ' + MONTH_NAMES[Number(pMonth)-1] : '')} • ${selections.currency}`
+
+    // Map room revenue actuals: key `${year}-${month}`
+    const repActualMap = {}
+    if (isHotel) {
+      ;(repStatRows || []).forEach(s => {
+        if (!s.stat_date) return
+        const [y, m] = s.stat_date.split('-')
+        const key = `${y}-${Number(m)}`
+        repActualMap[key] = (repActualMap[key] || 0) + (Number(s.room_revenue_usd) || 0)
+      })
+    } else {
+      ;(repRestRevRows || []).forEach(s => {
+        if (!s.revenue_date) return
+        const [y, m] = s.revenue_date.split('-')
+        const key = `${y}-${Number(m)}`
+        repActualMap[key] = (repActualMap[key] || 0) + (Number(s.food_amount_usd) || 0)
+      })
+    }
+
+    // Map ancillary budgets: key `${account_code}-${budget_year}-${budget_month}`
+    const repAncBudgetMap = {}
+    ;(repAncBudgetRows || []).forEach(r => {
+      repAncBudgetMap[`${r.account_code}-${r.budget_year}-${r.budget_month}`] = {
+        amount: Number(r.amount) || 0,
+        currency: r.currency,
+        amount_usd: Number(r.amount_usd) || 0
+      }
+    })
+
+    // Map ancillary actuals: key `${account_code}-${year}-${month}`
+    const repAncActualMap = {}
+    ;(repAncLedgerRows || []).forEach(r => {
+      if (!r.entry_date || !r.account?.code || r.account.code === '4010') return
+      const [y, m] = r.entry_date.split('-')
+      const k = `${r.account.code}-${y}-${Number(m)}`
+      repAncActualMap[k] = (repAncActualMap[k] || 0) + (Number(r.amount_usd) || 0)
+    })
+    ;(repRestRevRows || []).forEach(r => {
+      if (!r.revenue_date) return
+      const [y, m] = r.revenue_date.split('-')
+      const mNum = Number(m)
+      const foodKey = r.meal_period === 'Breakfast' ? `4016-${y}-${mNum}` : `4011-${y}-${mNum}`
+      const bevKey = `4020-${y}-${mNum}`
+      const otherKey = `4021-${y}-${mNum}`
+      repAncActualMap[foodKey] = (repAncActualMap[foodKey] || 0) + (Number(r.food_amount_usd) || 0)
+      repAncActualMap[bevKey] = (repAncActualMap[bevKey] || 0) + (Number(r.beverage_amount_usd) || 0)
+      repAncActualMap[otherKey] = (repAncActualMap[otherKey] || 0) + (Number(r.other_amount_usd) || 0)
+    })
+
+    const allRevenueAccounts = repAccounts || []
+
+    // Determine target years
+    const distinctYears = pYear === 'all'
+      ? Array.from(new Set([
+          startYear,
+          ...(repBudgetRows || []).map(b => Number(b.budget_year)),
+          ...(repAncBudgetRows || []).map(b => Number(b.budget_year))
+        ])).filter(Boolean).sort((a, b) => a - b)
+      : [Number(pYear)]
+
+    const sections = []
+
+    // Build report content for each year (or the selected year)
+    for (const yr of distinctYears) {
+      const now = new Date()
+      const repActiveM = pMonth !== 'all' ? Number(pMonth) : (now.getFullYear() === yr ? now.getMonth() + 1 : 12)
+      const isCurrMonth = yr === now.getFullYear() && repActiveM === now.getMonth() + 1
+      const daysInActiveM = daysInMonth(yr, repActiveM)
+      const daysElapsed = isCurrMonth ? now.getDate() : daysInActiveM
+
+      // 1. KPI Calculation for yr
+      let activeMonthBudgetUsd = 0
+      let activeMonthActualUsd = 0
+      if (isHotel) {
+        const rowThisM = repBudgetMap[`${yr}-${repActiveM}`]
+        activeMonthBudgetUsd = (Number(rowThisM?.revenue_usd) || 0) * daysInActiveM
+        activeMonthActualUsd = repActualMap[`${yr}-${repActiveM}`] || 0
+      } else {
+        for (const a of allRevenueAccounts) {
+          activeMonthBudgetUsd += Number(repAncBudgetMap[`${a.code}-${yr}-${repActiveM}`]?.amount_usd || 0)
+          activeMonthActualUsd += Number(repAncActualMap[`${a.code}-${yr}-${repActiveM}`] || 0)
+        }
+      }
+
+      const dailyExpectedUsd = activeMonthBudgetUsd / daysInActiveM
+      const paceExpected = dailyExpectedUsd * daysElapsed
+      const mtdPaceVariance = activeMonthActualUsd - paceExpected
+
+      // Full-year summaries for yr
+      let ytdRoomBudgetUsd = 0
+      let ytdRoomActualUsd = 0
+      for (let m = 1; m <= 12; m++) {
+        const b = repBudgetMap[`${yr}-${m}`]
+        if (b) ytdRoomBudgetUsd += (Number(b.revenue_usd) || 0) * daysInMonth(yr, m)
+        ytdRoomActualUsd += repActualMap[`${yr}-${m}`] || 0
+      }
+
+      let ytdFrontOfficeBudgetUsd = ytdRoomBudgetUsd
+      let ytdFbServiceBudgetUsd = 0
+      let ytdOtherRevBudgetUsd = 0
+      let ytdAncillaryActualUsd = 0
+
+      for (let m = 1; m <= 12; m++) {
+        for (const a of allRevenueAccounts) {
+          const bAmt = Number(repAncBudgetMap[`${a.code}-${yr}-${m}`]?.amount_usd || 0)
+          const aAmt = Number(repAncActualMap[`${a.code}-${yr}-${m}`] || 0)
+          ytdAncillaryActualUsd += aAmt
+
+          if (a.subtype === 'Front Office' || (!isHotel && (a.name === 'Room Revenue' || a.subtype === 'F&B Revenue' || a.subtype === 'Sales'))) {
+            ytdFrontOfficeBudgetUsd += bAmt
+          } else if (a.subtype === 'F&B Service') {
+            ytdFbServiceBudgetUsd += bAmt
+          } else {
+            ytdOtherRevBudgetUsd += bAmt
+          }
+        }
+      }
+
+      const ytdTotalBudgetUsd = ytdFrontOfficeBudgetUsd + ytdFbServiceBudgetUsd + ytdOtherRevBudgetUsd
+      const ytdTotalActualUsd = ytdRoomActualUsd + ytdAncillaryActualUsd
+      const ytdTotalVarianceUsd = ytdTotalActualUsd - ytdTotalBudgetUsd
+
+      // Determine months to include
+      const monthsToProcess = pMonth !== 'all' ? [Number(pMonth)] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+      // Section 1: KPI Summary
+      if (userSections.includes('Budget Performance Summary (KPIs)')) {
+        sections.push({
+          heading: distinctYears.length > 1 ? `${yr} - Budget Performance Summary` : 'Budget Performance Summary (KPIs)',
+          keyValuePairs: [
+            [`${MONTH_NAMES[repActiveM - 1]} Budget`, f(activeMonthBudgetUsd)],
+            [`${MONTH_NAMES[repActiveM - 1]} ${isCurrMonth ? 'MTD ' : ''}Actual`, f(activeMonthActualUsd)],
+            [`${MONTH_NAMES[repActiveM - 1]} Pace Variance`, `${mtdPaceVariance >= 0 ? '+' : ''}${f(mtdPaceVariance)} (${isCurrMonth ? 'Actual vs pace expected' : 'Actual vs full month budget'})`],
+            ['YTD Actual Revenue', f(ytdTotalActualUsd)],
+            ['YTD Total Budget', f(ytdTotalBudgetUsd)],
+            ['YTD Variance', `${ytdTotalVarianceUsd >= 0 ? '+' : ''}${f(ytdTotalVarianceUsd)}`],
+            [isHotel ? 'YTD FO Revenue Budget' : 'YTD Food Sales Budget', f(ytdFrontOfficeBudgetUsd)],
+            [isHotel ? 'YTD F&B Service Budget' : 'YTD Beverage Sales Budget', f(ytdFbServiceBudgetUsd)],
+            ['YTD Other Revenue Budget', f(ytdOtherRevBudgetUsd)],
+          ]
+        })
+      }
+
+      // Section 2: Room Revenue Budget with ADR & Occ% vs Actual Table
+      if (userSections.includes(roomRevSectionName) && isHotel) {
+        const curLabel = targetCurrency === 'USD' ? 'USD' : `${targetCurrency} (USD)`
+        const tableCols = ['Month', 'Occ %', `ADR (${curLabel})`, 'Rooms Occ.', `Daily Budget (${curLabel})`, `Monthly Budget (${curLabel})`, `Actual (${curLabel})`, `Variance (${curLabel})`]
+        const tableRows = []
+
+        let totMonthlyBudget = 0
+        let totActual = 0
+        let totRoomsOcc = 0
+        let sumOcc = 0
+        let countOcc = 0
+
+        monthsToProcess.forEach(m => {
+          const mName = MONTH_NAMES[m - 1]
+          const bRow = repBudgetMap[`${yr}-${m}`]
+          const occ = Number(bRow?.occ) || 0
+          const adrUsd = Number(bRow?.adr) || 0
+          const roomsOcc = repTotalRooms > 0 ? Math.round((occ / 100) * repTotalRooms) : 0
+          const dailyBudgetUsd = Number(bRow?.revenue_usd) || 0
+          const days = daysInMonth(yr, m)
+          const monthlyBudgetUsd = dailyBudgetUsd * days
+          const actualUsd = repActualMap[`${yr}-${m}`] || 0
+          const varianceUsd = actualUsd - monthlyBudgetUsd
+
+          totMonthlyBudget += monthlyBudgetUsd
+          totActual += actualUsd
+          totRoomsOcc += roomsOcc
+          if (occ > 0) {
+            sumOcc += occ
+            countOcc++
+          }
+
+          tableRows.push([
+            `${mName} ${yr}`,
+            occ > 0 ? `${occ}%` : '0%',
+            f(adrUsd),
+            String(roomsOcc),
+            f(dailyBudgetUsd),
+            f(monthlyBudgetUsd),
+            f(actualUsd),
+            `${varianceUsd >= 0 ? '+' : ''}${f(varianceUsd)}`
+          ])
+        })
+
+        if (monthsToProcess.length > 1) {
+          const totVariance = totActual - totMonthlyBudget
+          const avgOcc = countOcc > 0 ? (sumOcc / countOcc).toFixed(1) + '%' : '0%'
+          const avgDaily = totMonthlyBudget / (monthsToProcess.reduce((acc, m) => acc + daysInMonth(yr, m), 0) || 1)
+          const avgAdr = totRoomsOcc > 0 ? (totMonthlyBudget / totRoomsOcc) : 0
+
+          tableRows.push([
+            'Full Year Total / Avg',
+            avgOcc,
+            f(avgAdr),
+            String(totRoomsOcc),
+            f(avgDaily),
+            f(totMonthlyBudget),
+            f(totActual),
+            `${totVariance >= 0 ? '+' : ''}${f(totVariance)}`
+          ])
+        }
+
+        sections.push({
+          heading: distinctYears.length > 1 ? `${yr} - Room Revenue with ADR & Occ% vs Actual` : 'Room Revenue with ADR & Occ% vs Actual',
+          columns: tableCols,
+          columnStyles: {
+            0: { cellWidth: 32 },
+            1: { cellWidth: 20, halign: 'right' },
+            2: { cellWidth: 34, halign: 'right' },
+            3: { cellWidth: 24, halign: 'right' },
+            4: { cellWidth: 38, halign: 'right' },
+            5: { cellWidth: 42, halign: 'right' },
+            6: { cellWidth: 42, halign: 'right' },
+            7: { cellWidth: 42, halign: 'right' },
+          },
+          rows: tableRows
+        })
+      }
+
+      // Section 3: Other Revenue / Ancillary vs Actuals Table
+      if (userSections.includes(otherRevSectionName)) {
+        const curLabel = targetCurrency === 'USD' ? 'USD' : `${targetCurrency} (USD)`
+        const headingName = isHotel ? `${yr} - Other Revenue vs Actuals` : `${yr} - F&B Revenue & Actuals`
+        const tableCols = ['Month', `Monthly Budget (${curLabel})`, `Actual Revenue (${curLabel})`, `Variance (${curLabel})`]
+        const tableRows = []
+
+        let totAncBudget = 0
+        let totAncActual = 0
+
+        monthsToProcess.forEach(m => {
+          const mName = MONTH_NAMES[m - 1]
+          let mBudget = 0
+          let mActual = 0
+          for (const a of allRevenueAccounts) {
+            mBudget += Number(repAncBudgetMap[`${a.code}-${yr}-${m}`]?.amount_usd || 0)
+            mActual += Number(repAncActualMap[`${a.code}-${yr}-${m}`] || 0)
+          }
+          const mVar = mActual - mBudget
+          totAncBudget += mBudget
+          totAncActual += mActual
+
+          tableRows.push([
+            `${mName} ${yr}`,
+            f(mBudget),
+            f(mActual),
+            `${mVar >= 0 ? '+' : ''}${f(mVar)}`
+          ])
+        })
+
+        if (monthsToProcess.length > 1) {
+          const totVar = totAncActual - totAncBudget
+          tableRows.push([
+            'Full Year Total',
+            f(totAncBudget),
+            f(totAncActual),
+            `${totVar >= 0 ? '+' : ''}${f(totVar)}`
+          ])
+        }
+
+        sections.push({
+          heading: distinctYears.length > 1 ? headingName : (isHotel ? 'Other Revenue vs Actuals' : 'F&B Revenue & Actuals'),
+          columns: tableCols,
+          columnStyles: {
+            0: { cellWidth: 45 },
+            1: { cellWidth: 70, halign: 'right' },
+            2: { cellWidth: 70, halign: 'right' },
+            3: { cellWidth: 70, halign: 'right' },
+          },
+          rows: tableRows
+        })
+      }
+
+      // Section 4: Revenue Account Breakdown (Detail)
+      if (userSections.includes('Revenue Account Breakdown') && allRevenueAccounts.length > 0) {
+        const curLabel = targetCurrency === 'USD' ? 'USD' : `${targetCurrency} (USD)`
+        const detailCols = ['Account', 'Subtype', `Budget (${curLabel})`, `Actual (${curLabel})`, `Variance (${curLabel})`]
+        const detailRows = []
+
+        let totAcctBudget = 0
+        let totAcctActual = 0
+
+        allRevenueAccounts.forEach(a => {
+          let acctBudget = 0
+          let acctActual = 0
+          monthsToProcess.forEach(m => {
+            acctBudget += Number(repAncBudgetMap[`${a.code}-${yr}-${m}`]?.amount_usd || 0)
+            acctActual += Number(repAncActualMap[`${a.code}-${yr}-${m}`] || 0)
+          })
+          const acctVar = acctActual - acctBudget
+          totAcctBudget += acctBudget
+          totAcctActual += acctActual
+
+          detailRows.push([
+            `${a.code} - ${a.name}`,
+            a.subtype || 'Other Revenue',
+            f(acctBudget),
+            f(acctActual),
+            `${acctVar >= 0 ? '+' : ''}${f(acctVar)}`
+          ])
+        })
+
+        if (allRevenueAccounts.length > 1) {
+          const totAcctVar = totAcctActual - totAcctBudget
+          detailRows.push([
+            'Total Ancillary Revenue',
+            'All Subtypes',
+            f(totAcctBudget),
+            f(totAcctActual),
+            `${totAcctVar >= 0 ? '+' : ''}${f(totAcctVar)}`
+          ])
+        }
+
+        sections.push({
+          heading: distinctYears.length > 1 ? `${yr} - Ancillary Revenue Account Breakdown` : 'Ancillary Revenue Account Breakdown',
+          columns: detailCols,
+          columnStyles: {
+            0: { cellWidth: 75 },
+            1: { cellWidth: 45 },
+            2: { cellWidth: 45, halign: 'right' },
+            3: { cellWidth: 45, halign: 'right' },
+            4: { cellWidth: 45, halign: 'right' },
+          },
+          rows: detailRows
+        })
+      }
+
+      // Section 5: Monthly Chart (Grouped Bar Chart)
+      if (userSections.includes('Budget vs Actual Comparison (Chart)') && monthsToProcess.length > 1) {
+        const chartCats = monthsToProcess.map(m => MONTH_NAMES[m - 1])
+        const roomBudgets = monthsToProcess.map(m => {
+          const b = repBudgetMap[`${yr}-${m}`]
+          return conv((Number(b?.revenue_usd) || 0) * daysInMonth(yr, m))
+        })
+        const actualRevs = monthsToProcess.map(m => {
+          const roomAct = repActualMap[`${yr}-${m}`] || 0
+          let ancAct = 0
+          for (const a of allRevenueAccounts) {
+            ancAct += Number(repAncActualMap[`${a.code}-${yr}-${m}`] || 0)
+          }
+          return conv(roomAct + ancAct)
+        })
+        const totalBudgets = monthsToProcess.map(m => {
+          const roomB = (Number(repBudgetMap[`${yr}-${m}`]?.revenue_usd) || 0) * daysInMonth(yr, m)
+          let ancB = 0
+          for (const a of allRevenueAccounts) {
+            ancB += Number(repAncBudgetMap[`${a.code}-${yr}-${m}`]?.amount_usd || 0)
+          }
+          return conv(roomB + ancB)
+        })
+
+        sections.push({
+          heading: distinctYears.length > 1 ? `${yr} - Budget vs Actual Revenue by Month` : 'Budget vs Actual Revenue by Month',
+          chart: {
+            categories: chartCats,
+            valueFormatter: v => formatMoney(v, targetCurrency),
+            series: [
+              { name: isHotel ? 'Room Budget' : 'Food Budget', color: '#f59e0b', values: roomBudgets },
+              { name: 'Total Budget', color: '#6366f1', values: totalBudgets },
+              { name: 'Actual Revenue', color: '#10b981', values: actualRevs },
+            ]
+          }
+        })
+      }
+    }
+
+    const title = isHotel ? 'Room Revenue Budget' : 'Revenue Budget'
+    const periodLabel = pYear === 'all'
+      ? 'All Available Years'
+      : `${pYear}${pMonth !== 'all' ? ' ' + MONTH_NAMES[Number(pMonth) - 1] : ' Full Year'}`
+    const subtitle = `${activeCompany.name} • ${periodLabel} • ${targetCurrency}`
     const logoUrl = activeCompany.logo_url
-    if (format === 'pdf' || format === 'preview') exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'room_revenue_budget', logoUrl })
-    if (format === 'excel') exportMultiSectionExcel({ title, sections, filename: 'room_revenue_budget' })
-    if (format === 'word') exportMultiSectionWord({ title, subtitle, sections, filename: 'room_revenue_budget', logoUrl })
+
+    if (format === 'pdf' || format === 'preview') {
+      await exportMultiSectionPDF({ title, subtitle, sections, preview: format === 'preview', filename: 'revenue_budget_report', logoUrl, orientation: 'landscape' })
+    }
+    if (format === 'excel') {
+      exportMultiSectionExcel({ title, sections, filename: 'revenue_budget_report' })
+    }
+    if (format === 'word') {
+      exportMultiSectionWord({ title, subtitle, sections, filename: 'revenue_budget_report', logoUrl })
+    }
   }
 
   if (!activeCompany) return null
@@ -710,10 +1126,29 @@ export default function HotelBudget() {
               type: 'select',
               key: 'reportMonth',
               label: 'Select Month',
-              default: 'all',
+              default: startMonth || 'all',
               options: [
                 { value: 'all', label: 'Full Year' },
                 ...Array.from({ length: 12 }, (_, i) => { return { value: String(i + 1), label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i] } })
+              ]
+            },
+            {
+              type: 'checkboxGroup',
+              key: 'sections',
+              label: 'Include Sections',
+              options: [
+                'Budget Performance Summary (KPIs)',
+                activeProduct === 'restaurant' ? 'Revenue Budget vs Actuals' : 'Room Revenue Budget vs Actuals',
+                activeProduct === 'restaurant' ? 'F&B Revenue & Actuals' : 'Other Revenue vs Actuals',
+                'Revenue Account Breakdown',
+                'Budget vs Actual Comparison (Chart)'
+              ],
+              default: [
+                'Budget Performance Summary (KPIs)',
+                activeProduct === 'restaurant' ? 'Revenue Budget vs Actuals' : 'Room Revenue Budget vs Actuals',
+                activeProduct === 'restaurant' ? 'F&B Revenue & Actuals' : 'Other Revenue vs Actuals',
+                'Revenue Account Breakdown',
+                'Budget vs Actual Comparison (Chart)'
               ]
             }
           ]}
