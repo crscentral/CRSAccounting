@@ -1069,6 +1069,10 @@ export default function Dashboard() {
   const profitPct = totalBilledNum > 0 ? `${((Number(netProfit) || 0) / totalBilledNum * 100).toFixed(1)}%` : null
   const outstandingPct = totalBilledNum > 0 ? `${((Number(outstanding) || 0) / totalBilledNum * 100).toFixed(1)}%` : null
 
+  const roomRevPct = totalBilledNum > 0 ? `${((Number(totalRoomRevenue) || 0) / totalBilledNum * 100).toFixed(1)}%` : null
+  const fbRevPct = totalBilledNum > 0 ? `${((Number(totalFbRevenue) || 0) / totalBilledNum * 100).toFixed(1)}%` : null
+  const otherRevPct = totalBilledNum > 0 ? `${((Number(totalOtherRevenue) || 0) / totalBilledNum * 100).toFixed(1)}%` : null
+
   const collectedNum = Number(collected) || 0
   const expPaidPct = collectedNum > 0 ? `${((Number(expensesMade) || 0) / collectedNum * 100).toFixed(1)}%` : null
   const actualProfitPct = collectedNum > 0 ? `${((Number(actualProfit) || 0) / collectedNum * 100).toFixed(1)}%` : null
@@ -1102,6 +1106,9 @@ export default function Dashboard() {
             sublabel="subtype: Room Revenue" 
             icon={BedDouble} 
             tone="blue" 
+            badge={roomRevPct}
+            badgeTone="blue"
+            badgeTitle={roomRevPct ? `${roomRevPct} of Total Revenue` : undefined}
           />
           <KpiCard 
             label="Total F&B Revenue (F&B Service)" 
@@ -1109,6 +1116,9 @@ export default function Dashboard() {
             sublabel="subtype: F&B Service" 
             icon={Utensils} 
             tone="gold" 
+            badge={fbRevPct}
+            badgeTone="gold"
+            badgeTitle={fbRevPct ? `${fbRevPct} of Total Revenue` : undefined}
           />
           <KpiCard 
             label="Total Other Revenue" 
@@ -1116,6 +1126,9 @@ export default function Dashboard() {
             sublabel="subtype: Other Revenue" 
             icon={Sparkles} 
             tone="slate" 
+            badge={otherRevPct}
+            badgeTone="slate"
+            badgeTitle={otherRevPct ? `${otherRevPct} of Total Revenue` : undefined}
           />
         </div>
       )}
