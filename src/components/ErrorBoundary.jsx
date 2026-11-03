@@ -27,18 +27,25 @@ export class ErrorBoundary extends React.Component {
       try {
         const lastRetry = sessionStorage.getItem('crs_chunk_retry');
         const now = Date.now();
-        if (!lastRetry || now - parseInt(lastRetry, 10) > 15000) {
+        if (!lastRetry || now - parseInt(lastRetry, 10) > 20000) {
           sessionStorage.setItem('crs_chunk_retry', String(now));
-          if ('caches' in window) {
-            caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).then(() => {
-              window.location.reload();
-            });
-          } else {
+          const cleanUp = async () => {
+            try {
+              if ('caches' in window) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map((k) => caches.delete(k)));
+              }
+              if ('serviceWorker' in navigator) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(regs.map((r) => r.unregister()));
+              }
+            } catch {}
             window.location.reload();
-          }
+          };
+          cleanUp();
         }
       } catch (e) {
-        window.location.reload();
+        console.warn('ErrorBoundary chunk retry check error:', e);
       }
     }
   }

@@ -11,11 +11,10 @@
 // forever, since this file's own bytes rarely change and browsers only re-check a
 // service worker for updates when its file content changes.
 
-const CACHE_NAME = 'crs-accounting-shell-v166'
+const CACHE_NAME = 'crs-accounting-shell-v167'
 const APP_SHELL = [
-  '/',
-  '/index.html',
   '/manifest.webmanifest',
+  '/favicon.png',
   '/icon-192.png',
   '/icon-512.png',
 ]
@@ -44,10 +43,20 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Never cache or hijack HTML navigation requests or JS/CSS chunk bundles in the service worker.
+  // HTML navigation must ALWAYS be fresh from network so updates apply immediately.
+  // JS/CSS assets are already cache-busted with content-hashes by Vite.
+  const isHtml = event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/'
+  const isCodeAsset = url.pathname.startsWith('/assets/') && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css'))
+
+  if (isHtml || isCodeAsset) {
+    return
+  }
+
+  // Only cache static icons & manifest for offline fallback
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Only cache successful OK responses (never 404s or error pages)
         if (response && response.ok && response.status === 200) {
           const copy = response.clone()
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {})

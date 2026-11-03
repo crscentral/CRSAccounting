@@ -27,9 +27,9 @@ export function AuthProvider({ children }) {
       setSession(data.session)
       setLoading(false)
     })
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess)
-      if (!sess) {
+      if (event === 'SIGNED_OUT' || (!sess && event !== 'INITIAL_SESSION')) {
         setCompanies([])
         try { localStorage.removeItem('crs_cached_companies') } catch {}
       }
@@ -50,17 +50,21 @@ export function AuthProvider({ children }) {
         .eq('user_id', session.user.id)
 
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Company load timed out')), 8000)
+        setTimeout(() => reject(new Error('Company load timed out')), 5000)
       )
 
       const { data, error } = await Promise.race([fetchPromise, timeoutPromise])
       if (error) throw error
 
       if (data && data.length > 0) {
-        setCompanies(data)
-        try { localStorage.setItem('crs_cached_companies', JSON.stringify(data)) } catch {}
-        if (!activeCompanyId) {
-          const firstValid = data.find(c => c?.company?.id)?.company
+        const validMemberships = data.filter(c => Boolean(c?.company?.id))
+        const finalData = validMemberships.length > 0 ? validMemberships : data
+        setCompanies(finalData)
+        try { localStorage.setItem('crs_cached_companies', JSON.stringify(finalData)) } catch {}
+
+        const hasActive = finalData.some(c => c?.company?.id === activeCompanyId)
+        if (!activeCompanyId || !hasActive) {
+          const firstValid = finalData.find(c => c?.company?.id)?.company
           if (firstValid) {
             setActiveCompanyId(firstValid.id)
             localStorage.setItem('crs_active_company', firstValid.id)
@@ -98,7 +102,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('crs_active_product', product)
   }
 
-  const activeMembership = companies.find(c => c?.company?.id === activeCompanyId) || companies[0]
+  const activeMembership = companies.find(c => c?.company?.id === activeCompanyId) || companies.find(c => c?.company?.id) || companies[0]
   const activeCompany = activeMembership?.company || null
   const activeRole = activeMembership?.role || null
   const memberProducts = activeMembership?.products || ['basic', 'hotel', 'restaurant']

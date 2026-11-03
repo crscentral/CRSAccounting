@@ -21,18 +21,23 @@ function lazyWithRetry(componentImport) {
         error?.name === 'ChunkLoadError';
 
       if (isChunkError) {
-        const lastRetry = sessionStorage.getItem('crs_lazy_retry');
-        const now = Date.now();
-        if (!lastRetry || now - parseInt(lastRetry, 10) > 15000) {
-          sessionStorage.setItem('crs_lazy_retry', String(now));
-          if ('caches' in window) {
-            try {
-              await caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
-            } catch (e) {}
+        try {
+          const lastRetry = sessionStorage.getItem('crs_lazy_retry');
+          const now = Date.now();
+          if (!lastRetry || now - parseInt(lastRetry, 10) > 20000) {
+            sessionStorage.setItem('crs_lazy_retry', String(now));
+            if ('caches' in window) {
+              const keys = await caches.keys();
+              await Promise.all(keys.map((k) => caches.delete(k)));
+            }
+            if ('serviceWorker' in navigator) {
+              const registrations = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(registrations.map((r) => r.unregister()));
+            }
+            window.location.reload();
+            return new Promise(() => {});
           }
-          window.location.reload();
-          return new Promise(() => {});
-        }
+        } catch {}
       }
       throw error;
     }
@@ -82,13 +87,28 @@ function PageLoader() {
 }
 
 function LoadingCompaniesScreen() {
-  const { refreshCompanies } = useAuth()
+  const { refreshCompanies, signOut } = useAuth()
   const [slow, setSlow] = useState(false)
 
   useEffect(() => {
-    const t = setTimeout(() => setSlow(true), 4000)
+    const t = setTimeout(() => setSlow(true), 2500)
     return () => clearTimeout(t)
   }, [])
+
+  const handleHardRefresh = async () => {
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map(k => caches.delete(k)))
+      }
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.map(r => r.unregister()))
+      }
+      localStorage.removeItem('crs_cached_companies')
+    } catch {}
+    window.location.reload()
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50">
@@ -96,12 +116,32 @@ function LoadingCompaniesScreen() {
       <div className="text-slate-700 font-semibold text-sm">Loading Companies…</div>
       <div className="text-slate-400 text-xs mt-1">Connecting to your CRS workspace</div>
       {slow && (
-        <button
-          onClick={() => refreshCompanies()}
-          className="mt-4 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-100 shadow-sm transition-all"
-        >
-          Taking longer than usual? Click to retry
-        </button>
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={() => refreshCompanies()}
+            className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-100 shadow-sm transition-all"
+          >
+            Taking longer than usual? Click to retry
+          </button>
+          <div className="flex items-center gap-2 text-xs">
+            <button
+              type="button"
+              onClick={handleHardRefresh}
+              className="text-navy-600 hover:underline font-medium"
+            >
+              Clear Cache & Refresh
+            </button>
+            <span className="text-slate-300">•</span>
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="text-slate-500 hover:underline"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

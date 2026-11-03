@@ -17,20 +17,38 @@ if (typeof window !== 'undefined') {
   }
 
   // Handle chunk loading errors when a new deployment invalidates old asset hashes
-  window.addEventListener('vite:preloadError', (event) => {
-    console.warn('Vite preloadError detected (new deployment). Reloading page...', event);
+  window.addEventListener('vite:preloadError', async (event) => {
+    console.warn('Vite preloadError detected (new deployment). Handling reload safely...', event);
     event.preventDefault();
+
+    const RETRY_KEY = 'crs_vite_preload_retry';
+    try {
+      const lastRetry = sessionStorage.getItem(RETRY_KEY);
+      const now = Date.now();
+      if (lastRetry && now - parseInt(lastRetry, 10) < 20000) {
+        console.error('Repeated Vite preload errors detected within 20s. Halting auto-reload loop.');
+        return;
+      }
+      sessionStorage.setItem(RETRY_KEY, String(now));
+    } catch {
+      // If sessionStorage is unavailable, do not loop
+      return;
+    }
+
     try {
       if ('caches' in window) {
-        caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).finally(() => {
-          window.location.reload();
-        });
-      } else {
-        window.location.reload();
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((r) => r.unregister()));
       }
     } catch (e) {
-      window.location.reload();
+      console.warn('Failed to clear caches/serviceWorker on preload error:', e);
     }
+
+    window.location.reload();
   });
 }
 
