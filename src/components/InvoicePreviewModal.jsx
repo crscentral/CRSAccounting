@@ -50,7 +50,7 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
               <div className="text-slate-500">{company?.email}</div>
               {company?.tax_id && <div className="text-slate-500">Tax ID: {company.tax_id}</div>}
             </div>
-            <div>
+            <div className="sm:mx-auto">
               <div className="text-[11px] font-semibold text-slate-400 uppercase mb-1">{isGuest ? 'Guest' : isSales ? 'Bill To' : 'Supplier'}</div>
               <div className="font-semibold text-slate-800">{contactDisplay || invoice.guest_name || '—'}</div>
               {invoice.room_number && <div className="text-slate-500 font-medium">Room: {invoice.room_number}</div>}
@@ -62,7 +62,7 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
               <div className="text-slate-500">{invoice.customer_phone || invoice.supplier_phone}</div>
               {invoice.supplier_gstin && <div className="text-slate-500">GSTIN: {invoice.supplier_gstin}</div>}
             </div>
-            <div className="text-left">
+            <div className="text-left sm:ml-auto">
               <div className="text-[11px] font-semibold text-slate-400 uppercase mb-1">Document</div>
               <div className="font-semibold text-slate-800">{invoice.invoice_number || '—'}</div>
               <div className="text-slate-500">Issue: {invoice.invoice_date}</div>
@@ -154,15 +154,21 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
 
           {isSales && (invoice.bank_account_choice === 'bank2' ? company?.bank2_account_number : company?.bank_account_number) && (
             <div className="border-t border-slate-100 pt-4 mb-4 text-xs text-slate-500">
-              <div className="font-semibold text-slate-400 uppercase text-[11px] mb-1">Bank Details</div>
-              <p>Bank: {invoice.bank_account_choice === 'bank2' ? company.bank2_name : company.bank_name}</p>
-              <p>Account Holder: {invoice.bank_account_choice === 'bank2' ? company.bank2_account_holder : company.bank_account_holder}</p>
-              <p>Account Number: {invoice.bank_account_choice === 'bank2' ? company.bank2_account_number : company.bank_account_number}</p>
-              <p>Branch: {invoice.bank_account_choice === 'bank2' ? company.bank2_branch : company.bank_branch}</p>
-              <p>SWIFT: {invoice.bank_account_choice === 'bank2' ? company.bank2_swift_code : company.bank_swift_code}</p>
-              {(invoice.bank_account_choice === 'bank2' ? company.bank2_ifsc_code : company.bank_ifsc_code) && (
-                <p>IFSC: {invoice.bank_account_choice === 'bank2' ? company.bank2_ifsc_code : company.bank_ifsc_code}</p>
-              )}
+              <div className="font-semibold text-slate-400 uppercase text-[11px] mb-2">Bank Details</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p><span className="font-medium text-slate-600">Bank:</span> {invoice.bank_account_choice === 'bank2' ? company.bank2_name : company.bank_name}</p>
+                  <p><span className="font-medium text-slate-600">Account Holder:</span> {invoice.bank_account_choice === 'bank2' ? company.bank2_account_holder : company.bank_account_holder}</p>
+                  <p><span className="font-medium text-slate-600">Account Number:</span> {invoice.bank_account_choice === 'bank2' ? company.bank2_account_number : company.bank_account_number}</p>
+                </div>
+                <div className="space-y-1">
+                  <p><span className="font-medium text-slate-600">Branch:</span> {invoice.bank_account_choice === 'bank2' ? company.bank2_branch : company.bank_branch}</p>
+                  <p><span className="font-medium text-slate-600">SWIFT:</span> {invoice.bank_account_choice === 'bank2' ? company.bank2_swift_code : company.bank_swift_code}</p>
+                  {(invoice.bank_account_choice === 'bank2' ? company.bank2_ifsc_code : company.bank_ifsc_code) && (
+                    <p><span className="font-medium text-slate-600">IFSC:</span> {invoice.bank_account_choice === 'bank2' ? company.bank2_ifsc_code : company.bank_ifsc_code}</p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

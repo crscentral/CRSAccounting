@@ -10,8 +10,8 @@ function renderRichText(doc, text, startX, startY, maxWidth, options = {}) {
   if (!text) return startY;
   const lines = text.split('\n');
   let y = startY;
-  const lineHeight = 4.5;
-  const maxContentY = options.maxContentY || 272;
+  const lineHeight = 4.0;
+  const maxContentY = options.maxContentY || 278;
   const onPageBreak = options.onPageBreak || null;
 
   function ensureSpace() {
@@ -228,7 +228,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const rightX = pageWidth - 14
-  const maxContentY = pageHeight - 24
+  const maxContentY = pageHeight - 19
 
   const isProforma = isSales && invoice.invoice_type === 'proforma'
   let docHeading = 'Invoice'
@@ -301,9 +301,13 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.line(14, y, rightX, y)
   y += 8
 
-  // FROM / BILL TO / DOCUMENT three-column block (spans full printable width 14mm to 196mm)
-  const col1 = 14, col2 = 75, col3 = 137
-  const colWidth = 58
+  // FROM / TO / DOCUMENT three-column block (spans full printable width 14mm to 196mm)
+  const col1 = 14
+  const fromWidth = 60
+  const col2 = 80
+  const toWidth = 60
+  const col3 = 148
+  const docWidth = 48
   doc.setFontSize(8)
   doc.setTextColor(150)
   doc.text('FROM', col1, y)
@@ -318,9 +322,9 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const fromName = (isSales || isReceipt || isGuest) ? (company?.name || '') : (contact?.name || invoice.supplier_name_freeform || '')
   const toName = (isSales || isReceipt || isGuest) ? (contact?.name || invoice.guest_name || invoice.customer_name_freeform || invoice.customer_name || '') : (company?.name || '')
   
-  const fromNameWrapped = doc.splitTextToSize(fromName, colWidth)
-  const toNameWrapped = doc.splitTextToSize(toName, colWidth)
-  const docNameWrapped = doc.splitTextToSize((isReceipt ? invoice.receipt_number : invoice.invoice_number) || '', colWidth)
+  const fromNameWrapped = doc.splitTextToSize(fromName, fromWidth)
+  const toNameWrapped = doc.splitTextToSize(toName, toWidth)
+  const docNameWrapped = doc.splitTextToSize((isReceipt ? invoice.receipt_number : invoice.invoice_number) || '', docWidth)
 
   doc.text(fromNameWrapped, col1, y)
   doc.text(toNameWrapped, col2, y)
@@ -384,10 +388,10 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     })
     return cy
   }
-  const endY1 = renderColumn(fromLines, col1, colWidth, y1)
-  const endY2 = renderColumn(billLines, col2, colWidth, y2)
-  const endY3 = renderColumn(docLines, col3, colWidth, y3)
-  y = Math.max(endY1, endY2, endY3) + 6
+  const endY1 = renderColumn(fromLines, col1, fromWidth, y1)
+  const endY2 = renderColumn(billLines, col2, toWidth, y2)
+  const endY3 = renderColumn(docLines, col3, docWidth, y3)
+  y = Math.max(endY1, endY2, endY3) + 5
 
   // Line items -- two-line description like the original (bold name + gray subtitle)
   const tableColumns = isReceipt 
@@ -412,9 +416,9 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     head: [tableColumns],
     body: tableRows,
     headStyles: { fillColor: [27, 58, 107], fontSize: 9 },
-    styles: { fontSize: 9, cellPadding: 3 },
+    styles: { fontSize: 8.5, cellPadding: 2.2 },
     columnStyles: (isSales || isGuest) ? { 0: { cellWidth: 90 } } : { 0: { cellWidth: 70 } },
-    margin: { top: 20, left: 14, right: 14, bottom: 24 },
+    margin: { top: 20, left: 14, right: 14, bottom: 20 },
     didParseCell: (data) => {
       if (data.column.index === 0 && data.cell.raw && String(data.cell.raw).includes('\n')) {
         data.cell.styles.fontStyle = 'normal'
@@ -422,7 +426,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     },
   })
 
-  let finalY = doc.lastAutoTable.finalY + 8
+  let finalY = doc.lastAutoTable.finalY + 4
   const grandTotal = Number((isSales || isGuest) ? (invoice.amount ?? invoice.invoice_amount) : (invoice.net_payable ?? invoice.amount))
   const paid = Number(invoice.paid_amount ?? invoice.collected_amount ?? 0)
   const summaryRows = [
@@ -444,7 +448,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const usdBalance = Math.max(0, grandTotal - paid) / (fxRate || 1)
   const printUsd = invoice.currency && invoice.currency !== 'USD'
 
-  const totalsHeight = (summaryRows.length * 6) + (printUsd ? 12 : 9) + ((isSales || isGuest) ? (printUsd ? 18 : 12) : 0) + 4
+  const totalsHeight = (summaryRows.length * 5) + (printUsd ? 9 : 6) + ((isSales || isGuest) ? (printUsd ? 15 : 10) : 0) + 2
   checkPageBreak(totalsHeight)
 
   doc.setFontSize(9)
@@ -454,7 +458,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     doc.text(label, 130, finalY)
     doc.setTextColor(20)
     doc.text(`${val} ${invoice.currency}`, rightX, finalY, { align: 'right' })
-    finalY += 6
+    finalY += 5
   })
 
   doc.setDrawColor(220)
@@ -470,10 +474,10 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     doc.setFont(undefined, 'normal')
     doc.setFontSize(8)
     doc.setTextColor(120)
-    doc.text(`(USD ${usdGrandTotal.toFixed(2)})`, rightX, finalY + 7, { align: 'right' })
-    finalY += 12
+    doc.text(`(USD ${usdGrandTotal.toFixed(2)})`, rightX, finalY + 6.5, { align: 'right' })
+    finalY += 10
   } else {
-    finalY += 9
+    finalY += 7.5
   }
 
   if (isSales || isGuest) {
@@ -487,10 +491,10 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     if (printUsd) {
       doc.setFontSize(8)
       doc.setTextColor(120)
-      doc.text(`(USD ${usdPaid.toFixed(2)})`, rightX, finalY + 4, { align: 'right' })
-      finalY += 9
+      doc.text(`(USD ${usdPaid.toFixed(2)})`, rightX, finalY + 3.8, { align: 'right' })
+      finalY += 8
     } else {
-      finalY += 6
+      finalY += 5.5
     }
     
     doc.setFont(undefined, 'bold')
@@ -503,26 +507,26 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
       doc.setFont(undefined, 'normal')
       doc.setFontSize(8)
       doc.setTextColor(120)
-      doc.text(`(USD ${usdBalance.toFixed(2)})`, rightX, finalY + 4, { align: 'right' })
-      finalY += 9
+      doc.text(`(USD ${usdBalance.toFixed(2)})`, rightX, finalY + 3.8, { align: 'right' })
+      finalY += 8
     } else {
-      finalY += 6
+      finalY += 5.5
     }
   }
 
-  finalY += 4
+  finalY += 3
   const lutInfo = resolveLutInfo(invoice, company)
   if (isSales && lutInfo.number) {
-    checkPageBreak(8)
+    checkPageBreak(5)
     doc.setFontSize(8)
     doc.setFont(undefined, 'normal')
     doc.setTextColor(90)
     doc.text(`The LUT acknowledgement number is ${lutInfo.number}${lutInfo.date ? ` dated ${lutInfo.date}` : ''}`, 14, finalY)
-    finalY += 6
+    finalY += 4.5
   }
 
   if (invoice.payment_terms || invoice.notes) {
-    checkPageBreak(12)
+    checkPageBreak(8)
     const combined = [
       invoice.payment_terms ? `Payment Terms: ${invoice.payment_terms}` : null,
       invoice.notes ? `Remarks / Notes: ${invoice.notes}` : null
@@ -541,30 +545,44 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const bankNum = isBank2 ? company?.bank2_account_number : company?.bank_account_number
   
   if (isSales && bankNum) {
-    checkPageBreak(38)
-    finalY += 3
-    doc.setDrawColor(220)
-    doc.line(14, finalY - 4, rightX, finalY - 4)
-    doc.setFontSize(8)
-    doc.setTextColor(150)
-    doc.text('BANK DETAILS', 14, finalY)
-    finalY += 5
-    doc.setTextColor(60)
-    const bankLines = [
+    const ifsc = isBank2 ? company?.bank2_ifsc_code : company?.bank_ifsc_code
+    const col1Bank = [
       `Bank: ${isBank2 ? company.bank2_name : company.bank_name || ''}`,
       `Account Holder: ${isBank2 ? company.bank2_account_holder : company.bank_account_holder || ''}`,
       `Account Number: ${bankNum}`,
+    ]
+    const col2Bank = [
       `Branch: ${isBank2 ? company.bank2_branch : company.bank_branch || ''}`,
       `SWIFT Code: ${isBank2 ? company.bank2_swift_code : company.bank_swift_code || ''}`,
-    ]
-    const ifsc = isBank2 ? company?.bank2_ifsc_code : company?.bank_ifsc_code
-    if (ifsc) bankLines.push(`IFSC: ${ifsc}`)
+      ifsc ? `IFSC: ${ifsc}` : null,
+    ].filter(Boolean)
 
-    bankLines.forEach(line => {
-      checkPageBreak(6)
-      doc.text(line, 14, finalY)
-      finalY += 4.5
+    const bankNeededHeight = 6 + (Math.max(col1Bank.length, col2Bank.length) * 4) + 2
+    checkPageBreak(bankNeededHeight)
+
+    finalY += 2
+    doc.setDrawColor(220)
+    doc.line(14, finalY - 2, rightX, finalY - 2)
+    doc.setFontSize(8)
+    doc.setTextColor(150)
+    doc.text('BANK DETAILS', 14, finalY + 2)
+    finalY += 6
+    doc.setTextColor(60)
+
+    const startBankY = finalY
+    let by1 = startBankY
+    col1Bank.forEach(line => {
+      doc.text(line, 14, by1)
+      by1 += 4
     })
+
+    let by2 = startBankY
+    col2Bank.forEach(line => {
+      doc.text(line, 105, by2)
+      by2 += 4
+    })
+
+    finalY = Math.max(by1, by2) + 2
   }
 
   const totalPages = doc.internal.getNumberOfPages()
@@ -662,14 +680,18 @@ export function exportInvoiceExcel({ type, invoice, items, company, contact }) {
     rows.push([])
     rows.push(['LUT Acknowledgement Number', lutInfoXl.number, '', 'LUT Date', lutInfoXl.date || ''])
   }
-  if (isSales && company?.bank_account_number) {
+  const isBank2Xl = invoice.bank_account_choice === 'bank2'
+  const bankNumXl = isBank2Xl ? company?.bank2_account_number : company?.bank_account_number
+  const ifscXl = isBank2Xl ? company?.bank2_ifsc_code : company?.bank_ifsc_code
+  if (isSales && bankNumXl) {
     rows.push([])
     rows.push(['Bank Details'])
-    rows.push(['Bank', company.bank_name || ''])
-    rows.push(['Account Holder', company.bank_account_holder || ''])
-    rows.push(['Account Number', company.bank_account_number || ''])
-    rows.push(['Branch', company.bank_branch || ''])
-    rows.push(['SWIFT', company.bank_swift_code || ''])
+    rows.push(['Bank', (isBank2Xl ? company?.bank2_name : company?.bank_name) || ''])
+    rows.push(['Account Holder', (isBank2Xl ? company?.bank2_account_holder : company?.bank_account_holder) || ''])
+    rows.push(['Account Number', bankNumXl || ''])
+    rows.push(['Branch', (isBank2Xl ? company?.bank2_branch : company?.bank_branch) || ''])
+    rows.push(['SWIFT', (isBank2Xl ? company?.bank2_swift_code : company?.bank_swift_code) || ''])
+    if (ifscXl) rows.push(['IFSC', ifscXl])
   }
 
   const ws = XLSX.utils.aoa_to_sheet(rows)
@@ -702,9 +724,25 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
         .map(c => `<th style="background:#1B3A6B;color:#fff;padding:6px;text-align:left;">${esc(c)}</th>`).join('')
 
   const grandTotal = Number((isSales || isGuest) ? (invoice.amount ?? invoice.invoice_amount) : (invoice.net_payable ?? invoice.amount))
-  const bankHtml = isSales && company?.bank_account_number ? `
-    <p style="color:#999;font-size:11px;margin-top:20px;">BANK DETAILS</p>
-    <p>Bank: ${esc(company.bank_name)}<br/>Account Holder: ${esc(company.bank_account_holder)}<br/>Account Number: ${esc(company.bank_account_number)}<br/>Branch: ${esc(company.bank_branch)}<br/>SWIFT: ${esc(company.bank_swift_code)}</p>
+  const isBank2 = invoice.bank_account_choice === 'bank2'
+  const bankNum = isBank2 ? company?.bank2_account_number : company?.bank_account_number
+  const ifsc = isBank2 ? company?.bank2_ifsc_code : company?.bank_ifsc_code
+  const bankHtml = isSales && bankNum ? `
+    <table style="width:100%;margin-top:16px;border-top:1px solid #ddd;padding-top:8px;font-size:11px;color:#444;">
+      <tr><td colspan="2" style="color:#999;font-size:11px;padding-bottom:4px;"><strong>BANK DETAILS</strong></td></tr>
+      <tr>
+        <td style="vertical-align:top;width:50%;">
+          <strong>Bank:</strong> ${esc(isBank2 ? company?.bank2_name : company?.bank_name)}<br/>
+          <strong>Account Holder:</strong> ${esc(isBank2 ? company?.bank2_account_holder : company?.bank_account_holder)}<br/>
+          <strong>Account Number:</strong> ${esc(bankNum)}
+        </td>
+        <td style="vertical-align:top;width:50%;">
+          <strong>Branch:</strong> ${esc(isBank2 ? company?.bank2_branch : company?.bank_branch)}<br/>
+          <strong>SWIFT:</strong> ${esc(isBank2 ? company?.bank2_swift_code : company?.bank_swift_code)}<br/>
+          ${ifsc ? `<strong>IFSC:</strong> ${esc(ifsc)}` : ''}
+        </td>
+      </tr>
+    </table>
   ` : ''
 
   const docHeading = isReceipt ? 'Payment Receipt' : (isProformaDoc ? 'Proforma Invoice' : (isGuest ? 'Guest Invoice' : 'Invoice'))
