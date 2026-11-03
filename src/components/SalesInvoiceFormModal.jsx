@@ -10,10 +10,13 @@ import InvoicePreviewModal from './InvoicePreviewModal'
 
 const emptyItem = () => ({ description: '', qty: 1, unit_price: 0, tax_percent: 0 })
 
-export default function SalesInvoiceFormModal({ companyId, product, company, contacts, invoice, onClose, onSaved }) {
+export default function SalesInvoiceFormModal({ companyId, product, company, contacts, invoice, defaultInvoiceType = 'sales', onClose, onSaved }) {
   const { activeRole } = useAuth()
-  const [invoiceType, setInvoiceType] = useState(invoice?.invoice_type || 'sales')
-  const [invoiceNumber, setInvoiceNumber] = useState(invoice?.invoice_number || `INV-${Math.floor(Math.random() * 900000 + 100000)}`)
+  const initialType = invoice?.invoice_type || defaultInvoiceType || 'sales'
+  const [invoiceType, setInvoiceType] = useState(initialType)
+  const [invoiceNumber, setInvoiceNumber] = useState(
+    invoice?.invoice_number || (initialType === 'proforma' ? `PRO-${Math.floor(Math.random() * 900000 + 100000)}` : `INV-${Math.floor(Math.random() * 900000 + 100000)}`)
+  )
   const [revenueAccounts, setRevenueAccounts] = useState([])
   const [revenueAccountId, setRevenueAccountId] = useState(invoice?.revenue_account_id || '')
   const [contactId, setContactId] = useState(invoice?.contact_id || '')
@@ -219,8 +222,18 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
     <Modal title={invoice ? 'Edit Sales Invoice' : 'Create New Invoice'} onClose={onClose} maxWidth="max-w-3xl">
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => setInvoiceType('sales')} className={`py-2.5 rounded-lg text-sm font-semibold ${invoiceType === 'sales' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>Sales Invoice</button>
-          <button type="button" onClick={() => setInvoiceType('proforma')} className={`py-2.5 rounded-lg text-sm font-semibold ${invoiceType === 'proforma' ? 'bg-navy-700 text-white' : 'bg-slate-100 text-slate-500'}`}>Proforma Invoice</button>
+          <button type="button" onClick={() => {
+            setInvoiceType('sales')
+            if (!invoice && invoiceNumber.startsWith('PRO-')) {
+              setInvoiceNumber(invoiceNumber.replace(/^PRO-/, 'INV-'))
+            }
+          }} className={`py-2.5 rounded-lg text-sm font-semibold ${invoiceType === 'sales' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'}`}>Sales Invoice</button>
+          <button type="button" onClick={() => {
+            setInvoiceType('proforma')
+            if (!invoice && invoiceNumber.startsWith('INV-')) {
+              setInvoiceNumber(invoiceNumber.replace(/^INV-/, 'PRO-'))
+            }
+          }} className={`py-2.5 rounded-lg text-sm font-semibold ${invoiceType === 'proforma' ? 'bg-navy-700 text-white' : 'bg-slate-100 text-slate-500'}`}>Proforma Invoice</button>
         </div>
         {invoiceType === 'proforma' && (
           <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">

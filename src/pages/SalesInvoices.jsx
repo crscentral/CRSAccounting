@@ -25,6 +25,8 @@ export default function SalesInvoices() {
   const { activeCompany, activeProduct, can, activeRole } = useAuth()
   const cp = useCurrencyAndPeriod()
   const [tab, setTab] = useState('invoices')
+  const [invoiceSubTab, setInvoiceSubTab] = useState('standard') // 'standard' | 'proforma' | 'all'
+  const [defaultInvoiceType, setDefaultInvoiceType] = useState('sales')
   const [invoices, setInvoices] = useState([])
   const [receipts, setReceipts] = useState([])
   const [contacts, setContacts] = useState([])
@@ -168,25 +170,46 @@ export default function SalesInvoices() {
     if (selections.dataType === 'Invoices' || selections.dataType === 'Both') {
       const { data: inv } = await supabase.from('sales_invoices').select('*, contact:contacts(name)').eq('company_id', activeCompany.id).eq('product', activeProduct).gte('invoice_date', range.from).lte('invoice_date', range.to).order('invoice_date', { ascending: false })
       const invList = inv || []
-      const totalInvUsd = invList.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
-      const totalPaidUsd = invList.reduce((s, i) => s + (i.status === 'Paid' ? Number(i.amount_usd || 0) : 0), 0)
+      const stdList = invList.filter(i => i.invoice_type !== 'proforma')
+      const proList = invList.filter(i => i.invoice_type === 'proforma')
+
+      const totalInvUsd = stdList.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
+      const totalPaidUsd = stdList.reduce((s, i) => s + (i.status === 'Paid' ? Number(i.amount_usd || 0) : 0), 0)
       const totalPendUsd = totalInvUsd - totalPaidUsd
 
-      summaryPairs.push(['Total Invoices', String(invList.length)])
+      summaryPairs.push(['Total Invoices', String(stdList.length)])
       summaryPairs.push(['Total Invoiced Amount', fmt(totalInvUsd)])
       summaryPairs.push(['Total Invoiced Paid', fmt(totalPaidUsd)])
       summaryPairs.push(['Total Invoiced Pending', fmt(totalPendUsd)])
 
-      const invRows = invList.map(i => [i.invoice_number, i.contact?.name || '—', i.invoice_date, i.due_date || '—', `${i.amount} ${i.currency}`, fmt(i.amount_usd), i.status])
-      if (invRows.length > 0) {
-        invRows.push(['Total', '', '', '', '', fmt(totalInvUsd), ''])
+      if (proList.length > 0) {
+        const totalProUsd = proList.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
+        summaryPairs.push(['Total Proforma Invoices', String(proList.length)])
+        summaryPairs.push(['Total Proforma Amount', fmt(totalProUsd)])
+      }
+
+      const stdRows = stdList.map(i => [i.invoice_number, i.contact?.name || '—', i.invoice_date, i.due_date || '—', `${i.amount} ${i.currency}`, fmt(i.amount_usd), i.status])
+      if (stdRows.length > 0) {
+        stdRows.push(['Total', '', '', '', '', fmt(totalInvUsd), ''])
       }
 
       sections.push({
-        heading: 'Invoices',
+        heading: 'Sales Invoices',
         columns: ['Invoice #', 'Customer', 'Date', 'Due', 'Amount', selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency} & USD)`, 'Status'],
-        rows: invRows,
+        rows: stdRows,
       })
+
+      if (proList.length > 0) {
+        const totalProUsd = proList.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
+        const proRows = proList.map(i => [i.invoice_number, i.contact?.name || '—', i.invoice_date, i.due_date || '—', `${i.amount} ${i.currency}`, fmt(i.amount_usd), i.status])
+        proRows.push(['Total', '', '', '', '', fmt(totalProUsd), ''])
+
+        sections.push({
+          heading: 'Proforma Invoices',
+          columns: ['Invoice #', 'Customer', 'Date', 'Due', 'Amount', selections.currency === 'USD' ? 'Amount (USD)' : `Amount (${selections.currency} & USD)`, 'Status'],
+          rows: proRows,
+        })
+      }
     }
 
     if (selections.dataType === 'Payment Receipts' || selections.dataType === 'Both') {
@@ -231,12 +254,21 @@ export default function SalesInvoices() {
     else loadData()
   }
 
-  const totalUsd = invoices.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
-  const pendingUsd = invoices.reduce((s, i) => s + (i.status === 'Paid' ? 0 : ((Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd))), 0)
+  const standardInvoices = useMemo(() => invoices.filter(i => i.invoice_type !== 'proforma'), [invoices])
+  const proformaInvoices = useMemo(() => invoices.filter(i => i.invoice_type === 'proforma'), [invoices])
+
+  const activeInvoicesPool = useMemo(() => {
+    if (invoiceSubTab === 'proforma') return proformaInvoices
+    if (invoiceSubTab === 'all') return invoices
+    return standardInvoices
+  }, [invoiceSubTab, standardInvoices, proformaInvoices, invoices])
+
+  const totalUsd = activeInvoicesPool.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
+  const pendingUsd = activeInvoicesPool.reduce((s, i) => s + (i.status === 'Paid' ? 0 : ((Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd))), 0)
   const collectedUsd = totalUsd - pendingUsd
 
   const byCurrency = {}
-  invoices.forEach(i => {
+  activeInvoicesPool.forEach(i => {
     byCurrency[i.currency] = byCurrency[i.currency] || { count: 0, native: 0, usd: 0 }
     byCurrency[i.currency].count += 1
     byCurrency[i.currency].native += Number(i.amount)
@@ -248,31 +280,31 @@ export default function SalesInvoices() {
     { label: 'Date', key: 'invoice_date' }, { label: 'Due', key: 'due_date' },
     { label: 'Amount', key: 'amountLabel' }, { label: 'Amount (USD)', key: 'amountUsdLabel' }, { label: 'Status', key: 'status' },
   ]
-  const reportRows = invoices.map(i => ({
+  const reportRows = activeInvoicesPool.map(i => ({
     ...i, customerName: i.contact?.name || '—', amountLabel: `${i.amount} ${i.currency}`, amountUsdLabel: cp.fmt(i.amount_usd || 0),
   }))
 
   const allCustomers = useMemo(() => {
     const set = new Set()
-    invoices.forEach(i => {
+    activeInvoicesPool.forEach(i => {
       const name = (i.contact?.name || i.customer_name_freeform || '').trim()
       if (name) set.add(name)
     })
     return Array.from(set).sort((a, b) => a.localeCompare(b))
-  }, [invoices])
+  }, [activeInvoicesPool])
 
   const customerCounts = useMemo(() => {
     const counts = {}
-    invoices.forEach(i => {
+    activeInvoicesPool.forEach(i => {
       const name = (i.contact?.name || i.customer_name_freeform || '').trim()
       if (name) counts[name] = (counts[name] || 0) + 1
     })
     return counts
-  }, [invoices])
+  }, [activeInvoicesPool])
 
   // Filtered invoices logic
   const filteredInvoices = useMemo(() => {
-    return invoices.filter(i => {
+    return activeInvoicesPool.filter(i => {
       if (invoiceFilters.invoiceNumber && !String(i.invoice_number || '').toLowerCase().includes(invoiceFilters.invoiceNumber.toLowerCase().trim())) {
         return false
       }
@@ -316,7 +348,7 @@ export default function SalesInvoices() {
       }
       return true
     })
-  }, [invoices, invoiceFilters, selectedCustomers, cp])
+  }, [activeInvoicesPool, invoiceFilters, selectedCustomers, cp])
 
   const filteredTotalUsd = useMemo(() => {
     return filteredInvoices.reduce((s, i) => s + Number(i.amount_usd || 0), 0)
@@ -827,8 +859,15 @@ export default function SalesInvoices() {
             </button>
             {can(['owner', 'admin', 'accountant']) && (
               tab === 'invoices' ? (
-                <button onClick={() => { setEditingInvoice(null); setModalOpen(true) }} className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
-                  <Plus size={16} /> New Invoice
+                <button
+                  onClick={() => {
+                    setEditingInvoice(null)
+                    setDefaultInvoiceType(invoiceSubTab === 'proforma' ? 'proforma' : 'sales')
+                    setModalOpen(true)
+                  }}
+                  className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
+                >
+                  <Plus size={16} /> {invoiceSubTab === 'proforma' ? 'New Proforma Invoice' : 'New Invoice'}
                 </button>
               ) : (
                 <button onClick={() => { setEditingReceipt(null); setReceiptModalOpen(true) }} className="flex items-center gap-1.5 bg-navy-600 hover:bg-navy-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
@@ -841,16 +880,31 @@ export default function SalesInvoices() {
       />
 
       <div className="flex gap-2 mb-5">
-        <button onClick={() => setTab('invoices')} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === 'invoices' ? 'bg-navy-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>
-          Invoices ({invoices.length})
+        <button
+          onClick={() => { setTab('invoices'); setInvoiceSubTab('standard') }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'invoices' && invoiceSubTab === 'standard' ? 'bg-navy-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+        >
+          Invoices ({standardInvoices.length})
         </button>
-        <button onClick={() => setTab('receipts')} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === 'receipts' ? 'bg-navy-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>
+        <button
+          onClick={() => { setTab('invoices'); setInvoiceSubTab('proforma') }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'invoices' && invoiceSubTab === 'proforma' ? 'bg-navy-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+        >
+          Proforma Invoices ({proformaInvoices.length})
+        </button>
+        <button
+          onClick={() => setTab('receipts')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'receipts' ? 'bg-navy-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+        >
           Payment Receipts ({receipts.length})
         </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <StatBox label="Total Invoices" value={invoices.length} />
+        <StatBox
+          label={invoiceSubTab === 'proforma' ? 'Total Proforma' : (invoiceSubTab === 'all' ? 'Total Invoices (All)' : 'Total Invoices')}
+          value={activeInvoicesPool.length}
+        />
         <StatBox label="Collected" value={cp.fmt(collectedUsd)} tone="green" />
         <StatBox label="Pending" value={cp.fmt(pendingUsd)} tone="amber" />
         <StatBox label="Overdue" value={cp.fmt(0)} tone="red" />
@@ -859,7 +913,9 @@ export default function SalesInvoices() {
       {tab === 'invoices' ? (
         <>
           <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 mb-6">
-            <h3 className="font-semibold text-slate-700 mb-4">Invoice Currency Summary</h3>
+            <h3 className="font-semibold text-slate-700 mb-4">
+              {invoiceSubTab === 'proforma' ? 'Proforma Invoice Currency Summary' : (invoiceSubTab === 'all' ? 'All Invoices Currency Summary' : 'Invoice Currency Summary')}
+            </h3>
             <div className="space-y-3">
               {Object.entries(byCurrency).map(([code, v]) => (
                 <div key={code} className="flex items-center justify-between text-sm">
@@ -879,9 +935,41 @@ export default function SalesInvoices() {
 
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-semibold text-slate-700">
-                Invoices ({filteredInvoices.length}{filteredInvoices.length !== invoices.length ? ` of ${invoices.length}` : ''})
-              </span>
+              <div className="inline-flex items-center p-1 bg-slate-100 rounded-lg border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setInvoiceSubTab('standard')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    invoiceSubTab === 'standard'
+                      ? 'bg-navy-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Invoices ({standardInvoices.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInvoiceSubTab('proforma')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    invoiceSubTab === 'proforma'
+                      ? 'bg-navy-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Proforma Invoices ({proformaInvoices.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInvoiceSubTab('all')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    invoiceSubTab === 'all'
+                      ? 'bg-navy-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  All ({invoices.length})
+                </button>
+              </div>
               {hasActiveInvoiceFilters && (
                 <span className="inline-flex items-center gap-1 text-xs bg-navy-50 text-navy-700 font-medium px-2 py-0.5 rounded-full border border-navy-200">
                   <Filter size={11} /> {activeInvoiceFilterCount} filter{activeInvoiceFilterCount > 1 ? 's' : ''} applied
@@ -949,7 +1037,16 @@ export default function SalesInvoices() {
                     {invoiceFilters.invoiceNumber && <span className="w-1.5 h-1.5 rounded-full bg-navy-600" />}
                   </div>
                 ),
-                render: r => <span className="font-medium text-slate-800">{r.invoice_number}</span>
+                render: r => (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-slate-800">{r.invoice_number}</span>
+                    {r.invoice_type === 'proforma' && (
+                      <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                        Proforma
+                      </span>
+                    )}
+                  </div>
+                )
               },
               {
                 key: 'customer',
@@ -1288,6 +1385,7 @@ export default function SalesInvoices() {
           company={activeCompany}
           contacts={contacts}
           invoice={editingInvoice}
+          defaultInvoiceType={defaultInvoiceType}
           onClose={() => setModalOpen(false)}
           onSaved={loadData}
         />
