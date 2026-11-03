@@ -1064,6 +1064,15 @@ export default function Dashboard() {
   ]
   const reportRows = draftInvoices.map(i => ({ ...i, customerName: i.contact?.name || '—', balanceLabel: cp.fmt((Number(i.balance_due) / (Number(i.amount) || 1)) * Number(i.amount_usd)) }))
 
+  const totalBilledNum = Number(totalBilled) || 0
+  const expensePct = totalBilledNum > 0 ? `${((Number(totalExpenses) || 0) / totalBilledNum * 100).toFixed(1)}%` : null
+  const profitPct = totalBilledNum > 0 ? `${((Number(netProfit) || 0) / totalBilledNum * 100).toFixed(1)}%` : null
+  const outstandingPct = totalBilledNum > 0 ? `${((Number(outstanding) || 0) / totalBilledNum * 100).toFixed(1)}%` : null
+
+  const collectedNum = Number(collected) || 0
+  const expPaidPct = collectedNum > 0 ? `${((Number(expensesMade) || 0) / collectedNum * 100).toFixed(1)}%` : null
+  const actualProfitPct = collectedNum > 0 ? `${((Number(actualProfit) || 0) / collectedNum * 100).toFixed(1)}%` : null
+
   return (
     <div>
       <PageHeader
@@ -1080,9 +1089,9 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <KpiCard label="Total Revenue" value={cp.fmt(totalBilled)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'total accrued revenue' : 'sales invoices'} icon={TrendingUp} tone="green" />
-        <KpiCard label="Total Expenses" value={cp.fmt(totalExpenses)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'total accrued expenses' : 'purchase invoices'} icon={TrendingDown} tone="red" />
-        <KpiCard label={['hotel', 'restaurant'].includes(activeProduct) ? 'Accrued Net Profit' : 'Expected Net Profit'} value={cp.fmt(netProfit)} sublabel="revenue minus expenses" icon={DollarSign} tone={netProfit >= 0 ? 'green' : 'red'} />
-        <KpiCard label="Outstanding" value={cp.fmt(outstanding)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'pending + uncollected' : 'pending + overdue'} icon={AlertCircle} tone="slate" />
+        <KpiCard label="Total Expenses" value={cp.fmt(totalExpenses)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'total accrued expenses' : 'purchase invoices'} icon={TrendingDown} tone="red" badge={expensePct} badgeTone="red" badgeTitle={expensePct ? `${expensePct} of Total Revenue` : undefined} />
+        <KpiCard label={['hotel', 'restaurant'].includes(activeProduct) ? 'Accrued Net Profit' : 'Expected Net Profit'} value={cp.fmt(netProfit)} sublabel="revenue minus expenses" icon={DollarSign} tone={netProfit >= 0 ? 'green' : 'red'} badge={profitPct} badgeTone={netProfit >= 0 ? 'green' : 'red'} badgeTitle={profitPct ? `${profitPct} of Total Revenue` : undefined} />
+        <KpiCard label="Outstanding" value={cp.fmt(outstanding)} sublabel={['hotel', 'restaurant'].includes(activeProduct) ? 'pending + uncollected' : 'pending + overdue'} icon={AlertCircle} tone="slate" badge={outstandingPct} badgeTone="slate" badgeTitle={outstandingPct ? `${outstandingPct} of Total Revenue` : undefined} />
       </div>
 
       {activeProduct === 'hotel' && (
@@ -1113,8 +1122,8 @@ export default function Dashboard() {
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
         <KpiCard label="Total Revenue Collected" value={cp.fmt(collected)} sublabel="actual paid revenue" icon={Receipt} tone="gold" />
-        <KpiCard label="Total Expenses Paid" value={cp.fmt(expensesMade)} sublabel="actual paid expenses" icon={TrendingDown} tone="orange" />
-        <KpiCard label={['hotel', 'restaurant'].includes(activeProduct) ? 'Cash Net Profit' : 'Actual Profit'} value={cp.fmt(actualProfit)} sublabel="collected minus paid" icon={DollarSign} tone={actualProfit >= 0 ? 'green' : 'red'} />
+        <KpiCard label="Total Expenses Paid" value={cp.fmt(expensesMade)} sublabel="actual paid expenses" icon={TrendingDown} tone="orange" badge={expPaidPct} badgeTone="orange" badgeTitle={expPaidPct ? `${expPaidPct} of Total Revenue Collected` : undefined} />
+        <KpiCard label={['hotel', 'restaurant'].includes(activeProduct) ? 'Cash Net Profit' : 'Actual Profit'} value={cp.fmt(actualProfit)} sublabel="collected minus paid" icon={DollarSign} tone={actualProfit >= 0 ? 'green' : 'red'} badge={actualProfitPct} badgeTone={actualProfit >= 0 ? 'green' : 'red'} badgeTitle={actualProfitPct ? `${actualProfitPct} of Total Revenue Collected` : undefined} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
