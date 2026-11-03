@@ -580,12 +580,12 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     const thankYou = (invoice.thank_you_note || '').trim()
     
     if (thankYou) {
-      doc.text(companyLegal, 14, pageHeight - 11)
+      doc.text(companyLegal, pageWidth / 2, pageHeight - 11, { align: 'center' })
       doc.setFontSize(8)
       doc.setTextColor(160)
-      doc.text(thankYou, 14, pageHeight - 6.5)
+      doc.text(thankYou, pageWidth / 2, pageHeight - 6.5, { align: 'center' })
     } else {
-      doc.text(companyLegal, 14, pageHeight - 9)
+      doc.text(companyLegal, pageWidth / 2, pageHeight - 9, { align: 'center' })
     }
     
     doc.setFontSize(8)
@@ -745,6 +745,7 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
       ${invoice.notes ? `<p style="font-size:11px;color:#444;margin-top:6px;"><strong>Remarks / Notes:</strong><br/>${esc(invoice.notes).replace(/\n/g, '<br/>')}</p>` : ''}
       ${bankHtml}
       <p style="text-align:center;color:#999;margin-top:24px;">${esc(company?.legal_name || company?.name)}</p>
+      ${invoice.thank_you_note ? `<p style="text-align:center;color:#aaa;font-size:11px;margin-top:4px;">${esc(invoice.thank_you_note)}</p>` : ''}
     </body>
     </html>
   `
