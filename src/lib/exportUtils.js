@@ -302,12 +302,12 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   y += 8
 
   // FROM / BILL TO / DOCUMENT three-column block
-  const col1 = 14, col2 = 80, col3 = 150
+  const col1 = 14, col2 = 80
   doc.setFontSize(8)
   doc.setTextColor(150)
   doc.text('FROM', col1, y)
   doc.text(isGuest ? 'GUEST' : 'TO', col2, y)
-  doc.text('DOCUMENT', col3, y)
+  doc.text('DOCUMENT', rightX, y, { align: 'right' })
   y += 5.5
 
   doc.setFontSize(10)
@@ -319,11 +319,11 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   
   const fromNameWrapped = doc.splitTextToSize(fromName, 60)
   const toNameWrapped = doc.splitTextToSize(toName, 62)
-  const docNameWrapped = doc.splitTextToSize((isReceipt ? invoice.receipt_number : invoice.invoice_number) || '', 46)
+  const docNameWrapped = doc.splitTextToSize((isReceipt ? invoice.receipt_number : invoice.invoice_number) || '', 55)
 
   doc.text(fromNameWrapped, col1, y)
   doc.text(toNameWrapped, col2, y)
-  doc.text(docNameWrapped, col3, y)
+  doc.text(docNameWrapped, rightX, y, { align: 'right' })
   
   const y1 = y + fromNameWrapped.length * 4.5
   const y2 = y + toNameWrapped.length * 4.5
@@ -369,14 +369,14 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   // Render each column independently with its own running Y position, so a wrapped
   // multi-line address in one column never overlaps the next field in that same
   // column (previous bug: fixed line-height advance regardless of wrap count).
-  function renderColumn(lines, x, maxWidth, startY) {
+  function renderColumn(lines, x, maxWidth, startY, align = 'left') {
     let cy = startY
     lines.forEach(line => {
       const explicitLines = line.split('\n')
       explicitLines.forEach(el => {
         const wrapped = doc.splitTextToSize(el, maxWidth)
         wrapped.forEach(wl => {
-          doc.text(wl, x, cy)
+          doc.text(wl, x, cy, align === 'right' ? { align: 'right' } : undefined)
           cy += 4.5
         })
       })
@@ -385,7 +385,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   }
   const endY1 = renderColumn(fromLines, col1, 60, y1)
   const endY2 = renderColumn(billLines, col2, 62, y2)
-  const endY3 = renderColumn(docLines, col3, 46, y3)
+  const endY3 = renderColumn(docLines, rightX, 55, y3, 'right')
   y = Math.max(endY1, endY2, endY3) + 6
 
   // Line items -- two-line description like the original (bold name + gray subtitle)
@@ -724,7 +724,7 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
           <p style="color:#999;font-size:11px;">${isReceipt ? 'TO' : (isGuest ? 'GUEST' : (isSales ? 'BILL TO' : 'SUPPLIER'))}</p>
           <p><strong>${esc(toName)}</strong><br/>${isGuest && invoice.room_number ? 'Room: ' + esc(invoice.room_number) + '<br/>' : ''}${isGuest && invoice.checkin_date && invoice.checkout_date ? 'Stay: ' + esc(invoice.checkin_date) + ' to ' + esc(invoice.checkout_date) + ' (' + esc(invoice.nights || 1) + ' nights)<br/>' : ''}${esc(invoice.customer_address || contact?.address || invoice.supplier_address)}<br/>${esc(invoice.customer_email || invoice.supplier_email)}</p>
         </td>
-        <td style="vertical-align:top;width:33%;">
+        <td style="vertical-align:top;width:33%;text-align:right;">
           <p style="color:#999;font-size:11px;">DOCUMENT</p>
           <p><strong>${esc(isReceipt ? invoice.receipt_number : invoice.invoice_number)}</strong><br/>${isReceipt ? 'Date' : 'Issue'}: ${esc(isReceipt ? invoice.receipt_date : invoice.invoice_date)}<br/>${isReceipt ? 'Method: ' + esc(invoice.method || '—') : 'Due: ' + esc(invoice.due_date || '—')}<br/>Currency: ${esc(invoice.currency)}</p>
         </td>

@@ -62,7 +62,7 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
               <div className="text-slate-500">{invoice.customer_phone || invoice.supplier_phone}</div>
               {invoice.supplier_gstin && <div className="text-slate-500">GSTIN: {invoice.supplier_gstin}</div>}
             </div>
-            <div>
+            <div className="sm:text-right">
               <div className="text-[11px] font-semibold text-slate-400 uppercase mb-1">Document</div>
               <div className="font-semibold text-slate-800">{invoice.invoice_number || '—'}</div>
               <div className="text-slate-500">Issue: {invoice.invoice_date}</div>
