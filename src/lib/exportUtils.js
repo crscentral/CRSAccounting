@@ -303,11 +303,11 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
 
   // FROM / TO / DOCUMENT three-column block (spans full printable width 14mm to 196mm)
   const col1 = 14
-  const fromWidth = 60
-  const col2 = 80
-  const toWidth = 60
-  const col3 = 148
-  const docWidth = 48
+  const fromWidth = 62
+  const col2 = 86
+  const toWidth = 72
+  const col3 = 166
+  const docWidth = 30
   doc.setFontSize(8)
   doc.setTextColor(150)
   doc.text('FROM', col1, y)
@@ -545,44 +545,33 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const bankNum = isBank2 ? company?.bank2_account_number : company?.bank_account_number
   
   if (isSales && bankNum) {
-    const ifsc = isBank2 ? company?.bank2_ifsc_code : company?.bank_ifsc_code
-    const col1Bank = [
+    const bankLines = [
       `Bank: ${isBank2 ? company.bank2_name : company.bank_name || ''}`,
       `Account Holder: ${isBank2 ? company.bank2_account_holder : company.bank_account_holder || ''}`,
       `Account Number: ${bankNum}`,
-    ]
-    const col2Bank = [
       `Branch: ${isBank2 ? company.bank2_branch : company.bank_branch || ''}`,
       `SWIFT Code: ${isBank2 ? company.bank2_swift_code : company.bank_swift_code || ''}`,
-      ifsc ? `IFSC: ${ifsc}` : null,
-    ].filter(Boolean)
+    ]
+    const ifsc = isBank2 ? company?.bank2_ifsc_code : company?.bank_ifsc_code
+    if (ifsc) bankLines.push(`IFSC: ${ifsc}`)
 
-    const bankNeededHeight = 6 + (Math.max(col1Bank.length, col2Bank.length) * 4) + 2
+    const bankNeededHeight = 8 + (bankLines.length * 4.5)
     checkPageBreak(bankNeededHeight)
 
-    finalY += 2
+    finalY += 3
     doc.setDrawColor(220)
-    doc.line(14, finalY - 2, rightX, finalY - 2)
+    doc.line(14, finalY - 4, rightX, finalY - 4)
     doc.setFontSize(8)
     doc.setTextColor(150)
-    doc.text('BANK DETAILS', 14, finalY + 2)
-    finalY += 6
+    doc.text('BANK DETAILS', 14, finalY)
+    finalY += 5
     doc.setTextColor(60)
 
-    const startBankY = finalY
-    let by1 = startBankY
-    col1Bank.forEach(line => {
-      doc.text(line, 14, by1)
-      by1 += 4
+    bankLines.forEach(line => {
+      checkPageBreak(6)
+      doc.text(line, 14, finalY)
+      finalY += 4.5
     })
-
-    let by2 = startBankY
-    col2Bank.forEach(line => {
-      doc.text(line, 105, by2)
-      by2 += 4
-    })
-
-    finalY = Math.max(by1, by2) + 2
   }
 
   const totalPages = doc.internal.getNumberOfPages()
@@ -728,21 +717,8 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
   const bankNum = isBank2 ? company?.bank2_account_number : company?.bank_account_number
   const ifsc = isBank2 ? company?.bank2_ifsc_code : company?.bank_ifsc_code
   const bankHtml = isSales && bankNum ? `
-    <table style="width:100%;margin-top:16px;border-top:1px solid #ddd;padding-top:8px;font-size:11px;color:#444;">
-      <tr><td colspan="2" style="color:#999;font-size:11px;padding-bottom:4px;"><strong>BANK DETAILS</strong></td></tr>
-      <tr>
-        <td style="vertical-align:top;width:50%;">
-          <strong>Bank:</strong> ${esc(isBank2 ? company?.bank2_name : company?.bank_name)}<br/>
-          <strong>Account Holder:</strong> ${esc(isBank2 ? company?.bank2_account_holder : company?.bank_account_holder)}<br/>
-          <strong>Account Number:</strong> ${esc(bankNum)}
-        </td>
-        <td style="vertical-align:top;width:50%;">
-          <strong>Branch:</strong> ${esc(isBank2 ? company?.bank2_branch : company?.bank_branch)}<br/>
-          <strong>SWIFT:</strong> ${esc(isBank2 ? company?.bank2_swift_code : company?.bank_swift_code)}<br/>
-          ${ifsc ? `<strong>IFSC:</strong> ${esc(ifsc)}` : ''}
-        </td>
-      </tr>
-    </table>
+    <p style="color:#999;font-size:11px;margin-top:20px;">BANK DETAILS</p>
+    <p>Bank: ${esc(isBank2 ? company?.bank2_name : company?.bank_name)}<br/>Account Holder: ${esc(isBank2 ? company?.bank2_account_holder : company?.bank_account_holder)}<br/>Account Number: ${esc(bankNum)}<br/>Branch: ${esc(isBank2 ? company?.bank2_branch : company?.bank_branch)}<br/>SWIFT: ${esc(isBank2 ? company?.bank2_swift_code : company?.bank_swift_code)}${ifsc ? '<br/>IFSC: ' + esc(ifsc) : ''}</p>
   ` : ''
 
   const docHeading = isReceipt ? 'Payment Receipt' : (isProformaDoc ? 'Proforma Invoice' : (isGuest ? 'Guest Invoice' : 'Invoice'))
@@ -755,15 +731,15 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
       <h1 style="margin-bottom:0;">${docHeading}</h1>
       <p style="color:#666;text-transform:uppercase;font-size:12px;">${esc(isReceipt ? 'Received' : (invoice.status || 'Draft'))}</p>
       <table style="width:100%;margin-bottom:16px;"><tr>
-        <td style="vertical-align:top;width:33%;">
+        <td style="vertical-align:top;width:38%;">
           <p style="color:#999;font-size:11px;">FROM</p>
           <p><strong>${esc(company?.name)}</strong><br/>${esc(company?.legal_name)}<br/>${esc(company?.address)}<br/>${esc(company?.email)}<br/>${company?.tax_id ? 'Tax ID: ' + esc(company.tax_id) : ''}</p>
         </td>
-        <td style="vertical-align:top;width:33%;">
+        <td style="vertical-align:top;width:44%;padding-left:12px;">
           <p style="color:#999;font-size:11px;">${isReceipt ? 'TO' : (isGuest ? 'GUEST' : (isSales ? 'BILL TO' : 'SUPPLIER'))}</p>
           <p><strong>${esc(toName)}</strong><br/>${isGuest && invoice.room_number ? 'Room: ' + esc(invoice.room_number) + '<br/>' : ''}${isGuest && invoice.checkin_date && invoice.checkout_date ? 'Stay: ' + esc(invoice.checkin_date) + ' to ' + esc(invoice.checkout_date) + ' (' + esc(invoice.nights || 1) + ' nights)<br/>' : ''}${esc(invoice.customer_address || contact?.address || invoice.supplier_address)}<br/>${esc(invoice.customer_email || invoice.supplier_email)}</p>
         </td>
-        <td style="vertical-align:top;width:33%;text-align:left;">
+        <td style="vertical-align:top;width:18%;text-align:left;padding-left:12px;">
           <p style="color:#999;font-size:11px;">DOCUMENT</p>
           <p><strong>${esc(isReceipt ? invoice.receipt_number : invoice.invoice_number)}</strong><br/>${isReceipt ? 'Date' : 'Issue'}: ${esc(isReceipt ? invoice.receipt_date : invoice.invoice_date)}<br/>${isReceipt ? 'Method: ' + esc(invoice.method || '—') : 'Due: ' + esc(invoice.due_date || '—')}<br/>Currency: ${esc(invoice.currency)}</p>
         </td>
