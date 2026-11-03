@@ -10,13 +10,17 @@ function renderRichText(doc, text, startX, startY, maxWidth, options = {}) {
   if (!text) return startY;
   const lines = text.split('\n');
   let y = startY;
-  const lineHeight = 4.0;
+  const fontSize = options.fontSize || 8.5;
+  const lineHeight = options.lineHeight || 4.2;
   const maxContentY = options.maxContentY || 278;
   const onPageBreak = options.onPageBreak || null;
+
+  doc.setFontSize(fontSize);
 
   function ensureSpace() {
     if (onPageBreak && y > maxContentY) {
       y = onPageBreak();
+      doc.setFontSize(fontSize);
     }
   }
 
@@ -286,13 +290,13 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   }
 
   let y = 42
-  doc.setFontSize(9)
+  doc.setFontSize(9.5)
   doc.setTextColor(90)
   doc.setFont(undefined, 'bold')
   doc.text(isReceipt ? 'PAYMENT RECEIPT' : isGuest ? 'GUEST INVOICE' : isSales ? (isProforma ? 'PROFORMA INVOICE' : 'TAX INVOICE') : 'PURCHASE INVOICE', pageWidth / 2, y, { align: 'center' })
   y += 5
   doc.setFont(undefined, 'normal')
-  doc.setFontSize(8)
+  doc.setFontSize(8.5)
   if (isSales && invoice.is_export_lut) {
     doc.text('(Supply meant for export under LUT without payment of Integrated Tax)', pageWidth / 2, y, { align: 'center' })
     y += 5
@@ -308,7 +312,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const toWidth = 72
   const col3 = 166
   const docWidth = 30
-  doc.setFontSize(8)
+  doc.setFontSize(8.5)
   doc.setTextColor(150)
   doc.text('FROM', col1, y)
   doc.text(isGuest ? 'GUEST' : 'TO', col2, y)
@@ -335,7 +339,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const y3 = y + docNameWrapped.length * 4.5
 
   doc.setFont(undefined, 'normal')
-  doc.setFontSize(8)
+  doc.setFontSize(8.5)
   doc.setTextColor(90)
   
   const companyLines = [
@@ -415,8 +419,8 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     startY: y,
     head: [tableColumns],
     body: tableRows,
-    headStyles: { fillColor: [27, 58, 107], fontSize: 9 },
-    styles: { fontSize: 8.5, cellPadding: 2.2 },
+    headStyles: { fillColor: [27, 58, 107], fontSize: 9.5 },
+    styles: { fontSize: 9, cellPadding: 2.4 },
     columnStyles: (isSales || isGuest) ? { 0: { cellWidth: 90 } } : { 0: { cellWidth: 70 } },
     margin: { top: 20, left: 14, right: 14, bottom: 20 },
     didParseCell: (data) => {
@@ -451,7 +455,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const totalsHeight = (summaryRows.length * 5) + (printUsd ? 9 : 6) + ((isSales || isGuest) ? (printUsd ? 15 : 10) : 0) + 2
   checkPageBreak(totalsHeight)
 
-  doc.setFontSize(9)
+  doc.setFontSize(9.5)
   summaryRows.forEach(([label, val]) => {
     doc.setFont(undefined, 'normal')
     doc.setTextColor(90)
@@ -465,14 +469,14 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.line(130, finalY - 2, rightX, finalY - 2)
   
   doc.setFont(undefined, 'bold')
-  doc.setFontSize(11)
+  doc.setFontSize(11.5)
   doc.setTextColor(20)
   doc.text((isSales || isGuest) ? 'Grand total' : 'Net Payable', 130, finalY + 3)
   doc.text(`${grandTotal.toFixed(2)} ${invoice.currency}`, rightX, finalY + 3, { align: 'right' })
   
   if (printUsd) {
     doc.setFont(undefined, 'normal')
-    doc.setFontSize(8)
+    doc.setFontSize(8.5)
     doc.setTextColor(120)
     doc.text(`(USD ${usdGrandTotal.toFixed(2)})`, rightX, finalY + 6.5, { align: 'right' })
     finalY += 10
@@ -482,14 +486,14 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
 
   if (isSales || isGuest) {
     doc.setFont(undefined, 'normal')
-    doc.setFontSize(9)
+    doc.setFontSize(9.5)
     doc.setTextColor(90)
     doc.text(isGuest ? 'Collected' : 'Paid', 130, finalY)
     doc.setTextColor(20)
     doc.text(`${paid.toFixed(2)} ${invoice.currency}`, rightX, finalY, { align: 'right' })
     
     if (printUsd) {
-      doc.setFontSize(8)
+      doc.setFontSize(8.5)
       doc.setTextColor(120)
       doc.text(`(USD ${usdPaid.toFixed(2)})`, rightX, finalY + 3.8, { align: 'right' })
       finalY += 8
@@ -498,14 +502,14 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     }
     
     doc.setFont(undefined, 'bold')
-    doc.setFontSize(9)
+    doc.setFontSize(9.5)
     doc.setTextColor(20)
     doc.text(isGuest ? 'Pending' : 'Balance due', 130, finalY)
     doc.text(`${Math.max(0, grandTotal - paid).toFixed(2)} ${invoice.currency}`, rightX, finalY, { align: 'right' })
     
     if (printUsd) {
       doc.setFont(undefined, 'normal')
-      doc.setFontSize(8)
+      doc.setFontSize(8.5)
       doc.setTextColor(120)
       doc.text(`(USD ${usdBalance.toFixed(2)})`, rightX, finalY + 3.8, { align: 'right' })
       finalY += 8
@@ -518,7 +522,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const lutInfo = resolveLutInfo(invoice, company)
   if (isSales && lutInfo.number) {
     checkPageBreak(5)
-    doc.setFontSize(8)
+    doc.setFontSize(8.5)
     doc.setFont(undefined, 'normal')
     doc.setTextColor(90)
     doc.text(`The LUT acknowledgement number is ${lutInfo.number}${lutInfo.date ? ` dated ${lutInfo.date}` : ''}`, 14, finalY)
@@ -533,6 +537,8 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     ].filter(Boolean).join("\n\n")
     finalY = renderRichText(doc, combined, 14, finalY, pageWidth - 28, {
       maxContentY,
+      fontSize: 8.5,
+      lineHeight: 4.2,
       onPageBreak: () => {
         doc.addPage()
         renderContinuationHeader()
@@ -555,7 +561,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     const ifsc = isBank2 ? company?.bank2_ifsc_code : company?.bank_ifsc_code
     if (ifsc) bankLines.push(`IFSC: ${ifsc}`)
 
-    const bankTotalHeight = 8.5 + (bankLines.length - 1) * 4.5
+    const bankTotalHeight = 8.5 + (bankLines.length - 1) * 4.6
     // Anchor to bottom so the last bank line finishes cleanly at ~274mm (above pageHeight - 17 = 280mm footer)
     const bottomLineY = (pageHeight - 23) - bankTotalHeight
 
@@ -569,15 +575,16 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
 
     doc.setDrawColor(220)
     doc.line(14, lineY, rightX, lineY)
-    doc.setFontSize(8)
+    doc.setFontSize(8.5)
     doc.setTextColor(150)
     doc.text('BANK DETAILS', 14, lineY + 4)
     doc.setTextColor(60)
+    doc.setFontSize(8.5)
 
     let curBankY = lineY + 8.5
     bankLines.forEach(line => {
       doc.text(line, 14, curBankY)
-      curBankY += 4.5
+      curBankY += 4.6
     })
     finalY = curBankY
   }
@@ -588,7 +595,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     doc.setDrawColor(220)
     doc.line(14, pageHeight - 17, rightX, pageHeight - 17)
     
-    doc.setFontSize(8.5)
+    doc.setFontSize(9)
     doc.setTextColor(130)
     doc.setFont(undefined, 'normal')
     
@@ -597,14 +604,14 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     
     if (thankYou) {
       doc.text(companyLegal, pageWidth / 2, pageHeight - 11, { align: 'center' })
-      doc.setFontSize(8)
+      doc.setFontSize(8.5)
       doc.setTextColor(160)
       doc.text(thankYou, pageWidth / 2, pageHeight - 6.5, { align: 'center' })
     } else {
       doc.text(companyLegal, pageWidth / 2, pageHeight - 9, { align: 'center' })
     }
     
-    doc.setFontSize(8)
+    doc.setFontSize(8.5)
     doc.setTextColor(140)
     doc.text(`Page ${p} of ${totalPages}`, rightX, pageHeight - 9, { align: 'right' })
   }
