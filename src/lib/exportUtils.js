@@ -555,23 +555,31 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     const ifsc = isBank2 ? company?.bank2_ifsc_code : company?.bank_ifsc_code
     if (ifsc) bankLines.push(`IFSC: ${ifsc}`)
 
-    const bankNeededHeight = 8 + (bankLines.length * 4.5)
-    checkPageBreak(bankNeededHeight)
+    const bankTotalHeight = 8.5 + (bankLines.length - 1) * 4.5
+    // Anchor to bottom so the last bank line finishes cleanly at ~274mm (above pageHeight - 17 = 280mm footer)
+    const bottomLineY = (pageHeight - 23) - bankTotalHeight
 
-    finalY += 3
+    if (finalY + 6 + bankTotalHeight > maxContentY) {
+      doc.addPage()
+      renderContinuationHeader()
+      finalY = 24
+    }
+
+    const lineY = Math.max(finalY + 5, bottomLineY)
+
     doc.setDrawColor(220)
-    doc.line(14, finalY - 4, rightX, finalY - 4)
+    doc.line(14, lineY, rightX, lineY)
     doc.setFontSize(8)
     doc.setTextColor(150)
-    doc.text('BANK DETAILS', 14, finalY)
-    finalY += 5
+    doc.text('BANK DETAILS', 14, lineY + 4)
     doc.setTextColor(60)
 
+    let curBankY = lineY + 8.5
     bankLines.forEach(line => {
-      checkPageBreak(6)
-      doc.text(line, 14, finalY)
-      finalY += 4.5
+      doc.text(line, 14, curBankY)
+      curBankY += 4.5
     })
+    finalY = curBankY
   }
 
   const totalPages = doc.internal.getNumberOfPages()
