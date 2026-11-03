@@ -6,13 +6,22 @@ import * as XLSX from 'xlsx'
 
 
 
-function renderRichText(doc, text, startX, startY, maxWidth) {
+function renderRichText(doc, text, startX, startY, maxWidth, options = {}) {
   if (!text) return startY;
   const lines = text.split('\n');
   let y = startY;
   const lineHeight = 4.5;
-  
+  const maxContentY = options.maxContentY || 272;
+  const onPageBreak = options.onPageBreak || null;
+
+  function ensureSpace() {
+    if (onPageBreak && y > maxContentY) {
+      y = onPageBreak();
+    }
+  }
+
   lines.forEach(line => {
+    ensureSpace();
     let x = startX;
     const trimmed = line.trim();
     let indent = 0;
@@ -56,6 +65,7 @@ function renderRichText(doc, text, startX, startY, maxWidth) {
         
         if (x + wordWidth > startX + maxWidth && x > startX + indent) {
           y += lineHeight;
+          ensureSpace();
           x = startX + indent;
         }
         doc.text(wordToPrint, x, y);
@@ -216,7 +226,37 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   const isGuest = type === 'guest'
   const isReceipt = type === 'receipt'
   const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
   const rightX = pageWidth - 14
+  const maxContentY = pageHeight - 24
+
+  const isProforma = isSales && invoice.invoice_type === 'proforma'
+  let docHeading = 'Invoice'
+  if (isProforma) docHeading = 'Proforma Invoice'
+  if (isGuest) docHeading = 'Guest Invoice'
+  if (!isSales && !isReceipt && !isGuest) docHeading = 'Purchase Invoice'
+  if (isReceipt) docHeading = 'Payment Receipt'
+
+  function renderContinuationHeader() {
+    doc.setFontSize(8)
+    doc.setTextColor(130)
+    doc.setFont(undefined, 'bold')
+    const docHeadingStr = isReceipt ? 'PAYMENT RECEIPT' : isGuest ? 'GUEST INVOICE' : isSales ? (isProforma ? 'PROFORMA INVOICE' : 'TAX INVOICE') : 'PURCHASE INVOICE'
+    const docNumStr = (isReceipt ? invoice.receipt_number : invoice.invoice_number) || ''
+    doc.text(`${docHeadingStr} — ${docNumStr} (Continued)`, 14, 15)
+    doc.setDrawColor(220)
+    doc.line(14, 18, rightX, 18)
+  }
+
+  function checkPageBreak(neededHeight) {
+    if (finalY + neededHeight > maxContentY) {
+      doc.addPage()
+      renderContinuationHeader()
+      finalY = 24
+      return true
+    }
+    return false
+  }
 
   const logo = await loadImageAsDataUrl(company?.logo_url)
 
@@ -224,12 +264,6 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
   doc.setFontSize(24)
   doc.setTextColor(20)
   doc.setFont(undefined, 'bold')
-  const isProforma = isSales && invoice.invoice_type === 'proforma'
-  let docHeading = 'Invoice'
-  if (isProforma) docHeading = 'Proforma Invoice'
-  if (isGuest) docHeading = 'Guest Invoice'
-  if (!isSales && !isReceipt && !isGuest) docHeading = 'Purchase Invoice'
-  if (isReceipt) docHeading = 'Payment Receipt'
   doc.text(docHeading, 14, 22)
 
   const status = isReceipt ? 'Received' : (invoice.status || 'Draft')
@@ -379,7 +413,7 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     headStyles: { fillColor: [27, 58, 107], fontSize: 9 },
     styles: { fontSize: 9, cellPadding: 3 },
     columnStyles: (isSales || isGuest) ? { 0: { cellWidth: 90 } } : { 0: { cellWidth: 70 } },
-    margin: { top: 20, left: 14, right: 14, bottom: 15 },
+    margin: { top: 20, left: 14, right: 14, bottom: 24 },
     didParseCell: (data) => {
       if (data.column.index === 0 && data.cell.raw && String(data.cell.raw).includes('\n')) {
         data.cell.styles.fontStyle = 'normal'
@@ -402,6 +436,16 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     ...(isSales && invoice.bank_charges ? [['Bank Charges', Number(invoice.bank_charges).toFixed(2)]] : []),
     ...(!isSales && !isGuest && invoice.tds_percent ? [[`TDS (${invoice.tds_percent}%)`, `-${((Number(invoice.subtotal || 0)) * invoice.tds_percent / 100).toFixed(2)}`]] : []),
   ]
+
+  const fxRate = Number(invoice.fx_rate_locked) || (invoice.amount ? (Number(invoice.amount) / Number(invoice.amount_usd)) : 1)
+  const usdGrandTotal = Number(invoice.amount_usd) || grandTotal / (fxRate || 1)
+  const usdPaid = paid / (fxRate || 1)
+  const usdBalance = Math.max(0, grandTotal - paid) / (fxRate || 1)
+  const printUsd = invoice.currency && invoice.currency !== 'USD'
+
+  const totalsHeight = (summaryRows.length * 6) + (printUsd ? 12 : 9) + ((isSales || isGuest) ? (printUsd ? 18 : 12) : 0) + 4
+  checkPageBreak(totalsHeight)
+
   doc.setFontSize(9)
   summaryRows.forEach(([label, val]) => {
     doc.setFont(undefined, 'normal')
@@ -411,12 +455,6 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     doc.text(`${val} ${invoice.currency}`, rightX, finalY, { align: 'right' })
     finalY += 6
   })
-
-  const fxRate = Number(invoice.fx_rate_locked) || (invoice.amount ? (Number(invoice.amount) / Number(invoice.amount_usd)) : 1)
-  const usdGrandTotal = Number(invoice.amount_usd) || grandTotal / (fxRate || 1)
-  const usdPaid = paid / (fxRate || 1)
-  const usdBalance = Math.max(0, grandTotal - paid) / (fxRate || 1)
-  const printUsd = invoice.currency && invoice.currency !== 'USD'
 
   doc.setDrawColor(220)
   doc.line(130, finalY - 2, rightX, finalY - 2)
@@ -471,29 +509,39 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     }
   }
 
-  finalY += 6
-  doc.setFontSize(8)
-  doc.setFont(undefined, 'normal')
-  doc.setTextColor(90)
+  finalY += 4
   const lutInfo = resolveLutInfo(invoice, company)
   if (isSales && lutInfo.number) {
+    checkPageBreak(8)
+    doc.setFontSize(8)
+    doc.setFont(undefined, 'normal')
+    doc.setTextColor(90)
     doc.text(`The LUT acknowledgement number is ${lutInfo.number}${lutInfo.date ? ` dated ${lutInfo.date}` : ''}`, 14, finalY)
     finalY += 6
   }
 
   if (invoice.payment_terms || invoice.notes) {
+    checkPageBreak(12)
     const combined = [
       invoice.payment_terms ? `Payment Terms: ${invoice.payment_terms}` : null,
       invoice.notes ? `Remarks / Notes: ${invoice.notes}` : null
     ].filter(Boolean).join("\n\n")
-    finalY = renderRichText(doc, combined, 14, finalY, pageWidth - 28)
+    finalY = renderRichText(doc, combined, 14, finalY, pageWidth - 28, {
+      maxContentY,
+      onPageBreak: () => {
+        doc.addPage()
+        renderContinuationHeader()
+        return 24
+      }
+    })
   }
 
   const isBank2 = invoice.bank_account_choice === 'bank2'
   const bankNum = isBank2 ? company?.bank2_account_number : company?.bank_account_number
   
   if (isSales && bankNum) {
-    finalY += 6
+    checkPageBreak(38)
+    finalY += 3
     doc.setDrawColor(220)
     doc.line(14, finalY - 4, rightX, finalY - 4)
     doc.setFontSize(8)
@@ -511,20 +559,38 @@ export async function exportInvoicePDF({ type, invoice, items, company, contact,
     const ifsc = isBank2 ? company?.bank2_ifsc_code : company?.bank_ifsc_code
     if (ifsc) bankLines.push(`IFSC: ${ifsc}`)
 
-    bankLines.forEach(line => { doc.text(line, 14, finalY); finalY += 4.5 })
+    bankLines.forEach(line => {
+      checkPageBreak(6)
+      doc.text(line, 14, finalY)
+      finalY += 4.5
+    })
   }
 
-  finalY += 10
-  doc.setDrawColor(230)
-  doc.line(14, finalY - 5, rightX, finalY - 5)
-  doc.setFontSize(9)
-  doc.setTextColor(150)
-  doc.text(company?.legal_name || company?.name || '', pageWidth / 2, finalY, { align: 'center' })
-
-  if (invoice.thank_you_note) {
+  const totalPages = doc.internal.getNumberOfPages()
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p)
+    doc.setDrawColor(220)
+    doc.line(14, pageHeight - 17, rightX, pageHeight - 17)
+    
+    doc.setFontSize(8.5)
+    doc.setTextColor(130)
+    doc.setFont(undefined, 'normal')
+    
+    const companyLegal = (company?.legal_name || company?.name || '').trim()
+    const thankYou = (invoice.thank_you_note || '').trim()
+    
+    if (thankYou) {
+      doc.text(companyLegal, 14, pageHeight - 11)
+      doc.setFontSize(8)
+      doc.setTextColor(160)
+      doc.text(thankYou, 14, pageHeight - 6.5)
+    } else {
+      doc.text(companyLegal, 14, pageHeight - 9)
+    }
+    
     doc.setFontSize(8)
-    doc.setTextColor(180)
-    doc.text(invoice.thank_you_note, pageWidth / 2, finalY + 6, { align: 'center' })
+    doc.setTextColor(140)
+    doc.text(`Page ${p} of ${totalPages}`, rightX, pageHeight - 9, { align: 'right' })
   }
 
   if (preview) {
@@ -552,7 +618,7 @@ export function exportInvoiceExcel({ type, invoice, items, company, contact }) {
     if (invoice.room_number) rows.push(['', '', '', 'Room #', invoice.room_number])
     if (invoice.checkin_date && invoice.checkout_date) rows.push(['', '', '', 'Stay Dates', `${invoice.checkin_date} to ${invoice.checkout_date} (${invoice.nights || 1} nights)`])
   }
-  rows.push(['', company?.address || '', '', '', invoice.customer_address || invoice.supplier_address || ''])
+  rows.push(['', company?.address || '', '', '', invoice.customer_address || contact?.address || invoice.supplier_address || ''])
   rows.push(['', company?.email || '', '', '', invoice.customer_email || invoice.supplier_email || ''])
   rows.push([])
   rows.push(['Issue Date', isReceipt ? invoice.receipt_date : invoice.invoice_date, '', isReceipt ? 'Payment Method' : 'Due Date', isReceipt ? invoice.method : (invoice.due_date || '')])
@@ -656,7 +722,7 @@ export function exportInvoiceWord({ type, invoice, items, company, contact }) {
         </td>
         <td style="vertical-align:top;width:33%;">
           <p style="color:#999;font-size:11px;">${isReceipt ? 'TO' : (isGuest ? 'GUEST' : (isSales ? 'BILL TO' : 'SUPPLIER'))}</p>
-          <p><strong>${esc(toName)}</strong><br/>${isGuest && invoice.room_number ? 'Room: ' + esc(invoice.room_number) + '<br/>' : ''}${isGuest && invoice.checkin_date && invoice.checkout_date ? 'Stay: ' + esc(invoice.checkin_date) + ' to ' + esc(invoice.checkout_date) + ' (' + esc(invoice.nights || 1) + ' nights)<br/>' : ''}${esc(invoice.customer_address || invoice.supplier_address)}<br/>${esc(invoice.customer_email || invoice.supplier_email)}</p>
+          <p><strong>${esc(toName)}</strong><br/>${isGuest && invoice.room_number ? 'Room: ' + esc(invoice.room_number) + '<br/>' : ''}${isGuest && invoice.checkin_date && invoice.checkout_date ? 'Stay: ' + esc(invoice.checkin_date) + ' to ' + esc(invoice.checkout_date) + ' (' + esc(invoice.nights || 1) + ' nights)<br/>' : ''}${esc(invoice.customer_address || contact?.address || invoice.supplier_address)}<br/>${esc(invoice.customer_email || invoice.supplier_email)}</p>
         </td>
         <td style="vertical-align:top;width:33%;">
           <p style="color:#999;font-size:11px;">DOCUMENT</p>

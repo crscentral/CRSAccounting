@@ -74,7 +74,19 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
     if (c) {
       setCustomerEmail(c.email || '')
       setCustomerPhone(c.phone || '')
-      setCustomerAddress(c.address || '')
+      let addr = c.address || ''
+      if (c.hotel_address || c.banking_address) {
+        if (c.show_hotel_address && c.show_banking_address && c.hotel_address && c.banking_address) {
+          addr = `Hotel Address: ${c.hotel_address}\nBanking Address: ${c.banking_address}`
+        } else if (c.show_banking_address && c.banking_address && (!c.show_hotel_address || !c.hotel_address)) {
+          addr = c.banking_address
+        } else if (c.show_hotel_address && c.hotel_address) {
+          addr = c.hotel_address
+        } else {
+          addr = c.hotel_address || c.banking_address || c.address || ''
+        }
+      }
+      setCustomerAddress(addr)
     }
   }, [contactId, newCustomerMode, contacts])
 
@@ -292,7 +304,34 @@ export default function SalesInvoiceFormModal({ companyId, product, company, con
             <Field label="Email"><input type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
             <Field label="Phone"><input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
           </div>
-          <Field label="Address" className="mt-3"><input value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
+          <div className="mt-3">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-slate-500">Address</label>
+              {(() => {
+                const c = contacts.find(c => c.id === contactId)
+                if (c && c.hotel_address && c.banking_address) {
+                  return (
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <span className="text-slate-400">Use:</span>
+                      <button type="button" onClick={() => setCustomerAddress(c.hotel_address)} className="text-navy-600 hover:underline">Hotel</button>
+                      <span className="text-slate-300">•</span>
+                      <button type="button" onClick={() => setCustomerAddress(c.banking_address)} className="text-navy-600 hover:underline">Banking</button>
+                      <span className="text-slate-300">•</span>
+                      <button type="button" onClick={() => setCustomerAddress(`Hotel Address: ${c.hotel_address}\nBanking Address: ${c.banking_address}`)} className="text-navy-600 hover:underline">Both</button>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+            </div>
+            <textarea
+              rows={2}
+              value={customerAddress}
+              onChange={e => setCustomerAddress(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="Customer address"
+            />
+          </div>
         </div>
 
         <div>

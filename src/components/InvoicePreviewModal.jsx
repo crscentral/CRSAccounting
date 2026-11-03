@@ -57,7 +57,7 @@ export default function InvoicePreviewModal({ type, invoice, items, company, con
               {invoice.checkin_date && invoice.checkout_date && (
                 <div className="text-slate-500">Stay: {invoice.checkin_date} to {invoice.checkout_date} ({invoice.nights || 1} nights)</div>
               )}
-              <div className="text-slate-500">{invoice.customer_address || invoice.supplier_address}</div>
+              <div className="text-slate-500 whitespace-pre-line">{invoice.customer_address || invoice.supplier_address}</div>
               <div className="text-slate-500">{invoice.customer_email || invoice.supplier_email}</div>
               <div className="text-slate-500">{invoice.customer_phone || invoice.supplier_phone}</div>
               {invoice.supplier_gstin && <div className="text-slate-500">GSTIN: {invoice.supplier_gstin}</div>}

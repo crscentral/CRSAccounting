@@ -46,7 +46,19 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
       setSupplierEmail(c.email || '')
       setSupplierPhone(c.phone || '')
       setSupplierGstin(c.tax_id || '')
-      setSupplierAddress(c.address || '')
+      let addr = c.address || ''
+      if (c.hotel_address || c.banking_address) {
+        if (c.show_hotel_address && c.show_banking_address && c.hotel_address && c.banking_address) {
+          addr = `Hotel Address: ${c.hotel_address}\nBanking Address: ${c.banking_address}`
+        } else if (c.show_banking_address && c.banking_address && (!c.show_hotel_address || !c.hotel_address)) {
+          addr = c.banking_address
+        } else if (c.show_hotel_address && c.hotel_address) {
+          addr = c.hotel_address
+        } else {
+          addr = c.hotel_address || c.banking_address || c.address || ''
+        }
+      }
+      setSupplierAddress(addr)
     }
   }, [contactId, newSupplierMode, contacts])
 
@@ -222,9 +234,36 @@ export default function PurchaseInvoiceFormModal({ companyId, product, company, 
             <Field label="Supplier Email"><input type="email" value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
             <Field label="Supplier Phone"><input value={supplierPhone} onChange={e => setSupplierPhone(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
           </div>
-          <div className="grid grid-cols-2 gap-3 mt-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
             <Field label="GSTIN / Tax Number"><input value={supplierGstin} onChange={e => setSupplierGstin(e.target.value)} placeholder="e.g. 22AAAAA0000A1Z5" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
-            <Field label="Address"><input value={supplierAddress} onChange={e => setSupplierAddress(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" /></Field>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-slate-500">Address</label>
+                {(() => {
+                  const c = contacts.find(c => c.id === contactId)
+                  if (c && c.hotel_address && c.banking_address) {
+                    return (
+                      <div className="flex items-center gap-1.5 text-[11px]">
+                        <span className="text-slate-400">Use:</span>
+                        <button type="button" onClick={() => setSupplierAddress(c.hotel_address)} className="text-navy-600 hover:underline">Hotel</button>
+                        <span className="text-slate-300">•</span>
+                        <button type="button" onClick={() => setSupplierAddress(c.banking_address)} className="text-navy-600 hover:underline">Banking</button>
+                        <span className="text-slate-300">•</span>
+                        <button type="button" onClick={() => setSupplierAddress(`Hotel Address: ${c.hotel_address}\nBanking Address: ${c.banking_address}`)} className="text-navy-600 hover:underline">Both</button>
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
+              </div>
+              <textarea
+                rows={2}
+                value={supplierAddress}
+                onChange={e => setSupplierAddress(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                placeholder="Supplier address"
+              />
+            </div>
           </div>
         </div>
 

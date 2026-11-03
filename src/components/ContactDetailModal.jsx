@@ -45,7 +45,41 @@ export default function ContactDetailModal({ contact, company, product, role, on
           <div className="grid sm:grid-cols-2 gap-3 text-sm">
             {contact.email && <div className="flex items-center gap-2 text-slate-600"><Mail size={14} className="text-slate-400" /> {contact.email}</div>}
             {contact.phone && <div className="flex items-center gap-2 text-slate-600"><Phone size={14} className="text-slate-400" /> {contact.phone}</div>}
-            {contact.address && <div className="flex items-center gap-2 text-slate-600 sm:col-span-2"><MapPin size={14} className="text-slate-400" /> {contact.address}</div>}
+            {contact.hotel_address ? (
+              <div className="sm:col-span-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                    <MapPin size={13} className="text-slate-400" /> Hotel / Property Address
+                  </span>
+                  {contact.show_hotel_address && (
+                    <span className="text-[10px] font-medium bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                      Featured on Invoice
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-700 whitespace-pre-line pl-5">{contact.hotel_address}</div>
+              </div>
+            ) : null}
+
+            {contact.banking_address ? (
+              <div className="sm:col-span-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                    <MapPin size={13} className="text-slate-400" /> Banking / Billing Address
+                  </span>
+                  {contact.show_banking_address && (
+                    <span className="text-[10px] font-medium bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                      Featured on Invoice
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-700 whitespace-pre-line pl-5">{contact.banking_address}</div>
+              </div>
+            ) : null}
+
+            {!contact.hotel_address && !contact.banking_address && contact.address && (
+              <div className="flex items-center gap-2 text-slate-600 sm:col-span-2"><MapPin size={14} className="text-slate-400" /> {contact.address}</div>
+            )}
             {contact.tax_id && <div className="flex items-center gap-2 text-slate-600"><Hash size={14} className="text-slate-400" /> Tax ID: {contact.tax_id}</div>}
           </div>
 

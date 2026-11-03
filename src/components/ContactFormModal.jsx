@@ -2,6 +2,17 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Modal, { Field } from './Modal'
 
+function computeFeaturedAddress(hAddr, bAddr, showH, showB) {
+  const h = (hAddr || '').trim()
+  const b = (bAddr || '').trim()
+  if (showH && showB && h && b) {
+    return `Hotel Address: ${h}\nBanking Address: ${b}`
+  }
+  if (showH && h) return h
+  if (showB && b) return b
+  return h || b || ''
+}
+
 export default function ContactFormModal({ companyId, product = 'basic', contact, defaultType = 'customer', onClose, onSaved }) {
   const [form, setForm] = useState({
     type: contact?.type || defaultType,
@@ -9,7 +20,10 @@ export default function ContactFormModal({ companyId, product = 'basic', contact
     email: contact?.email || '',
     phone: contact?.phone || '',
     tax_id: contact?.tax_id || '',
-    address: contact?.address || '',
+    hotel_address: contact?.hotel_address ?? (contact?.address || ''),
+    banking_address: contact?.banking_address ?? '',
+    show_hotel_address: contact?.show_hotel_address !== undefined ? Boolean(contact.show_hotel_address) : true,
+    show_banking_address: contact?.show_banking_address !== undefined ? Boolean(contact.show_banking_address) : false,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -22,11 +36,31 @@ export default function ContactFormModal({ companyId, product = 'basic', contact
     if (!form.name.trim()) { setError('Name is required.'); return }
     setSaving(true)
     try {
+      const computedAddress = computeFeaturedAddress(
+        form.hotel_address,
+        form.banking_address,
+        form.show_hotel_address,
+        form.show_banking_address
+      )
+
+      const payload = {
+        type: form.type,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        tax_id: form.tax_id.trim(),
+        hotel_address: form.hotel_address.trim(),
+        banking_address: form.banking_address.trim(),
+        show_hotel_address: form.show_hotel_address,
+        show_banking_address: form.show_banking_address,
+        address: computedAddress,
+      }
+
       if (contact) {
-        const { error: err } = await supabase.from('contacts').update(form).eq('id', contact.id)
+        const { error: err } = await supabase.from('contacts').update(payload).eq('id', contact.id)
         if (err) throw err
       } else {
-        const { error: err } = await supabase.from('contacts').insert({ ...form, company_id: companyId, product })
+        const { error: err } = await supabase.from('contacts').insert({ ...payload, company_id: companyId, product })
         if (err) throw err
       }
       onSaved()
@@ -39,7 +73,7 @@ export default function ContactFormModal({ companyId, product = 'basic', contact
   }
 
   return (
-    <Modal title={contact ? 'Edit Contact' : (defaultType === 'customer' ? 'New Customer' : 'New Supplier')} onClose={onClose}>
+    <Modal maxWidth="max-w-2xl" title={contact ? 'Edit Contact' : (defaultType === 'customer' ? 'New Customer' : 'New Supplier')} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field label="Type">
           <div className="flex gap-2">
@@ -69,10 +103,59 @@ export default function ContactFormModal({ companyId, product = 'basic', contact
           <input value={form.tax_id} onChange={e => update('tax_id', e.target.value)}
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         </Field>
-        <Field label="Address">
-          <textarea value={form.address} onChange={e => update('address', e.target.value)} rows={2}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        </Field>
+
+        <div className="border border-slate-200 rounded-xl p-3.5 bg-slate-50/60 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Addresses & Invoice Selection</label>
+            <span className="text-[11px] text-slate-500">Tick which address to feature on invoices</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-700">Hotel / Property Address</span>
+                <label className="flex items-center gap-1.5 text-xs text-navy-700 font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.show_hotel_address}
+                    onChange={e => update('show_hotel_address', e.target.checked)}
+                    className="rounded border-slate-300 text-navy-600 focus:ring-navy-500"
+                  />
+                  <span>Feature on Invoice</span>
+                </label>
+              </div>
+              <textarea
+                value={form.hotel_address}
+                onChange={e => update('hotel_address', e.target.value)}
+                placeholder="Enter physical hotel or property address..."
+                rows={3}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-navy-500 focus:border-navy-500"
+              />
+            </div>
+
+            <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-700">Banking / Billing Address</span>
+                <label className="flex items-center gap-1.5 text-xs text-navy-700 font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.show_banking_address}
+                    onChange={e => update('show_banking_address', e.target.checked)}
+                    className="rounded border-slate-300 text-navy-600 focus:ring-navy-500"
+                  />
+                  <span>Feature on Invoice</span>
+                </label>
+              </div>
+              <textarea
+                value={form.banking_address}
+                onChange={e => update('banking_address', e.target.value)}
+                placeholder="Enter registered banking or billing address..."
+                rows={3}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-navy-500 focus:border-navy-500"
+              />
+            </div>
+          </div>
+        </div>
 
         {error && <p className="text-xs text-red-600">{error}</p>}
 
